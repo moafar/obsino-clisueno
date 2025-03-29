@@ -1,6 +1,12 @@
 # Extractor de Informes de laboratorio de sueño
 
-Este proyecto permite extraer información estructurada desde archivos `.docx` de informes clínicos como AUTO CPAP, POLIGRAFÍA y ACTIGRAFÍA.
+Este proyecto permite extraer información estructurada desde archivos de informes clínicos de Laboratorio de Sueño
+
+## Activar venv
+source venv/bin/activate
+
+## Instalar dependencias
+pip install -r requirements.txt
 
 ## 📁 Estructura del proyecto
 
@@ -45,19 +51,30 @@ python extractor_base.py --input ./informes
 
 ## 🛠 Dependencias
 
+- `argparse` : Lectura de argumentos
 - `python-docx`: Lectura de documentos `.docx`
 - `pandas`: Estructura y exportación de datos
 - `tqdm`: Barra de progreso
-- `loguru`: Logging avanzado
+- `logging`: Logging avanzado
 - `python-dateutil`: Manejo de fechas
 - `openpyxl`: Exportación opcional a Excel
 
 ## 📒 Notas
 
-- Se crean logs automáticos por día en la carpeta `logs/`.
+- Se crean logs para:
+    - Inicio del proceso
+    - Errores de directorio
+    - Inicio de un nuevo subdirectorio
+    - Errores de subdirectorio
+    - Inicio de procesamiento de archivo
+    - Compatibilidad de archivo con la extracción
+    - Error en la extracción de un dato, incluyendo texto procesado
+    - Procesamiento exitoso de un archivo
+    - Fin del proceso
 - Si un archivo presenta errores, se omite y se registra el incidente sin detener el proceso.
 - Se puede extender fácilmente para nuevas estructuras de informes.
 
 ## 📌 Autor
-
-Proyecto desarrollado para la CLÍNICA DE SUEÑO – Instituto Neumológico del Oriente.
+Rafael Ortiz - ortizmartinez64gmail.com
+Proyecto desarrollado para el Instituto Neumológico del Oriente.
+2025
