@@ -1,8 +1,8 @@
 from pathlib import Path
 import os
 import logging
-from utils.texto_utils import extraer_texto_docx, extraer_texto_pdf, extraer_texto_rtf, extraer_texto_doc, normalizar_texto, extraer_subcadenas
-from utils.examen_utils import determinar_tipos_examenes, procesar_basal, procesar_cpap, procesar_dam, procesar_bpap, procesar_actigrafia, procesar_capnografia, procesar_autocpap, procesar_poligrafia
+from utils.texto_utils import extraer_texto_docx, extraer_texto_pdf, extraer_texto_rtf, extraer_texto_doc, normalizar_texto, extraer_subcadenas, determinar_tipos_examenes
+from utils.procesar_psg import procesar_psg_doc, procesar_psg_rtf
 import csv
 
 def procesar_archivo(archivo: Path) -> None:
@@ -33,10 +33,11 @@ def procesar_archivo(archivo: Path) -> None:
     texto_normalizado = normalizar_texto(texto)  # Normalizar el texto extraído
     
     tipos_examenes = determinar_tipos_examenes(texto_normalizado)  # <-- Llamada a la función para determinar el tipo de examen ***
+    
     if not tipos_examenes:
         logging.warning(f"No se encontraron tipos de examen en el archivo {archivo}.")
         return
-    
+
     cadenas_busqueda = {
         "BASAL": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL", r"CONCLUSION(?:ES)?"),
         "CPAP": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+CPAP", r"CONCLUSION(?:ES)?"),
@@ -55,18 +56,27 @@ def procesar_archivo(archivo: Path) -> None:
             texto_relevante = extraer_subcadenas(texto_normalizado, inicio, fin) # <-- Llamada a la función para extraer subcadenas ***
             if texto_relevante:
                 logging.info(f"Subcadena encontrada para {tipo}: {texto_relevante}")
+                
                 if tipo == "BASAL":
-                    resultados_basal = procesar_basal(texto_relevante)
-                    ruta = "resultados_psg.csv"
+                    if extension == ".rtf":
+                        resultados_basal = procesar_psg_rtf(texto_relevante)
+                        ruta = "resultados_psg_rtf.csv"
+                    elif extension == ".doc":
+                        resultados_basal = procesar_psg_doc(texto_relevante)
+                        ruta = "resultados_psg_doc.csv"
+                    else:
+                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
+                        continue
+                        
                     es_nuevo = not os.path.isfile(ruta) # Escribir encabezado si el archivo no existe
                     with open(ruta, mode='a', newline='', encoding='utf-8') as f:
                         writer = csv.DictWriter(f, fieldnames=resultados_basal.keys()) 
                         if es_nuevo:
                             writer.writeheader()
                         writer.writerow(resultados_basal)
-                    logging.info(f"Procesamiento Basal terminado para {archivo}")
+                    logging.info(f"** FIN ** Procesamiento Basal terminado para {archivo}")
 
-                elif tipo == "CPAP":
+                '''elif tipo == "CPAP":
                     procesar_cpap(texto_relevante)
                 elif tipo == "DAM":
                     procesar_dam(texto_relevante)
@@ -79,6 +89,6 @@ def procesar_archivo(archivo: Path) -> None:
                 elif tipo == "AUTOCPAP":
                     procesar_autocpap(texto_relevante)
                 elif tipo == "POLIGRAFIA":
-                    procesar_poligrafia(texto_relevante)
+                    procesar_poligrafia(texto_relevante)'''
             else:
                 logging.error(f"No se encontraron subcadenas para {tipo} en el archivo {archivo}.")

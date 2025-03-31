@@ -36,7 +36,7 @@ def procesar_directorio(ruta: Path) -> dict:
         
     """
     
-    TIPOS_VALIDOS = ["docx", "doc", "rtf"]
+    TIPOS_VALIDOS = ["doc", "rtf"]
     
     num_files = 0
     num_dirs = 0
@@ -50,7 +50,7 @@ def procesar_directorio(ruta: Path) -> dict:
             extension = archivo.suffix[1:].lower()  # Obtener la extensión del archivo sin el punto inicial y en minúsculas
             if extension in TIPOS_VALIDOS:
                 archivos_validos += 1
-                logging.info(f"Procesando archivo válido: {archivo}")
+                logging.info(f"** INICIO ** Procesando archivo válido: {archivo}")
                 procesar_archivo(archivo) # <-- Llamada a la función para analizar el archivo ***
 
             else:
