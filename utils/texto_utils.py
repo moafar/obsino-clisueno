@@ -1,9 +1,6 @@
 import docx
 import subprocess
-import fitz  # PyMuPDF
 import logging
-import os
-import unicodedata
 import re
 
 def extraer_regex(texto, patron, grupo=1):
@@ -57,28 +54,30 @@ def normalizar_texto(texto):
     texto = re.sub(r'\r+', '|', texto)  # Eliminar retornos de carro
     texto = re.sub(r'\t+', '|', texto)  # Reemplazar múltiples tabulaciones por un espacio
     texto = texto.strip()  # Eliminar espacios en blanco al inicio y al final
-    
+
     return texto
 
+# ########################################################################### DOCX
 def extraer_texto_docx(archivo):
     doc = docx.Document(archivo)
     textos = []
 
+    # Extraer texto de las tablas
+    for table in doc.tables:
+            for row in table.rows:
+                fila = " ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                if fila:
+                    textos.append(fila)
+
+    # Extraer texto de los párrafos
+    for paragraph in doc.paragraphs:
+        textos.append(paragraph.text)
+        
     # Extraer texto del header
     for section in doc.sections:
         header = section.header
         for paragraph in header.paragraphs:
             textos.append(paragraph.text)
-
-    # Extraer texto de las tablas
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                textos.append(cell.text)
-
-    # Extraer texto de los párrafos
-    for paragraph in doc.paragraphs:
-        textos.append(paragraph.text)
 
     # Extraer texto del footer
     for section in doc.sections:
@@ -88,19 +87,14 @@ def extraer_texto_docx(archivo):
 
     return "\n".join(textos)
 
+# ########################################################################### RTF
 def extraer_texto_rtf(archivo):
     from striprtf.striprtf import rtf_to_text
     with open(archivo, "r", encoding="utf-8") as f:
         rtf_content = f.read()
     return rtf_to_text(rtf_content).strip()
 
-def extraer_texto_pdf(archivo):
-    doc = fitz.open(archivo)
-    texto = ""
-    for pagina in doc:
-        texto += pagina.get_text()
-    return texto
-
+# ########################################################################### DOC
 def extraer_texto_doc(archivo):
     try:
         resultado = subprocess.run(["catdoc", archivo], capture_output=True, text=True)
@@ -115,6 +109,7 @@ def extraer_texto_doc(archivo):
         logging.error(f"❌ Error al procesar .doc {archivo}: {e}")
         return None
 
+# ########################################################################### 
 def extraer_subcadenas(texto, inicio, fin):
     # Buscar la primera aparición de la cadena de inicio
     match_inicio = re.search(inicio, texto, re.DOTALL | re.IGNORECASE)
@@ -131,7 +126,9 @@ def extraer_subcadenas(texto, inicio, fin):
     
     return subcadena
 
+# ###########################################################################
 def determinar_tipos_examenes(texto: str) -> list:
+    # Cadenas a buscar para determinar tipo de examen
     tipos_examen = {
         "BASAL": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL"],
         "CPAP": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+CPAP"],

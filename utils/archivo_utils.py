@@ -1,8 +1,9 @@
 from pathlib import Path
 import os
 import logging
-from utils.texto_utils import extraer_texto_docx, extraer_texto_pdf, extraer_texto_rtf, extraer_texto_doc, normalizar_texto, extraer_subcadenas, determinar_tipos_examenes
+from utils.texto_utils import extraer_texto_docx, extraer_texto_rtf, extraer_texto_doc, normalizar_texto, extraer_subcadenas, determinar_tipos_examenes
 from utils.procesar_psg import procesar_psg_doc, procesar_psg_rtf
+from utils.procesar_cpap import procesar_cpap_doc, procesar_cpap_rtf, procesar_cpap_docx
 import csv
 
 def procesar_archivo(archivo: Path) -> None:
@@ -16,8 +17,6 @@ def procesar_archivo(archivo: Path) -> None:
 
         if extension == ".docx":
             texto = extraer_texto_docx(archivo)
-        elif extension == ".pdf":
-            texto = extraer_texto_pdf(archivo)
         elif extension == ".rtf":
             texto = extraer_texto_rtf(archivo)
         elif extension == ".doc":
@@ -33,14 +32,15 @@ def procesar_archivo(archivo: Path) -> None:
     texto_normalizado = normalizar_texto(texto)  # Normalizar el texto extraído
     
     tipos_examenes = determinar_tipos_examenes(texto_normalizado)  # <-- Llamada a la función para determinar el tipo de examen ***
-    
+ 
     if not tipos_examenes:
         logging.warning(f"No se encontraron tipos de examen en el archivo {archivo}.")
         return
 
+    # Cadenas para extraer subcadenas (texto relevante) según el tipo de examen
     cadenas_busqueda = {
         "BASAL": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL", r"CONCLUSION(?:ES)?"),
-        "CPAP": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+CPAP", r"CONCLUSION(?:ES)?"),
+        "CPAP": (r"^", r"CONCLUSION(?:ES)?"),
         "DAM": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\s+CON\s+DISPOSITIVO\s+(?:DE\s+AVANCE\s+)?MANDIBULAR", r"CONCLUSION(?:ES)?"),
         "BPAP": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+B[I]?PAP", r"CONCLUSION(?:ES)?"),
         "ACTIGRAFIA": (r"^", r"CONCLUSION(?:ES)?"),
@@ -59,10 +59,10 @@ def procesar_archivo(archivo: Path) -> None:
                 
                 if tipo == "BASAL":
                     if extension == ".rtf":
-                        resultados_basal = procesar_psg_rtf(texto_relevante)
+                        resultados_psg = procesar_psg_rtf(texto_relevante)
                         ruta = "resultados_psg_rtf.csv"
                     elif extension == ".doc":
-                        resultados_basal = procesar_psg_doc(texto_relevante)
+                        resultados_psg = procesar_psg_doc(texto_relevante)
                         ruta = "resultados_psg_doc.csv"
                     else:
                         logging.warning(f"Extensión no reconocida para archivo: {archivo}")
@@ -70,14 +70,39 @@ def procesar_archivo(archivo: Path) -> None:
                         
                     es_nuevo = not os.path.isfile(ruta) # Escribir encabezado si el archivo no existe
                     with open(ruta, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.DictWriter(f, fieldnames=resultados_basal.keys()) 
+                        writer = csv.DictWriter(f, fieldnames=resultados_psg.keys()) 
                         if es_nuevo:
                             writer.writeheader()
-                        writer.writerow(resultados_basal)
+                        writer.writerow(resultados_psg)
                     logging.info(f"** FIN ** Procesamiento Basal terminado para {archivo}")
+                
 
-                '''elif tipo == "CPAP":
-                    procesar_cpap(texto_relevante)
+                '''elif tipo == "CPAP":''' # Cambiar del if al elif para enlazar con el procesamiento de PSG
+                if tipo == "CPAP":
+                    logging.info(f"** INICIO ** Procesando archivo CPAP válido: {archivo}")
+
+                    if extension == ".rtf":
+                        resultados_cpap = procesar_cpap_rtf(texto_relevante)
+                        ruta = "resultados_cpap_rtf.csv"
+                    elif extension == ".doc":
+                        resultados_cpap = procesar_cpap_doc(texto_relevante)
+                        ruta = "resultados_cpap_doc.csv"
+                    elif extension == ".docx":
+                        resultados_cpap = procesar_cpap_docx(texto_relevante)
+                        ruta = "resultados_cpap_docx.csv"
+                    else:
+                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
+                        continue
+                    
+                    es_nuevo = not os.path.isfile(ruta)
+                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
+                        writer = csv.DictWriter(f, fieldnames=resultados_cpap.keys()) 
+                        if es_nuevo:
+                            writer.writeheader()
+                        writer.writerow(resultados_cpap)
+                    logging.info(f"** FIN ** Procesamiento CPAP terminado para {archivo}")
+                    
+                '''
                 elif tipo == "DAM":
                     procesar_dam(texto_relevante)
                 elif tipo == "BPAP":
