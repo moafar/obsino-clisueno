@@ -5,6 +5,7 @@ from utils.texto_utils import extraer_texto_docx, extraer_texto_rtf, extraer_tex
 from utils.procesar_psg import procesar_psg_doc, procesar_psg_rtf
 from utils.procesar_cpap import procesar_cpap_doc, procesar_cpap_rtf, procesar_cpap_docx
 from utils.procesar_dam import procesar_dam_doc, procesar_dam_rtf
+from utils.procesar_bpap import procesar_bpap_doc, procesar_bpap_rtf
 import csv
 
 def procesar_archivo(archivo: Path) -> None:
@@ -103,10 +104,8 @@ def procesar_archivo(archivo: Path) -> None:
                             writer.writeheader()
                         writer.writerow(resultados_cpap)
                     logging.info(f"** FIN ** Procesamiento CPAP terminado para {archivo}")
-                '''
-                    
                 
-                if tipo == "DAM": # Cambiar a elif cuando esté terminado DAM para encadenar con PSG y CPAP
+                elif tipo == "DAM": 
                     logging.info(f"** INICIO ** Procesando archivo DAM válido: {archivo}")
                     if extension == ".rtf":
                         resultados_dam = procesar_dam_rtf(texto_relevante)
@@ -126,11 +125,32 @@ def procesar_archivo(archivo: Path) -> None:
                             writer.writeheader()
                         writer.writerow(resultados_dam)
                     logging.info(f"** FIN ** Procesamiento DAM terminado para {archivo}")
-                    
-                    
+                '''    
+                
+                if tipo == "BPAP": # Cambiar a elif cuando esté terminado BPAP para encadenar con PSG, CPAP y DAM
+                    logging.info(f"** INICIO ** Procesando archivo BPAP válido: {archivo}")
+                    #print()
+                    #print(texto_relevante)
+                    #print()
+                    if extension == ".rtf":
+                        resultados_bpap = procesar_bpap_rtf(texto_relevante)
+                        ruta = "resultados_bpap_rtf.csv"
+                    elif extension == ".doc":
+                        resultados_bpap = procesar_bpap_doc(texto_relevante)
+                        ruta = "resultados_bpap_doc.csv"
+                    else:
+                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
+                        continue
+                    es_nuevo = not os.path.isfile(ruta)
+                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
+                        writer = csv.DictWriter(f, fieldnames=resultados_bpap.keys()) 
+                        if es_nuevo:
+                            writer.writeheader()
+                        writer.writerow(resultados_bpap)
+                    logging.info(f"** FIN ** Procesamiento BPAP terminado para {archivo}")
+
+
                 '''
-                elif tipo == "BPAP":
-                    procesar_bpap(texto_relevante)
                 elif tipo == "ACTIGRAFIA":
                     procesar_actigrafia(texto_relevante)
                 elif tipo == "CAPNOGRAFIA":
