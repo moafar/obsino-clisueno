@@ -110,7 +110,7 @@ def procesar_cpap_docx(texto_relevante: str):
     datos["nombre_paciente"] = eliminar_cadenas_duplicadas(datos["nombre_paciente"])
     datos["edad_paciente"] = eliminar_cadenas_duplicadas(datos["edad_paciente"])
     datos["md_solicita"] = eliminar_cadenas_duplicadas(datos["md_solicita"]) # No funciona pero lo dejo para no perder datos
-    datos["empresa"] = eliminar_cadenas_duplicadas(datos["empresa"]) # No funciona pero lo dejo para no perder datos
+    #datos["empresa"] = eliminar_cadenas_duplicadas(datos["empresa"]) # No funciona pero lo dejo para no perder datos
 
     return datos
 

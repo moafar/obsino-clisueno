@@ -45,27 +45,28 @@ def procesar_psg_doc(texto_relevante: str):
     return datos
 
 def procesar_psg_rtf(texto_relevante: str):
+    #print(texto_relevante)
     logging.info("Procesando examen PSG RTF")
     datos = {}
 
     campos = [
-        ("nombre_paciente", r"Nombre del paciente:\s*[|]?(.*?)\|Edad"),
-        ("edad_paciente", r"Edad:\s*(\d{1,3})\s*anos"),
-        ("id_paciente", r"Identificacion:\s*[|]?(\d{6,11})\|"),
-        ("peso_paciente", r"Peso:\s*(\d{2,3})\s*Kg"),
-        ("talla_paciente", r"Talla:\s*(\d{2,3})\s*cm"),
-        ("imc_paciente", r"IMC:\s*(\d{2}(?:[.,]\d{1,2})?)"),
+        ("nombre_paciente", r"(?:Nombre(?: del paciente)?)[:|]\s*[|]?([^|]+)"),
+        ("edad_paciente", r"Edad\s*[|:]\s*(\d+)\s*(?:anos)?"),
+        ("id_paciente", r"(?i)(?:id|identificaci[oó]n)\s*:?\s*\|?\s*(\d+)"),
+        ("peso_paciente", r"(?i)Peso\s*[:|]?\s*\(?\s*(\d{2,3}(?:[.,]\d{1,2})?)\s*K?G?\s*\)?"),
+        ("talla_paciente", r"(?i)Talla\s*[:|]?\s*\(?\s*(\d{2,3})\s*(?:cm|cent[ií]metros?)\s*\)?"),
+        ("imc_paciente", r"(?i)IMC\s*[:|]?\s*(\d{1,2}[.,]\d{1,2}|\d{1,2})\b"),
         ("cuello_paciente", r"Cuello:\s*(\d{2,3})\s*cm"),
         ("perimetro_abdominal", r"Perimetro Abdominal:\s*(\d{2,3})\s*cm"),
         ("md_solicita", r"Solicita:\s*[|]?(.*?)\|Empresa"),
-        ("eps_paciente", r"Empresa:\s*[|]?(.*?)\|Fecha del estudio"),
-        ("fecha_proced", r"Fecha del estudio:\s*(\d{1,2}/\d{1,2}/\d{4})"),
-        ("escala_epworth", r"\(Escala de Epworth\s+(\d{1,2}/\d{2})\)"),
+        ("eps_paciente", r"Empresa\s*:\s*\|([^|]+)\|(?:Fecha|Fecha del estudio)\s*:"),
+        ("fecha_proced", r"Fecha\s*(?:del\s+estudio)?\s*:\s*\|?\s*(\d{1,2}/\d{1,2}/\d{4})(?=\s|\||$)"),
+        ("escala_epworth", r"(?i)(?:\bEscala\s+(?:de\s+)?)?Epworth\b\s*[:|]?\s*(\d{1,2}/\d{2})\b"),
         ("eficiencia_sueno", r"eficiencia de sueno de\s*(\d{1,3}(?:[.,]\d+)?)%"),
         ("latencia_total", r"latencia de sueno fue:\s*(\d{1,3}(?:[.,]\d+)?)\s+minutos"),
-        ("latencia_rem", r"latencia de sueno REM fue\s*(?:de\s*)?(\d{1,3}(?:[.,]\d+)?)\s+minutos"),
-        ("sueno_profundo", r"porcentaje de sueno profundo \(estado 3\) de\s*(\d{1,3}(?:[.,]\d+)?)"),
-        ("indice_microalertamientos", r"indice de microalertamientos fue\s*(\d{1,3}(?:[.,]\d+)?)/hora"),
+        ("latencia_rem", r"(?:latencia|tiempo)\s+(?:estimada\s+)?(?:de\s+)?sueno\s+REM\s+(?:fue\s*)?(?:de\s*)?(\d+[\.,]?\d*)\s*(?:min|minutos|')"),
+        ("sueno_profundo", r"porcentaje de sueno profundo \(estad[i]?o 3\) de\s*(\d{1,3}(?:[.,]\d+)?)"),
+        ("indice_microalertamientos", r"indice de micro\s?alertamientos fue\s*(\d{1,3}(?:[.,]\d+)?)/hora"),
         ("iah", r"indice de apnea hipopnea \(IAH\) fue de\s*(\d{1,3}(?:[.,]\d+)?)/hora"),
         ("gravedad_iah", r"IAH.*?:\s*(grave|moderado|leve|normal)"),
         ("duracion_prom_ah", r"promedio de duracion de\s*(\d{1,3}(?:[.,]\d+)?)\s+segundos"),
@@ -83,5 +84,8 @@ def procesar_psg_rtf(texto_relevante: str):
         datos[clave] = valor if valor else "N/A"
         if datos[clave] == "N/A":
             logging.info(f"{clave}: N/A")
-
+            
+    # Imprimo la última par clave:valor
+    #print(list(datos.keys())[-1],":",datos[list(datos.keys())[-1]])
+    #print(datos)
     return datos

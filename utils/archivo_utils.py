@@ -6,6 +6,8 @@ from utils.procesar_psg import procesar_psg_doc, procesar_psg_rtf
 from utils.procesar_cpap import procesar_cpap_doc, procesar_cpap_rtf, procesar_cpap_docx
 from utils.procesar_dam import procesar_dam_doc, procesar_dam_rtf
 from utils.procesar_bpap import procesar_bpap_doc, procesar_bpap_rtf
+from utils.procesar_actigrafia import procesar_actigrafia_doc
+from utils.procesar_capnografia import procesar_capnografia_doc, procesar_capnografia_rtf
 import csv
 
 def procesar_archivo(archivo: Path) -> None:
@@ -61,7 +63,7 @@ def procesar_archivo(archivo: Path) -> None:
             if texto_relevante:
                 logging.info(f"Subcadena encontrada para {tipo}: {texto_relevante}")
                 #print(texto_relevante)  # Para verificar el texto relevante extraído
-                '''
+                
                 if tipo == "BASAL":
                     if extension == ".rtf":
                         resultados_psg = procesar_psg_rtf(texto_relevante)
@@ -109,11 +111,11 @@ def procesar_archivo(archivo: Path) -> None:
                     logging.info(f"** INICIO ** Procesando archivo DAM válido: {archivo}")
                     if extension == ".rtf":
                         resultados_dam = procesar_dam_rtf(texto_relevante)
-                        print("\n",resultados_dam)
+                        #print("\n",resultados_dam)
                         ruta = "resultados_dam_rtf.csv"
                     elif extension == ".doc":   
                         resultados_dam = procesar_dam_doc(texto_relevante)
-                        print("\n",resultados_dam)
+                        #print("\n",resultados_dam)
                         ruta = "resultados_dam_doc.csv"
                     else:
                         logging.warning(f"Extensión no reconocida para archivo: {archivo}")
@@ -125,9 +127,9 @@ def procesar_archivo(archivo: Path) -> None:
                             writer.writeheader()
                         writer.writerow(resultados_dam)
                     logging.info(f"** FIN ** Procesamiento DAM terminado para {archivo}")
-                '''    
                 
-                if tipo == "BPAP": # Cambiar a elif cuando esté terminado BPAP para encadenar con PSG, CPAP y DAM
+                
+                elif tipo == "BPAP": 
                     logging.info(f"** INICIO ** Procesando archivo BPAP válido: {archivo}")
                     #print()
                     #print(texto_relevante)
@@ -149,15 +151,58 @@ def procesar_archivo(archivo: Path) -> None:
                         writer.writerow(resultados_bpap)
                     logging.info(f"** FIN ** Procesamiento BPAP terminado para {archivo}")
 
+                
+                elif tipo == "ACTIGRAFIA": # Cambiar a elif cuando esté terminado BPAP para encadenar con PSG, CPAP y DAM
+                    logging.info(f"** INICIO ** Procesando archivo ACTIGRAFIA válido: {archivo}")
+                    '''
+                    print()
+                    print(texto_relevante)
+                    print()
+                    '''
+                    if extension == ".doc":
+                        resultados_actigrafia = procesar_actigrafia_doc(texto_relevante)
+                        ruta = "resultados_actigrafia_doc.csv"
+                    else:
+                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
+                        continue
+                    es_nuevo = not os.path.isfile(ruta)
+                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
+                        writer = csv.DictWriter(f, fieldnames=resultados_actigrafia.keys()) 
+                        if es_nuevo:
+                            writer.writeheader()
+                        writer.writerow(resultados_actigrafia)
+                    logging.info(f"** FIN ** Procesamiento BPAP terminado para {archivo}")
+                
 
-                '''
-                elif tipo == "ACTIGRAFIA":
-                    procesar_actigrafia(texto_relevante)
                 elif tipo == "CAPNOGRAFIA":
-                    procesar_capnografia(texto_relevante)
+                    logging.info(f"** INICIO ** Procesando archivo CAPNOGRAFIA válido: {archivo}")
+                    '''
+                    print()
+                    print(texto_relevante)
+                    print()
+                    '''
+                    if extension == ".rtf":
+                        resultados_capnografia = procesar_capnografia_rtf(texto_relevante)
+                        ruta = "resultados_capnografia_rtf.csv"
+                    elif extension == ".doc":
+                        resultados_capnografia = procesar_capnografia_doc(texto_relevante)
+                        ruta = "resultados_capnografia_doc.csv"
+                    else:
+                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
+                        continue
+                    es_nuevo = not os.path.isfile(ruta)
+                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
+                        writer = csv.DictWriter(f, fieldnames=resultados_capnografia.keys()) 
+                        if es_nuevo:
+                            writer.writeheader()
+                        writer.writerow(resultados_capnografia)
+                    logging.info(f"** FIN ** Procesamiento BPAP terminado para {archivo}")
+                    
+                '''                
                 elif tipo == "AUTOCPAP":
                     procesar_autocpap(texto_relevante)
                 elif tipo == "POLIGRAFIA":
-                    procesar_poligrafia(texto_relevante)'''
+                    procesar_poligrafia(texto_relevante)
+                '''
             else:
                 logging.error(f"No se encontraron subcadenas para {tipo} en el archivo {archivo}.")
