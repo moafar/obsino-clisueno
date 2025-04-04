@@ -19,10 +19,8 @@ def procesar_capnografia_doc(texto_relevante: str):
         ("md_solicita", r"Solicita\s*[:|]?\s*(.*?)\s+Empresa"),
         ("eps_paciente", r"Empresa\s*[:|]?\s*(.*?)\s*Fecha"),
         ("fecha_proced", r"Fecha\s*[:|]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})(?=\s*DATOS)"),
-        ("media_etco2_sueno", r'Durante Sueno: (\d+)'),
-        ("media_etco2_nrem", r'Durante NREM: (\d+)\b'),
-        ("media_etco2_rem", r'Durante REM: (\d+)\b'),
-        ("media_etco2_despierto", r'Despierto: (\d+)\b'),
+        ("media_etco2_nrem", r"Durante NREM:\s*\d+(?:[,.]\d+)?\s*Durante NREM:\s*(\d+[,.]\d+)"),
+        ("media_etco2_rem", r"Durante REM:\s*\d+(?:[,.]\d+)?\s*Durante REM:\s*(\d+[,.]\d+)"),
         ("nivel_max_etco2", r'nivel mas alto de EtCO2 durante el sueno fue de (\d+)')
     ]
 
@@ -32,6 +30,7 @@ def procesar_capnografia_doc(texto_relevante: str):
         if datos[clave] == "N/A":
             logging.warning(f"{clave}: N/A")
 
+    print(list(datos.keys())[-1],":",datos[list(datos.keys())[-1]])
     #print(datos)
     return datos
 
