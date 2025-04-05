@@ -3,4 +3,3 @@ pypandoc
 pymupdf
 striprtf
 tqdm
-catdoc

@@ -11,6 +11,7 @@ def procesar_actigrafia_doc(texto_relevante: str):
         ("edad_paciente", r"Edad\s*:\s*(\d+)\s*anos\b"),
         ("id_paciente", r"TI:\s*(\d+)"),
         ("fecha_proced", r"Fecha:\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})"),
+        ("iah", r"(?i)AOS\b[^(]*\(IAH\s*([\d]+[.,]?\d*)\s*(?:\/h|\/hora|\/ hora)?\)"),
         ("fecha_inicio_grabacion", r"Periodo de grabaci[óo]n:\s*de\s*(\d{1,2}/\d{2}/\d{4})"),
         ("fecha_fin_grabacion", r"Periodo de grabaci[óo]n:\s*de\s*\d{1,2}/\d{2}/\d{4}\s*a\s*(\d{1,2}/\d{2}/\d{4})"),
         ("hora_acostarse_prom", r"promedio\s+(\d{1,2}:\d{2}:\d{2})"),
@@ -28,6 +29,7 @@ def procesar_actigrafia_doc(texto_relevante: str):
         if datos[clave] == "N/A":
             logging.warning(f"{clave}: N/A")
 
-    #print(datos)
+    #print(texto_relevante)
+    print(datos["iah"])
     return datos
 

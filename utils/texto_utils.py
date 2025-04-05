@@ -1,3 +1,4 @@
+from striprtf.striprtf import rtf_to_text
 import docx
 import subprocess
 import logging
@@ -89,7 +90,7 @@ def extraer_texto_docx(archivo):
 
 # ########################################################################### RTF
 def extraer_texto_rtf(archivo):
-    from striprtf.striprtf import rtf_to_text
+
     with open(archivo, "r", encoding="utf-8") as f:
         rtf_content = f.read()
     return rtf_to_text(rtf_content).strip()
@@ -103,7 +104,7 @@ def extraer_texto_doc(archivo):
         else:
             raise RuntimeError(f"catdoc no pudo procesar {archivo}: {resultado.stderr}")
     except FileNotFoundError:
-        logging.error("❌ No se pudo procesar .doc porque 'catdoc' no está instalado.")
+        logging.error("❌ No se pudo procesar .doc")
         return None
     except Exception as e:
         logging.error(f"❌ Error al procesar .doc {archivo}: {e}")
@@ -134,7 +135,7 @@ def determinar_tipos_examenes(texto: str) -> list:
         "CPAP": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+CPAP"],
         "DAM": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\s+CON\s+DISPOSITIVO(\s+DE\s+AVANCE)?\s+MANDIBULAR"],
         "BPAP": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+B[I]?PAP"],
-        "ACTIGRAFIA": [r"INFORME\s+ACTIGRAFIA"],
+        "ACTIGRAFIA": [r"Actograma"],
         "CAPNOGRAFIA": [r"INFORME\s+DE\s+CAPNOGRAFIA"],
         "AUTOCPAP": [r"INFORME\s+DE\s+TITULACION\s+CON\s+AUTO\s+CPAP"],
         "POLIGRAFIA": [r"INFORME\s+POLIGRAFIA\s+RESPIRATORIA"]

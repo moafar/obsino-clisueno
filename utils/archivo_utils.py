@@ -34,11 +34,13 @@ def procesar_archivo(archivo: Path) -> None:
         return None
 
     #print(texto)  # Para verificar el texto extraído
-    texto_normalizado = normalizar_texto(texto)  # Normalizar el texto extraído
     
+    texto_normalizado = normalizar_texto(texto)  # Normalizar el texto extraído
     #print(texto_normalizado)  # Para verificar el texto normalizado
+    
     tipos_examenes = determinar_tipos_examenes(texto_normalizado)  # <-- Llamada a la función para determinar el tipo de examen ***
-
+    #print(tipos_examenes)  # Para verificar los tipos de examen encontrados
+    
     if not tipos_examenes:
         logging.warning(f"No se encontraron tipos de examen en el archivo {archivo}.")
         return
@@ -63,7 +65,7 @@ def procesar_archivo(archivo: Path) -> None:
             if texto_relevante:
                 logging.info(f"Subcadena encontrada para {tipo}: {texto_relevante}")
                 #print(texto_relevante)  # Para verificar el texto relevante extraído
-                
+
                 if tipo == "BASAL":
                     if extension == ".rtf":
                         resultados_psg = procesar_psg_rtf(texto_relevante)
@@ -82,7 +84,7 @@ def procesar_archivo(archivo: Path) -> None:
                             writer.writeheader()
                         writer.writerow(resultados_psg)
                     logging.info(f"** FIN ** Procesamiento Basal terminado para {archivo}")
-                    
+
                 elif tipo == "CPAP":
                     logging.info(f"** INICIO ** Procesando archivo CPAP válido: {archivo}")
                     
@@ -106,7 +108,7 @@ def procesar_archivo(archivo: Path) -> None:
                             writer.writeheader()
                         writer.writerow(resultados_cpap)
                     logging.info(f"** FIN ** Procesamiento CPAP terminado para {archivo}")
-                
+
                 elif tipo == "DAM": 
                     logging.info(f"** INICIO ** Procesando archivo DAM válido: {archivo}")
                     if extension == ".rtf":
@@ -127,8 +129,7 @@ def procesar_archivo(archivo: Path) -> None:
                             writer.writeheader()
                         writer.writerow(resultados_dam)
                     logging.info(f"** FIN ** Procesamiento DAM terminado para {archivo}")
-                
-                
+
                 elif tipo == "BPAP": 
                     logging.info(f"** INICIO ** Procesando archivo BPAP válido: {archivo}")
                     #print()
@@ -151,7 +152,6 @@ def procesar_archivo(archivo: Path) -> None:
                         writer.writerow(resultados_bpap)
                     logging.info(f"** FIN ** Procesamiento BPAP terminado para {archivo}")
 
-                
                 elif tipo == "ACTIGRAFIA": # Cambiar a elif cuando esté terminado BPAP para encadenar con PSG, CPAP y DAM
                     logging.info(f"** INICIO ** Procesando archivo ACTIGRAFIA válido: {archivo}")
                     '''
@@ -172,7 +172,6 @@ def procesar_archivo(archivo: Path) -> None:
                             writer.writeheader()
                         writer.writerow(resultados_actigrafia)
                     logging.info(f"** FIN ** Procesamiento BPAP terminado para {archivo}")
-                
 
                 elif tipo == "CAPNOGRAFIA":
                     logging.info(f"** INICIO ** Procesando archivo CAPNOGRAFIA válido: {archivo}")
@@ -197,7 +196,7 @@ def procesar_archivo(archivo: Path) -> None:
                             writer.writeheader()
                         writer.writerow(resultados_capnografia)
                     logging.info(f"** FIN ** Procesamiento BPAP terminado para {archivo}")
-                    
+
                 '''                
                 elif tipo == "AUTOCPAP":
                     procesar_autocpap(texto_relevante)
