@@ -17,6 +17,10 @@ def procesar_bpap_doc(texto_relevante: str):
         ("md_solicita", r"Solicita\s*[:|]?\s*(.*?)\s+Empresa"),
         ("eps_paciente", r"Empresa\s*[:|]?\s*(.*?)\s+Fecha"),
         ("fecha_proced", r"Fecha\s*[:|]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})"),
+        ("mascara_marca", r"\b(?:[BCbc][iI]?[-]?[Pp][Aa]?[Pp])\b es marca ([A-Za-z0-9\s&.\-]+?)(?=\s+y se utilizo mascara)"),
+        ("mascara_tipo", r"mascara (\w+)\s+tamano"),
+        ("mascara_tamano", r"mascara\b.*?\btamano\s+[“\"']([A-Za-z0-9]+)[”\"']"),
+        ("mascara_referencia", r"(?:\bmascara\b.*?\btamano\b.*?)(?:\([Rr]ef\.\s+([^)]+)\))"),
         ("iah_diagnostico", r"IAH[:\s]*([0-9]+(?:[.,][0-9]+)?)/hr"),
         ("tiempo_de_sueno(eficiencia)", r"Durmio\s+([0-9]+(?:[.,][0-9]+)?)\s+minutos"),
         ("tiempo_en_cama(eficiencia)", r"minutos de(?: los)?\s+([0-9]+(?:[.,][0-9]+)?)\s+(?:minutos\s+)?que permanecio en cama"),
@@ -35,6 +39,9 @@ def procesar_bpap_doc(texto_relevante: str):
         datos[clave] = valor if valor else "N/A"
         if datos[clave] == "N/A":
             logging.info(f"{clave}: N/A")
+            
+    #print(texto_relevante)
+    #print(datos["mascara_referencia"])
     return datos
 
 def procesar_bpap_rtf(texto_relevante: str):
@@ -53,6 +60,10 @@ def procesar_bpap_rtf(texto_relevante: str):
         ("md_solicita", r"Solicita[:|]?\s*\|?(.*?)\s*\|Empresa"),
         ("eps_paciente", r"Empresa[:|]?\s*\|?(.*?)\s*\|Fecha"),
         ("fecha_proced", r"Fecha(?: del estudio)?[:|]?\s*\|?(\d{1,2}[/-]\d{1,2}[/-]\d{4})"),
+        ("mascara_marca", r"\b(?:[BCbc][iI]?[-]?[Pp][Aa]?[Pp])\b es marca ([A-Za-z0-9\s&.\-]+?)(?=\s+y se utilizo mascara)"),
+        ("mascara_tipo", r"mascara (\w+)\s+tamano"),
+        ("mascara_tamano", r"mascara\b.*?\btamano\s+[“\"']([A-Za-z0-9]+)[”\"']"),
+        ("mascara_referencia", r"(?:\bmascara\b.*?\btamano\b.*?)(?:\([Rr]ef\.\s+([^)]+)\))"),
         ("iah_diagnostico", r"IAH[:|]?\s*([0-9]+(?:[.,][0-9]+)?)\s*/hr"),
         ("tiempo_de_sueno(eficiencia)", r"Durmio\s+([0-9]+(?:[.,][0-9]+)?)\s+minutos"),
         ("tiempo_en_cama(eficiencia)", r"minutos de(?: los)?\s+([0-9]+(?:[.,][0-9]+)?)\s+(?:minutos\s+)?que permanecio en cama"),
@@ -71,6 +82,9 @@ def procesar_bpap_rtf(texto_relevante: str):
         datos[clave] = valor if valor else "N/A"
         if datos[clave] == "N/A":
             logging.info(f"{clave}: N/A")
+    
+    #print(texto_relevante)
+    #print(datos)
     return datos
 
 

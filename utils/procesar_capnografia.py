@@ -30,7 +30,7 @@ def procesar_capnografia_doc(texto_relevante: str):
         if datos[clave] == "N/A":
             logging.warning(f"{clave}: N/A")
 
-    print(list(datos.keys())[-1],":",datos[list(datos.keys())[-1]])
+    #print(list(datos.keys())[-1],":",datos[list(datos.keys())[-1]])
     #print(datos)
     return datos
 
