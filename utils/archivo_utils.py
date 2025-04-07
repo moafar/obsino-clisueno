@@ -47,7 +47,7 @@ def procesar_archivo(archivo: Path) -> None:
 
     # Cadenas para extraer subcadenas (texto relevante) según el tipo de examen
     cadenas_busqueda = {
-        "BASAL": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL", r"CONCLUSION(?:ES)?"),
+        "BASAL": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL", r"OXIMETRIA"),
         "CPAP": (r"^", r"CONCLUSION(?:ES)?"),
         "DAM": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\s+CON\s+DISPOSITIVO\s+(?:DE\s+AVANCE\s+)?MANDIBULAR", r"CONCLUSION(?:ES)?"),
         "BPAP": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+B[I]?PAP", r"CONCLUSION(?:ES)?"),
