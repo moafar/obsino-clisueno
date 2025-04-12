@@ -34,7 +34,7 @@ def procesar_archivo(archivo: Path) -> None:
         return None
 
     #print(texto)  # Para verificar el texto extraído
-    
+
     texto_normalizado = normalizar_texto(texto)  # Normalizar el texto extraído
     #print(texto_normalizado)  # Para verificar el texto normalizado
     

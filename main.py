@@ -45,6 +45,7 @@ def main():
     try:
         inicio = time.time()
         resultados = procesar_directorio(path)  # Llamada a la función para analizar el directorio
+        
         #resultados = {"num_files": 0, "num_dirs": 0, "archivos_validos": 0}  # Simulación de resultados
         tiempo = time.time() - inicio
 
@@ -73,8 +74,8 @@ def main():
         logging.info(f"Fin del proceso para el directorio: {args.directorio}")
 
     except Exception as e:
-        logging.error(f"Error durante el análisis del directorio: {e}")
-        print(f"\nError durante el análisis del directorio: {e}", file=sys.stderr)
+        logging.error(f" Se ha producido un error: {e}")
+        print(f"\n Se ha producido un error: {e}", file=sys.stderr)
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -51,7 +51,10 @@ def procesar_directorio(ruta: Path) -> dict:
             if extension in TIPOS_VALIDOS:
                 archivos_validos += 1
                 logging.info(f"Procesando archivo válido: {archivo}")
-                procesar_archivo(archivo) # <-- Llamada a la función para analizar el archivo ***
+                try:            
+                    procesar_archivo(archivo) # <-- Llamada a la función para analizar el archivo ***
+                except Exception as e:
+                    logging.error(f"Error al procesar el archivo {archivo}: {e}")
 
             else:
                 logging.warning(f"Archivo descartado por tipo no válido ({extension}): {archivo}")
