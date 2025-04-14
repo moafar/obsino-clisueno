@@ -1,5 +1,4 @@
 import logging
-import re
 from utils.texto_utils import extraer_regex
 
 def procesar_dam_doc(texto_relevante: str):
@@ -82,7 +81,7 @@ def procesar_dam_rtf(texto_relevante: str):
         valor = extraer_regex(texto_relevante, patron)
         datos[clave] = valor if valor else "N/A"
         if datos[clave] == "N/A":
-            logging.info(f"{clave}: N/A")
+            logging.warning(f"{clave}: N/A")
 
     return datos
 

@@ -1,5 +1,4 @@
 import logging
-import re
 from utils.texto_utils import extraer_regex
 
 def procesar_capnografia_doc(texto_relevante: str):
@@ -61,7 +60,7 @@ def procesar_capnografia_rtf(texto_relevante: str):
         valor = extraer_regex(texto_relevante, patron)
         datos[clave] = valor if valor else "N/A"
         if datos[clave] == "N/A":
-            logging.info(f"{clave}: N/A")
+            logging.warning(f"{clave}: N/A")
 
     #print(list(datos.keys())[-1],":",datos[list(datos.keys())[-1]])
     #print(datos)

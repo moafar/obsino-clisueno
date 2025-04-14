@@ -38,43 +38,11 @@ def procesar_cpap_doc(texto_relevante: str):
         valor = extraer_regex(texto_relevante, patron)
         datos[clave] = valor if valor else "N/A"
         if datos[clave] == "N/A":
-            logging.info(f"{clave}: N/A")
+            logging.warning(f"{clave}: N/A")
     return datos
 
 def procesar_cpap_docx(texto_relevante: str):
     logging.info("Procesando examen CPAP - formato DOC")
-    
-    def eliminar_cadenas_duplicadas(texto: str) -> str | None:
-        
-        texto = texto.strip()
-
-        if not texto:
-            return None
-        
-        # Primero intentar por frases completas (para casos como "Solicita:")
-        palabras = texto.split()
-        if len(palabras) > 5:  # Solo si es suficientemente largo para ser una frase
-            # Buscar el patrón de frase completa
-            for tam in range(len(palabras)//2, 0, -1):  # De mayor a menor
-                patron = ' '.join(palabras[:tam])
-                repeticiones = texto.count(patron)
-                if repeticiones > 1 and patron * repeticiones in texto:
-                    return patron
-        
-        # Luego la lógica original para palabras individuales
-        for tam in range(1, len(palabras)//2 + 1):
-            patron = palabras[:tam]
-            repeticiones = len(palabras) // tam
-            if patron * repeticiones == palabras[:tam*repeticiones]:
-                return ' '.join(patron)
-        
-        # Eliminar duplicados consecutivos como último recurso
-        resultado = []
-        for palabra in palabras:
-            if not resultado or palabra != resultado[-1]:
-                resultado.append(palabra)
-                
-        return ' '.join(resultado)
 
     datos = {}
     
@@ -112,13 +80,7 @@ def procesar_cpap_docx(texto_relevante: str):
         valor = extraer_regex(texto_relevante, patron)
         datos[clave] = valor if valor else "N/A"
         if datos[clave] == "N/A":
-            logging.info(f"{clave}: N/A")
-    
-    # Eliminar cadenas duplicadas en el nombre del paciente
-    #datos["nombre_paciente"] = eliminar_cadenas_duplicadas(datos["nombre_paciente"])
-    #datos["edad_paciente"] = eliminar_cadenas_duplicadas(datos["edad_paciente"])
-    #datos["md_solicita"] = eliminar_cadenas_duplicadas(datos["md_solicita"]) # No funciona pero lo dejo para no perder datos
-    #datos["empresa"] = eliminar_cadenas_duplicadas(datos["empresa"]) # No funciona pero lo dejo para no perder datos
+            logging.warning(f"{clave}: N/A")
 
     return datos
 
@@ -159,7 +121,7 @@ def procesar_cpap_rtf(texto_relevante: str):
         valor = extraer_regex(texto_relevante, patron)
         datos[clave] = valor if valor else "N/A"
         if datos[clave] == "N/A":
-            logging.info(f"{clave}: N/A")
+            logging.warning(f"{clave}: N/A")
     return datos
 
 

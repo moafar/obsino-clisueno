@@ -93,7 +93,7 @@ def procesar_psg_rtf(texto_relevante: str):
         valor = extraer_regex(texto_relevante, patron)
         datos[clave] = valor if valor else "N/A"
         if datos[clave] == "N/A":
-            logging.info(f"{clave}: N/A")
+            logging.warning(f"{clave}: N/A")
             
     
     #print(texto_relevante)
