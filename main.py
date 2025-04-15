@@ -29,18 +29,17 @@ def main():
     
     path = args.directorio
     try:
-        logging.info(f"Inicio del proceso para el directorio: {path}")
-        validacion_directorio = validar_directorio(path)
+        logging.info(f"Inicio del proceso para el directorio | {path}")
+        validacion_directorio = validar_directorio(path) # Devuelve 1 si el directorio es válido
     except ValueError as e:
-        logging.error(e)
-        print(f"\nError: {e}", file=sys.stderr)
+        logging.error(f"Error al validar el directorio {path} | {e}")
         return
     
     if validacion_directorio != 1:
-        logging.error(f"El directorio no es válido: {path}")
+        logging.error(f"El directorio no es válido | {path}")
         print(f"\nError: El directorio no es válido.", file=sys.stderr)
         return
-    logging.info(f"El directorio es válido: {path}")    
+    logging.info(f"El directorio es válido | {path}")    
     
     try:
         inicio = time.time()
@@ -74,7 +73,7 @@ def main():
         logging.info(f"Fin del proceso para el directorio: {args.directorio}")
 
     except Exception as e:
-        logging.error(f" Se ha producido un error: {e}")
+        logging.error(f" Se ha producido un error | {e}")
         print(f"\n Se ha producido un error: {e}", file=sys.stderr)
 
 if __name__ == "__main__":

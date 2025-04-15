@@ -2,7 +2,7 @@ import logging
 from utils.texto_utils import extraer_regex
 
 def procesar_bpap_doc(texto_relevante: str):
-    logging.info("Procesando examen CPAP - formato DOC")
+    logging.info("Procesando examen BPAP - formato DOC")
     datos = {}
 
     campos = [
@@ -40,12 +40,10 @@ def procesar_bpap_doc(texto_relevante: str):
         if datos[clave] == "N/A":
             logging.warning(f"{clave}: N/A")
             
-    #print(texto_relevante)
-    #print(datos["mascara_referencia"])
     return datos
 
 def procesar_bpap_rtf(texto_relevante: str):
-    logging.info("Procesando examen CPAP (RTF)")
+    logging.info("Procesando examen BPAP (RTF)")
     datos = {}
 
     campos = [
@@ -83,8 +81,6 @@ def procesar_bpap_rtf(texto_relevante: str):
         if datos[clave] == "N/A":
             logging.warning(f"{clave}: N/A")
     
-    #print(texto_relevante)
-    #print(datos)
     return datos
 
 

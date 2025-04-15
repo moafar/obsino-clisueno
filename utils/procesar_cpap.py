@@ -2,7 +2,7 @@ import logging
 from utils.texto_utils import extraer_regex
 
 def procesar_cpap_doc(texto_relevante: str):
-    logging.info("Procesando examen CPAP - formato DOC")
+    logging.info("Procesando examen CPAP (DOC)")
     datos = {}
 
     campos = [
@@ -42,7 +42,7 @@ def procesar_cpap_doc(texto_relevante: str):
     return datos
 
 def procesar_cpap_docx(texto_relevante: str):
-    logging.info("Procesando examen CPAP - formato DOC")
+    logging.info("Procesando examen CPAP (DOCX)")
 
     datos = {}
     

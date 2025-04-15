@@ -30,7 +30,7 @@ def procesar_archivo(archivo: Path) -> None:
             return None        
         
     except Exception as e:
-        logging.error(f"Error inesperado al leer {archivo}: {e}")
+        logging.error(f"Error inesperado al leer {archivo} | {e}")
         return None
 
     #print(texto)  # Para verificar el texto extraído
@@ -64,9 +64,10 @@ def procesar_archivo(archivo: Path) -> None:
             texto_relevante = extraer_subcadenas(texto_normalizado, inicio, fin) # <-- Llamada a la función para extraer subcadenas ***
             if texto_relevante:
                 logging.info(f"Subcadena encontrada para {tipo}: {texto_relevante}")
-                #print(texto_relevante)  # Para verificar el texto relevante extraído
 
                 if tipo == "BASAL":
+                    logging.info(f"** INICIO ** Procesando archivo BASAL válido: {archivo}")
+
                     if extension == ".rtf":
                         resultados_psg = procesar_psg_rtf(texto_relevante)
                         ruta = "resultados_psg_rtf.csv"
@@ -77,7 +78,7 @@ def procesar_archivo(archivo: Path) -> None:
                         logging.warning(f"Extensión no reconocida para archivo: {archivo}")
                         continue
                     
-                    es_nuevo = not os.path.isfile(ruta) # Escribir encabezado si el archivo no existe
+                    es_nuevo = not os.path.isfile(ruta) 
                     with open(ruta, mode='a', newline='', encoding='utf-8') as f:
                         writer = csv.DictWriter(f, fieldnames=resultados_psg.keys()) 
                         if es_nuevo:
@@ -113,11 +114,9 @@ def procesar_archivo(archivo: Path) -> None:
                     logging.info(f"** INICIO ** Procesando archivo DAM válido: {archivo}")
                     if extension == ".rtf":
                         resultados_dam = procesar_dam_rtf(texto_relevante)
-                        #print("\n",resultados_dam)
                         ruta = "resultados_dam_rtf.csv"
                     elif extension == ".doc":   
                         resultados_dam = procesar_dam_doc(texto_relevante)
-                        #print("\n",resultados_dam)
                         ruta = "resultados_dam_doc.csv"
                     else:
                         logging.warning(f"Extensión no reconocida para archivo: {archivo}")
@@ -132,9 +131,6 @@ def procesar_archivo(archivo: Path) -> None:
 
                 elif tipo == "BPAP": 
                     logging.info(f"** INICIO ** Procesando archivo BPAP válido: {archivo}")
-                    #print()
-                    #print(texto_relevante)
-                    #print()
                     if extension == ".rtf":
                         resultados_bpap = procesar_bpap_rtf(texto_relevante)
                         ruta = "resultados_bpap_rtf.csv"
@@ -154,11 +150,6 @@ def procesar_archivo(archivo: Path) -> None:
 
                 elif tipo == "ACTIGRAFIA": # Cambiar a elif cuando esté terminado BPAP para encadenar con PSG, CPAP y DAM
                     logging.info(f"** INICIO ** Procesando archivo ACTIGRAFIA válido: {archivo}")
-                    '''
-                    print()
-                    print(texto_relevante)
-                    print()
-                    '''
                     if extension == ".doc":
                         resultados_actigrafia = procesar_actigrafia_doc(texto_relevante)
                         ruta = "resultados_actigrafia_doc.csv"
@@ -175,11 +166,6 @@ def procesar_archivo(archivo: Path) -> None:
 
                 elif tipo == "CAPNOGRAFIA":
                     logging.info(f"** INICIO ** Procesando archivo CAPNOGRAFIA válido: {archivo}")
-                    '''
-                    print()
-                    print(texto_relevante)
-                    print()
-                    '''
                     if extension == ".rtf":
                         resultados_capnografia = procesar_capnografia_rtf(texto_relevante)
                         ruta = "resultados_capnografia_rtf.csv"
