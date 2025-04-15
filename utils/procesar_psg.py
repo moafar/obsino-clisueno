@@ -1,5 +1,4 @@
 import logging
-import re
 from utils.texto_utils import extraer_regex
 
 def procesar_psg_doc(texto_relevante: str):
