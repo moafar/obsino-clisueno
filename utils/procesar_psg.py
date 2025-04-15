@@ -46,9 +46,6 @@ def procesar_psg_doc(texto_relevante: str):
         if datos[clave] == "N/A":
             logging.warning(f"{clave}: N/A")
 
-    #print(texto_relevante)
-    #print("-"*50)
-    #print(datos['iac'])
     return datos
 
 def procesar_psg_rtf(texto_relevante: str):
@@ -95,10 +92,4 @@ def procesar_psg_rtf(texto_relevante: str):
         if datos[clave] == "N/A":
             logging.warning(f"{clave}: N/A")
             
-    
-    #print(texto_relevante)
-    #print("-"*50)
-    # Imprimo la última par clave:valor
-    #print(list(datos.keys())[-1],":",datos[list(datos.keys())[-1]])
-    #print(datos['iam'])
     return datos

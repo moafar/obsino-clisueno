@@ -28,7 +28,5 @@ def procesar_actigrafia_doc(texto_relevante: str):
         if datos[clave] == "N/A":
             logging.warning(f"{clave}: N/A")
 
-    #print(texto_relevante)
-    #print(datos["iah"])
     return datos
 
