@@ -91,9 +91,12 @@ def extraer_texto_rtf(archivo):
 def extraer_texto_doc(archivo):
     try:
         resultado = subprocess.run(["catdoc", archivo], capture_output=True, text=True)
-        return resultado.stdout.strip()
+        if resultado.returncode == 0:
+            return resultado.stdout.strip()
+        else:
+            raise RuntimeError(f"catdoc no pudo procesar {archivo}: {resultado.stderr}")
     except Exception as e:
-        logging.error(f"Error al procesar .doc {archivo} | {e}")
+        logging.error(f"Error al procesar .doc {archivo} $$ {e}")
         return None
 
 # ########################################################################### SUBCADENAS
@@ -101,17 +104,21 @@ import re
 import logging
 
 def extraer_subcadenas(texto, inicio, fin):
+    logging.debug(f"Texto original: {texto}")
+    logging.debug(f"Inicio: {inicio}, Fin: {fin}")
     try:
         # Buscar la primera aparición de la cadena de inicio
         match_inicio = re.search(inicio, texto, re.DOTALL | re.IGNORECASE)
         if not match_inicio:
+            logging.warning(f"No se encontró la cadena de inicio ({inicio})")
             return []  # No se encontró la cadena de inicio
-
+        logging.debug(f"Cadena de inicio encontrada: {match_inicio.group(0)}")
         # Buscar la primera aparición de la cadena de fin a partir de la posición de la cadena de inicio
         match_fin = re.search(fin, texto[match_inicio.end():], re.DOTALL | re.IGNORECASE)
         if not match_fin:
+            logging.warning(f"No se encontró la cadena de fin ({fin}) después de {inicio}")
             return []  # No se encontró la cadena de fin
-
+        logging.debug(f"Cadena de fin encontrada: {match_fin.group(0)}")
         # Extraer la subcadena entre las cadenas de inicio y fin
         subcadena = texto[match_inicio.end():match_inicio.end() + match_fin.start()].strip()
 
@@ -133,7 +140,7 @@ def determinar_tipos_examenes(texto: str) -> list:
             "CPAP": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+CPAP"],
             "DAM": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\s+CON\s+DISPOSITIVO(\s+DE\s+AVANCE)?\s+MANDIBULAR"],
             "BPAP": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+B[I]?PAP"],
-            "ACTIGRAFIA": [r"Actograma"],
+            "ACTIGRAFIA": [r"ESTADISTICAS\s+DIARIAS"],
             "CAPNOGRAFIA": [r"INFORME\s+DE\s+CAPNOGRAFIA"],
             "AUTOCPAP": [r"INFORME\s+DE\s+TITULACION\s+CON\s+AUTO\s+CPAP"],
             "POLIGRAFIA": [r"INFORME\s+POLIGRAFIA\s+RESPIRATORIA"]
@@ -142,6 +149,7 @@ def determinar_tipos_examenes(texto: str) -> list:
         for tipo, patrones in tipos_examen.items():
             for patron in patrones:
                 if re.search(patron, texto, re.IGNORECASE):
+                    logging.debug(f"Tipo de examen {tipo} detectado en el texto {texto}")
                     tipos_detectados.append(tipo)
                     break
         if not tipos_detectados:

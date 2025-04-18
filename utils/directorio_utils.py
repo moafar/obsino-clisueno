@@ -9,9 +9,9 @@ def validar_directorio(path) -> int:
     
     # Verificar si la ruta es un directorio
     if not ruta.exists():
-        raise ValueError(f"La ruta proporcionada no existe | {ruta}")
+        raise ValueError(f"La ruta proporcionada no existe $$ {ruta}")
     if not ruta.is_dir():
-        raise ValueError(f"La ruta proporcionada no es un directorio válido | {ruta}")
+        raise ValueError(f"La ruta proporcionada no es un directorio válido $$ {ruta}")
     return 1
 
 
@@ -32,13 +32,13 @@ def procesar_directorio(ruta: Path) -> dict:
             if extension in TIPOS_VALIDOS:
                 archivos_validos += 1
                 logging.info(f"Procesando archivo válido: {archivo}")
-                try:            
+                try:
                     procesar_archivo(archivo) # <-- Llamada a la función para analizar el archivo ***
                 except Exception as e:
-                    logging.critical(f"Error al procesar el archivo {archivo} | {e}")
+                    logging.critical(f"Error al procesar el archivo {archivo} $$ {e}")
 
             else:
-                logging.warning(f"Archivo descartado por tipo no válido ({extension}) | {archivo}")
+                logging.warning(f"Archivo descartado por tipo no válido ({extension}) $$ {archivo}")
         elif archivo.is_dir():
             num_dirs += 1
 

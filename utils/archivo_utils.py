@@ -30,13 +30,14 @@ def procesar_archivo(archivo: Path) -> None:
             return None        
         
     except Exception as e:
-        logging.error(f"Error inesperado al leer {archivo} | {e}")
+        logging.error(f"Error inesperado al leer {archivo} $$ {e}")
         return None
 
     #print(texto)  # Para verificar el texto extraído
 
     texto_normalizado = normalizar_texto(texto)  # Normalizar el texto extraído
     #print(texto_normalizado)  # Para verificar el texto normalizado
+    logging.debug(f"Texto normalizado: {texto_normalizado}")
     
     tipos_examenes = determinar_tipos_examenes(texto_normalizado)  # <-- Llamada a la función para determinar el tipo de examen ***
     #print(tipos_examenes)  # Para verificar los tipos de examen encontrados
@@ -51,7 +52,7 @@ def procesar_archivo(archivo: Path) -> None:
         "CPAP": (r"^", r"CONCLUSION(?:ES)?"),
         "DAM": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\s+CON\s+DISPOSITIVO\s+(?:DE\s+AVANCE\s+)?MANDIBULAR", r"CONCLUSION(?:ES)?"),
         "BPAP": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+B[I]?PAP", r"CONCLUSION(?:ES)?"),
-        "ACTIGRAFIA": (r"^", r"CONCLUSION(?:ES)?"),
+        "ACTIGRAFIA": (r"Fecha", r"ESTADISTICAS DIARIAS"),
         "CAPNOGRAFIA": (r"INFORME\s+DE\s+CAPNOGRAFIA", r"CONCLUSION(?:ES)?"),
         "AUTOCPAP": (r"INFORME\s+DE\s+TITULACION\s+CON\s+AUTO\s+CPAP", r"CONCLUSION(?:ES)?"),
         "POLIGRAFIA": (r"INFORME\s+POLIGRAFIA\s+RESPIRATORIA", r"GRAFICOS")
@@ -61,6 +62,7 @@ def procesar_archivo(archivo: Path) -> None:
         logging.info(f"Procesando examen de {tipo}")
         if tipo in cadenas_busqueda:
             inicio, fin = cadenas_busqueda[tipo]
+            logging.debug(f"Buscando subcadenas para {tipo}: Inicio: {inicio}, Fin: {fin}")
             texto_relevante = extraer_subcadenas(texto_normalizado, inicio, fin) # <-- Llamada a la función para extraer subcadenas ***
             if texto_relevante:
                 logging.info(f"Subcadena encontrada para {tipo}: {texto_relevante}")
