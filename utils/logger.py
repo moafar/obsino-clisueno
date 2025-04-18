@@ -18,7 +18,7 @@ def setup_logger(log_directory: str):
     
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s | %(levelname)s | %(message)s',
+        format='%(asctime)s $$ %(levelname)s $$ %(message)s',
         handlers=[
             logging.FileHandler(log_file)
         ]
