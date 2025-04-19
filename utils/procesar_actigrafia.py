@@ -11,9 +11,9 @@ def procesar_actigrafia_doc(texto_relevante: str):
         ("id_paciente", r"[ID|TI]:\s*(\d+)"),
         ("edad_paciente", r"Edad\s*:\s*(\d+)\s*anos\b"),
         ("fecha_proced", r":\s*(\d{1,2}\s+(?:de\s+)?[A-Za-z]+\s+\d{4})(?=\s+Informacion\s+de\s+paciente)"),
-        ("latencia_prom", r"Estadisticas\s+de\s+resumen(?:.|\n)*?promedio\s+\d{1,2}:\d{2}:\d{2}\s+\d{1,2}:\d{2}:\d{2}\s+(?:\d+\s*h\s*\d+min|\d+,\d+\s*h)\s+([\d,]+)")
+        ("tiempo_total_sueno", r"Promedio\s+\d+:\d+:\d+\s+[ap]\.\s*m\.\s+\d+:\d+:\d+\s+[ap]\.\s*m\.\s+\d+:\d+:\d+\s+(\d+:\d+:\d+)"),
+        ("latencia_prom", r"Promedio(?:\s+\d+:\d+:\d+\s*(?:[ap]\.\s*m\.)?\s*){4}(\d+,\d+)")
     ]
-
 
     for clave, patron in campos:
         valor = extraer_regex(texto_relevante, patron)
