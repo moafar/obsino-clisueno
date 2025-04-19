@@ -2,19 +2,19 @@ import logging
 from utils.texto_utils import extraer_regex
 
 def procesar_psg_doc(texto_relevante: str):
-    logging.info("Procesando examen BASAL")
+    logging.info("Procesando examen BASAL (DOC)")
     datos = {}
 
     campos = [
         ("nombre_paciente", r"(?i)nombre(?: del paciente)?\s*[:|]?\s*([\wáéíóúñ-]+(?:\s+[\wáéíóúñ-]+)*)(?=\s*[:|]?\s*edad\b)"),
         ("edad_paciente", r"(?i)edad\s*[:|]?\s*(\d+(?:[.,]\d+)?)\s*(?:años|anos)?"),
-        ("id_paciente", r"(?i)id\s*[:|]?\s*(\d{4,10})"),
+        ("id_paciente", r"(?i)id\s*[:|]?\s*([A-Z0-9]{4,20})"),
         ("eps_paciente", r"(?i)empresa\s*[:|]?\s*(.*?)\s*fecha"),
         ("fecha_proced", r"(?i)fecha\s*[:|]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})(?=\s*procedimiento)"),
         ("escala_epworth", r"(?i)escala\s+de\s+epworth\s*[:|]?\s*(\d{1,2})(?=\s*/\s*24)"),
         ("tiempo_dormido", r"(?i)arquitectura\s+del\s+sueno:\s*durmio\D*(\d+[.,]\d+|\d+)\s*(?:min(?:utos?|s)?)?"),
         ("tiempo_en_cama", r"(?i)arquitectura\s+del\s+sueno:\s*durmio\s*\d+[.,]\d*\s*min(?:utos?)?\s*de\s*(?:los\s*)?(\d+[.,]\d+)\s*min(?:utos?)?\s*"),
-        ("eficiencia_sueno", r"(?i)eficiencia\s+de\s+sueno\s+de\s+(\d+[.,]\d+)\s*%?"),
+        ("eficiencia_sueno", r"(?i)interpretacion\s+.*?(?:\(|(?:,|\s)+para\s+una\s+eficiencia(?:\s+de\s+sueno)?\s+de\s+|eficiencia\s*[:(\s]+)(\d+[.,]\d+)\s*%?"),
         ("porc_sueno_rem", r"(?i)(?:porcentaje\s+de\s+)?sueno\s+rem\s+(?:de\s+|del?\s+)?(\d+[.,]\d+)\s*%?"),
         ("porcentaje_sueno_profundo", r"(?i)(?:porcentaje|%)\s*(?:del?\s+)?sueno\s+profundo\s*(?:\(?\s*estadio\s*3\s*\)?)?\s*(?:de\s+|:?\s*)(\d+[.,]\d+)\s*%?"),
         ("indice_microalertamientos", r"(?i)indice\s+de\s+microalertamientos\s*(?:fue|:)?\s*(\d+[.,]\d+)\s*(?:/|por\s+)?h(?:ora|r)?\b"),
@@ -38,7 +38,7 @@ def procesar_psg_doc(texto_relevante: str):
     return datos
 
 def procesar_psg_rtf(texto_relevante: str):
-    logging.info("Procesando examen PSG RTF")
+    logging.info("Procesando examen PSG (RTF)")
     datos = {}
 
     campos = [
@@ -50,7 +50,7 @@ def procesar_psg_rtf(texto_relevante: str):
         ("escala_epworth", r"(?i)(?:\bEscala\s+(?:de\s+)?)?Epworth\b\s*[:|]?\s*(\d{1,2})(?=\s*/\d{2})\b"),
         ("tiempo_dormido", r"(?i)arquitectura\s+del\s+sueno:\s*durmio\D*(\d+[.,]?\d*)\s*(?:min(?:utos?|s)?)?"),
         ("tiempo_en_cama", r"(?i)arquitectura\s+del\s+sueno:\s*durmio\s*\d+[.,]?\d*\s*min(?:utos?)?\s*de\s*(?:los\s*)?(\d+[.,]?\d*)\s*min(?:utos?)?\s*"),
-        ("eficiencia_sueno", r"(?i)eficiencia\s+de\s+sueno\s+de\s*(\d+[.,]\d+)|eficiencia\s+de\s*(\d+[.,]\d+)%?"),
+        ("eficiencia_sueno", r"(?i)interpretacion\s+.*?(?:\(|(?:,|\s)+para\s+una\s+eficiencia(?:\s+de\s+sueno)?\s+de\s+|eficiencia\s*[:(\s]+)(\d+[.,]\d+)\s*%?"),        
         ("porc_sueno_rem", r"(?i)(?:porcentaje\s+de\s+)?sueno\s+rem\s+(?:de\s+|del?\s+)?(\d+[.,]\d+)\s*%?"),
         ("porcentaje_sueno_profundo", r"(?i)(?:porcentaje|%)\s*(?:del?\s+)?sueno\s+profundo\s*(?:\(?\s*estado\s*3\s*\)?)?\s*(?:de\s+|:?\s*)(\d+[.,]\d+)\s*%?"),
         ("indice_microalertamientos", r"(?i)indice de micro\s?alertamientos fue\s*(\d{1,3}(?:[.,]\d+)?)/(?:hora|h|hr)"),
