@@ -9,6 +9,7 @@ from utils.procesar_bpap import procesar_bpap_doc, procesar_bpap_rtf
 from utils.procesar_actigrafia import procesar_actigrafia_doc
 from utils.procesar_capnografia import procesar_capnografia_doc, procesar_capnografia_rtf
 from utils.procesar_autocpap import procesar_autocpap_docx
+from utils.procesar_poligrafia import procesar_poligrafia_docx
 import csv
 
 def procesar_archivo(archivo: Path) -> None:
@@ -57,7 +58,7 @@ def procesar_archivo(archivo: Path) -> None:
         "ACTIGRAFIA": (r"Fecha", r"ESTADISTICAS DIARIAS"),
         "CAPNOGRAFIA": (r"INFORME\s+DE\s+CAPNOGRAFIA", r"CONCLUSION(?:ES)?"),
         "AUTOCPAP": (r"^", r"Informe\s+de\s+cumplimiento"),
-        "POLIGRAFIA": (r"INFORME\s+POLIGRAFIA\s+RESPIRATORIA", r"GRAFICOS")
+        "POLIGRAFIA": (r"^", r"GRAFICOS")
     }
 
     for tipo in tipos_examenes:
@@ -65,7 +66,7 @@ def procesar_archivo(archivo: Path) -> None:
         if tipo in cadenas_busqueda:
             inicio, fin = cadenas_busqueda[tipo]
             logging.debug(f"Buscando subcadenas para {tipo}: Inicio: {inicio}, Fin: {fin}")
-            texto_relevante = extraer_subcadenas(texto_normalizado, inicio, fin) # <-- Llamada a la función para extraer subcadenas ***
+            texto_relevante = extraer_subcadenas(texto_normalizado, inicio, fin) # <-- Llamada a la función para extraer SUBCADENAS ***
             if texto_relevante:
                 logging.info(f"Subcadena encontrada para {tipo}: {texto_relevante}")
 
@@ -152,7 +153,7 @@ def procesar_archivo(archivo: Path) -> None:
                         writer.writerow(resultados_bpap)
                     logging.info(f"** FIN ** Procesamiento BPAP terminado para {archivo}")
 
-                elif tipo == "ACTIGRAFIA": # Cambiar a elif cuando esté terminado BPAP para encadenar con PSG, CPAP y DAM
+                elif tipo == "ACTIGRAFIA":
                     logging.info(f"** INICIO ** Procesando archivo ACTIGRAFIA válido: {archivo}")
                     if extension == ".doc":
                         resultados_actigrafia = procesar_actigrafia_doc(texto_relevante)
@@ -204,10 +205,22 @@ def procesar_archivo(archivo: Path) -> None:
                         writer.writerow(resultados_autocpap)
                     logging.info(f"** FIN ** Procesamiento AUTOCPAP terminado para {archivo}")
 
-
-                '''
+                
                 elif tipo == "POLIGRAFIA":
-                    procesar_poligrafia(texto_relevante)
-                '''
+                    logging.info(f"** INICIO ** Procesando archivo POLIGRAFIA válido: {archivo}")
+                    if extension == ".docx":
+                        resultados_poligrafia = procesar_poligrafia_docx(texto_relevante)
+                        ruta = "resultados_poligrafia_docx.csv"
+                    else:
+                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
+                        continue
+                    es_nuevo = not os.path.isfile(ruta)
+                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
+                        writer = csv.DictWriter(f, fieldnames=resultados_poligrafia.keys()) 
+                        if es_nuevo:
+                            writer.writeheader()
+                        writer.writerow(resultados_poligrafia)
+                    logging.info(f"** FIN ** Procesamiento POLIGRAFIA terminado para {archivo}")
+                
             else:
                 logging.error(f"No se encontraron subcadenas para {tipo} en el archivo {archivo}.")
