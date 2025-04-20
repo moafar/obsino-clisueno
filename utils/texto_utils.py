@@ -69,7 +69,6 @@ def extraer_texto_docx(archivo):
             footer = section.footer
             for paragraph in footer.paragraphs:
                 textos.append(paragraph.text)
-
         return "\n".join(textos)
 
     except Exception as e:

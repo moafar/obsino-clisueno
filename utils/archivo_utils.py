@@ -8,6 +8,7 @@ from utils.procesar_dam import procesar_dam_doc, procesar_dam_rtf
 from utils.procesar_bpap import procesar_bpap_doc, procesar_bpap_rtf
 from utils.procesar_actigrafia import procesar_actigrafia_doc
 from utils.procesar_capnografia import procesar_capnografia_doc, procesar_capnografia_rtf
+from utils.procesar_autocpap import procesar_autocpap_docx
 import csv
 
 def procesar_archivo(archivo: Path) -> None:
@@ -34,6 +35,7 @@ def procesar_archivo(archivo: Path) -> None:
         return None
 
     #print(texto)  # Para verificar el texto extraído
+    #logging.debug(f"Texto extraído: {texto}")
 
     texto_normalizado = normalizar_texto(texto)  # Normalizar el texto extraído
     #print(texto_normalizado)  # Para verificar el texto normalizado
@@ -54,7 +56,7 @@ def procesar_archivo(archivo: Path) -> None:
         "BPAP": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+B[I]?PAP", r"CONCLUSION(?:ES)?"),
         "ACTIGRAFIA": (r"Fecha", r"ESTADISTICAS DIARIAS"),
         "CAPNOGRAFIA": (r"INFORME\s+DE\s+CAPNOGRAFIA", r"CONCLUSION(?:ES)?"),
-        "AUTOCPAP": (r"INFORME\s+DE\s+TITULACION\s+CON\s+AUTO\s+CPAP", r"CONCLUSION(?:ES)?"),
+        "AUTOCPAP": (r"^", r"Informe\s+de\s+cumplimiento"),
         "POLIGRAFIA": (r"INFORME\s+POLIGRAFIA\s+RESPIRATORIA", r"GRAFICOS")
     }
 
@@ -185,9 +187,25 @@ def procesar_archivo(archivo: Path) -> None:
                         writer.writerow(resultados_capnografia)
                     logging.info(f"** FIN ** Procesamiento BPAP terminado para {archivo}")
 
-                '''                
+                                
                 elif tipo == "AUTOCPAP":
-                    procesar_autocpap(texto_relevante)
+                    logging.info(f"** INICIO ** Procesando archivo AUTOCPAP válido: {archivo}")
+                    if extension == ".docx":
+                        resultados_autocpap = procesar_autocpap_docx(texto_relevante)
+                        ruta = "resultados_autocpap_docx.csv"
+                    else:
+                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
+                        continue
+                    es_nuevo = not os.path.isfile(ruta)
+                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
+                        writer = csv.DictWriter(f, fieldnames=resultados_autocpap.keys()) 
+                        if es_nuevo:
+                            writer.writeheader()
+                        writer.writerow(resultados_autocpap)
+                    logging.info(f"** FIN ** Procesamiento AUTOCPAP terminado para {archivo}")
+
+
+                '''
                 elif tipo == "POLIGRAFIA":
                     procesar_poligrafia(texto_relevante)
                 '''
