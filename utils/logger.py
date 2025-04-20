@@ -17,7 +17,7 @@ def setup_logger(log_directory: str):
     log_file = log_path / f'log_{timestamp}.log'
     
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format='%(asctime)s $$ %(levelname)s $$ %(message)s',
         handlers=[
             logging.FileHandler(log_file)
