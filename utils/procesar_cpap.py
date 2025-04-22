@@ -8,6 +8,7 @@ def procesar_cpap_doc(texto_relevante: str):
     campos = [
         ("nombre_paciente", r"(?i)nombre(?: del paciente)?\s*[:|]?\s*([\wáéíóúñ-]+(?:\s+[\wáéíóúñ-]+)*)(?=\s*[:|]?\s*edad\b)"),
         ("edad_paciente", r"(?i)edad\s*[:|]?\s*(\d+(?:[.,]\d+)?)\s*(?:años|anos)?"),
+        ("medida_edad_paciente", r"(?:edad\s*[:|]?\s*\d+\s*)(anos|meses)\b"),
         ("id_paciente", r"(?i)id\s*[:|]?\s*([A-Z0-9]{4,20})"),
         ("fecha_proced", r"(?i)fecha\s*[:|]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})(?=\s*procedimiento)"),
         ("iah_diagnostico", r"IAH[:\s]*([0-9]+(?:[.,][0-9]+)?)\s*/(?:hr|h|hora)\b"),
@@ -39,6 +40,7 @@ def procesar_cpap_docx(texto_relevante: str):
     campos = [
         ("nombre_paciente", r"Nombre:\s*(.*?)\s*Edad"),
         ("edad_paciente", r"Edad\s*[:|]?\s*(\d{1,3})"),
+        ("medida_edad_paciente", r"(?i)(?:edad\s*[:|]?\s*\d{1,3}\s*)(\w+)"),
         ("id_paciente", r"Id:\s*(\d+)\s*\d+\s*Adq"),
         ("fecha_proced", r"Fecha:\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})"),
         ("iah_diagnostico", r"IAH\s*[:=]\s*(\d+[,.]\d+|\d+)\s*(?:/?\s*hr)?"),
@@ -71,6 +73,7 @@ def procesar_cpap_rtf(texto_relevante: str):
         ("nombre_paciente", r"Nombre(?: del paciente)?:?\s*[|]?(.*?)\|Edad"),
         ("edad_paciente", r"Edad[:|]?\s*(\d{1,3})\s*anos"),
         ("id_paciente", r"(?:Id|Identificacion)[:|]?\s*[|]?(\d{5,10})\b"),
+        ("medida_edad_paciente", r"(?i)(?:edad\s*[:|]?\s*\d+\s*)(anos|meses)(?=\s*[\|]?\s*|$)"),
         ("fecha_proced", r"Fecha(?: del estudio)?[:|]?\s*\|?(\d{1,2}[/-]\d{1,2}[/-]\d{4})"),
         ("iah_diagnostico", r"IAH[:|]?\s*([0-9]+(?:[.,][0-9]+)?)\s*/hr"),
         ("mascara_marca", r"\b(?:[BCbc][iI]?[-]?[Pp][Aa]?[Pp])\b es marca ([A-Za-z0-9\s&.\-]+?)(?=\s+y se utilizo mascara)"),

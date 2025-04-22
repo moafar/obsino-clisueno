@@ -7,7 +7,8 @@ def procesar_capnografia_doc(texto_relevante: str):
 
     campos = [
         ("nombre_paciente", r"Nombre(?: del paciente)?:?\s*[|]?\s*([\wÁÉÍÓÚÑáéíóúñ-]+(?:\s+[\wÁÉÍÓÚÑáéíóúñ-]+)*)(?=\s*[|]?\s*Edad\b)"),
-        ("edad_paciente", r"Edad\s*[:|]?\s*([\d]+(?:[.,]\d+)?)\s*(años|anos)?"),
+        ("edad_paciente", r"(?i)Edad\s*[:|]?\s*([\d]+(?:[.,]\d+)?)\s*"),
+        ("medida_edad_paciente", r"(?i)(?:Edad\s*[:|]?\s*\d+(?:[.,]\d+)?\s*)([a-záéíóúüñ]+)\b(?:\s*y\s*\d+\s*[a-záéíóúüñ]+)?\s*Id"),
         ("id_paciente", r"Id\s*[:|]?\s*([A-Za-z]?\d{4,10})"),
         ("eps_paciente", r"Empresa\s*[:|]?\s*(.*?)\s*Fecha"),
         ("fecha_proced", r"Fecha\s*[:|]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})(?=\s*DATOS)"),
@@ -32,6 +33,7 @@ def procesar_capnografia_rtf(texto_relevante: str):
     campos = [
         ("nombre_paciente", r"Nombre(?: del paciente)?:\|([^|]+)\|Edad"),
         ("edad_paciente", r"\|Edad\|\s*(\d{1,2})\s*anos?\b"),
+        ("medida_edad_paciente", r"(?i)(?:Edad\|?\s*\d+\s*)(\w+)\|?\s*Id"),
         ("id_paciente", r"Id:\s*\|?\s*([A-Za-z]?\d{6,10})\|?"),
         ("eps_paciente", r"Empresa:\s*\|([^|]+)\|Fecha(?: del estudio)?"),
         ("fecha_proced", r"Fecha:\s*\|(\d{4}/\d{2}/\d{2}|\d{1,2}/\d{1,2}/\d{4})\|"),
