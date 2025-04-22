@@ -56,7 +56,7 @@ def procesar_psg_rtf(texto_relevante: str):
         ("eficiencia_sueno", r"(?i)interpretacion\s+.*?(?:\(|(?:,|\s)+para\s+una\s+eficiencia(?:\s+de\s+sueno)?\s+de\s+|eficiencia\s*[:(\s]+)(\d+[.,]\d+)\s*%?"),        
         ("porc_sueno_rem", r"(?i)(?:porcentaje\s+de\s+)?sueno\s+rem\s+(?:de\s+|del?\s+)?(\d+[.,]\d+)\s*%?"),
         ("porcentaje_sueno_profundo", r"sueno\s+profundo\s+\(estado\s+3\)\s+de\s+(\d+(?:[.,]\d+)?)"),
-        ("ausencia_sueno_profundo", r"(ausencia)\s+de\s+sueno\s+profundo"),
+        ("ausencia_sueno_profundo", r"(?:((?:ausencia))\s+de\s+sueno\s+profundo(?:\s+\((?:estado|estadio)\s+3\))?|(?:(?:porcentaje\s+de\s+)?sueno\s+profundo\s+\((?:estado|estadio)\s+3\)\s+ausente))"),
         ("indice_microalertamientos", r"(?i)indice de micro\s?alertamientos fue\s*(\d{1,3}(?:[.,]\d+)?)/(?:hora|h|hr)"),
         ("iah", r"(?i)indice de apnea hipopnea \(IAH\) fue de\s*(\d{1,3}(?:[.,]\d+)?)/(?:hora|h|hr)"),
         ("gravedad_iah", r"(?i)iah.*?:\s*([^.]+)"),
