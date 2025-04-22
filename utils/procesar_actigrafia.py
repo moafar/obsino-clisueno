@@ -9,7 +9,8 @@ def procesar_actigrafia_doc(texto_relevante: str):
     campos = [
         ("nombre_paciente", r"Nombre\s*:\s*\*{0,2}([A-ZÑÁÉÍÓÚÜ\s]+?)\s*(?=\*{2}|TI\s*[:]|ID\s*[:]|CC\s*[:])"),
         ("id_paciente", r"[ID|TI]:\s*(\d+)"),
-        ("edad_paciente", r"Edad\s*:\s*(\d+)\s*anos\b"),
+        ("edad_paciente", r"(?i)(?i)Edad:\s*(\d+)\b"),
+        ("medida_edad_paciente", r"(?i)Edad:\s*\d+\s*(\w+)\b"),
         ("fecha_proced", r":\s*(\d{1,2}\s+(?:de\s+)?[A-Za-z]+\s+\d{4})(?=\s+Informacion\s+de\s+paciente)"),
         ("tiempo_total_sueno", r"Promedio\s+\d+:\d+:\d+\s+[ap]\.\s*m\.\s+\d+:\d+:\d+\s+[ap]\.\s*m\.\s+\d+:\d+:\d+\s+(\d+:\d+:\d+)"),
         ("latencia_prom", r"Promedio(?:\s+\d+:\d+:\d+\s*(?:[ap]\.\s*m\.)?\s*){4}(\d+,\d+)")
