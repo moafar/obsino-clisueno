@@ -51,14 +51,14 @@ def procesar_archivo(archivo: Path) -> None:
 
     # Cadenas para extraer subcadenas (texto relevante) según el tipo de examen
     cadenas_busqueda = {
-        "BASAL": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL", r"OXIMETRIA"),
+        "BASAL": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL", r"Saturacion\s+O2\s+Minima\s+durante\s+el\s+sueno"),
         "CPAP": (r"^", r"CONCLUSION(?:ES)?"),
         "DAM": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\s+CON\s+DISPOSITIVO\s+(?:DE\s+AVANCE\s+)?MANDIBULAR", r"CONCLUSION(?:ES)?"),
         "BPAP": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+B[I]?PAP", r"CONCLUSION(?:ES)?"),
         "ACTIGRAFIA": (r"Fecha", r"ESTADISTICAS DIARIAS"),
         "CAPNOGRAFIA": (r"INFORME\s+DE\s+CAPNOGRAFIA", r"CONCLUSION(?:ES)?"),
         "AUTOCPAP": (r"^", r"Informe\s+de\s+cumplimiento"),
-        "POLIGRAFIA": (r"^", r"GRAFICOS")
+        "POLIGRAFIA": (r"^", r"Indicacion\s+del\s+estudio")
     }
 
     for tipo in tipos_examenes:
@@ -69,7 +69,7 @@ def procesar_archivo(archivo: Path) -> None:
             texto_relevante = extraer_subcadenas(texto_normalizado, inicio, fin) # <-- Llamada a la función para extraer SUBCADENAS ***
             if texto_relevante:
                 logging.info(f"Subcadena encontrada para {tipo}: {texto_relevante}")
-
+                
                 if tipo == "BASAL":
                     logging.info(f"** INICIO ** Procesando archivo BASAL válido: {archivo}")
 
@@ -90,7 +90,7 @@ def procesar_archivo(archivo: Path) -> None:
                             writer.writeheader()
                         writer.writerow(resultados_psg)
                     logging.info(f"** FIN ** Procesamiento Basal terminado para {archivo}")
-
+                '''
                 elif tipo == "CPAP":
                     logging.info(f"** INICIO ** Procesando archivo CPAP válido: {archivo}")
                     
@@ -206,7 +206,7 @@ def procesar_archivo(archivo: Path) -> None:
                     logging.info(f"** FIN ** Procesamiento AUTOCPAP terminado para {archivo}")
 
                 
-                elif tipo == "POLIGRAFIA":
+                if tipo == "POLIGRAFIA":
                     logging.info(f"** INICIO ** Procesando archivo POLIGRAFIA válido: {archivo}")
                     if extension == ".docx":
                         resultados_poligrafia = procesar_poligrafia_docx(texto_relevante)
@@ -221,6 +221,6 @@ def procesar_archivo(archivo: Path) -> None:
                             writer.writeheader()
                         writer.writerow(resultados_poligrafia)
                     logging.info(f"** FIN ** Procesamiento POLIGRAFIA terminado para {archivo}")
-                
+                '''
             else:
                 logging.error(f"No se encontraron subcadenas para {tipo} en el archivo {archivo}.")

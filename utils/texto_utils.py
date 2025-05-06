@@ -4,12 +4,9 @@ import subprocess
 import logging
 import re
 
-def extraer_regex(texto, patron, grupo=1):
-
-    match = re.search(patron, texto, re.IGNORECASE)
-    if match:
-        return match.group(grupo).strip()
-    return None
+def extraer_regex(texto, patron):
+    match = re.search(patron, texto)
+    return next((g for g in match.groups() if g), None) if match else None
 
 def normalizar_texto(texto):
 

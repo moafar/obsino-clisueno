@@ -3,3 +3,7 @@ pypandoc
 pymupdf
 striprtf
 tqdm
+openpyxl
+pyarrow
+google
+google-cloud-bigquery
