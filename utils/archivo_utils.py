@@ -74,10 +74,10 @@ def procesar_archivo(archivo: Path) -> None:
                     logging.info(f"** INICIO ** Procesando archivo BASAL válido: {archivo}")
 
                     if extension == ".rtf":
-                        resultados_psg = procesar_psg_rtf(texto_relevante)
+                        resultados_psg = procesar_psg_rtf(texto_relevante, archivo)
                         ruta = "resultados_psg_rtf.csv"
                     elif extension == ".doc":
-                        resultados_psg = procesar_psg_doc(texto_relevante)
+                        resultados_psg = procesar_psg_doc(texto_relevante, archivo)
                         ruta = "resultados_psg_doc.csv"
                     else:
                         logging.warning(f"Extensión no reconocida para archivo: {archivo}")

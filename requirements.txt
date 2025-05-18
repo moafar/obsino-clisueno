@@ -7,3 +7,6 @@ openpyxl
 pyarrow
 google
 google-cloud-bigquery
+gspread
+gspread-dataframe
+oauth2client
