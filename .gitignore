@@ -26,4 +26,6 @@ output/**/*          # Ignora todo en output/
 .vscode/
 
 # Secretos
-**/secrets/*.json
+secrets/*.json       # Ignora archivos sensibles dentro de secrets/
+!secrets/.gitkeep    # Excepto .gitkeep
+

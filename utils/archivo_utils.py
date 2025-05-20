@@ -75,21 +75,27 @@ def procesar_archivo(archivo: Path) -> None:
 
                     if extension == ".rtf":
                         resultados_psg = procesar_psg_rtf(texto_relevante, archivo)
-                        ruta = "resultados_psg_rtf.csv"
+                        nombre_archivo = "resultados_psg_rtf.csv"
                     elif extension == ".doc":
                         resultados_psg = procesar_psg_doc(texto_relevante, archivo)
-                        ruta = "resultados_psg_doc.csv"
+                        nombre_archivo = "resultados_psg_doc.csv"
                     else:
                         logging.warning(f"Extensión no reconocida para archivo: {archivo}")
                         continue
-                    
-                    es_nuevo = not os.path.isfile(ruta) 
+
+                    directorio_salida = "output"
+                    os.makedirs(directorio_salida, exist_ok=True)
+                    ruta = os.path.join(directorio_salida, nombre_archivo)
+
+                    es_nuevo = not os.path.isfile(ruta)
                     with open(ruta, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.DictWriter(f, fieldnames=resultados_psg.keys()) 
+                        writer = csv.DictWriter(f, fieldnames=resultados_psg.keys())
                         if es_nuevo:
                             writer.writeheader()
                         writer.writerow(resultados_psg)
+
                     logging.info(f"** FIN ** Procesamiento Basal terminado para {archivo}")
+                    
                 '''
                 elif tipo == "CPAP":
                     logging.info(f"** INICIO ** Procesando archivo CPAP válido: {archivo}")
