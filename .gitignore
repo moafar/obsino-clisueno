@@ -6,9 +6,15 @@ __pycache__/
 venv/
 
 # Logs y salidas
-logs/
-output/
-*.log
+logs/**/*.log        # Ignora todos los .log en subdirectorios de logs/
+!logs/.gitkeep       # Excepto .gitkeep
+
+output/**/*          # Ignora todo en output/
+!output/.gitkeep     # Excepto .gitkeep
+
+*.log                # Atrapa cualquier .log fuera de logs/
+
+# Archivos de datos
 *.csv
 *.xlsx
 
@@ -20,4 +26,4 @@ output/
 .vscode/
 
 # Secretos
-secrets/
+**/secrets/*.json
