@@ -10,3 +10,4 @@ google-cloud-bigquery
 gspread
 gspread-dataframe
 oauth2client
+ipython
