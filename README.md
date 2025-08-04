@@ -41,10 +41,13 @@ extractor_sueno/
 pip install -r requirements.txt
 ```
 
-2. Ejecuta el script pasando el directorio con archivos `.docx`:
+Ojo!  Hay una dependencia adicional del sistema (no es de Python): `catdoc`
+Se instala con `sudo apt install catdoc`
+
+2. Ejecuta el script pasando el directorio correspondiente:
 
 ```bash
-python extractor_base.py --input ./informes
+python main.py 'ruta/de/la/carpeta/a/procesar'
 ```
 
 > Los resultados se guardan en `resultados.csv`.

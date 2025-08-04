@@ -1,0 +1,27 @@
+2025-08-04 20:55:16,806 $$ INFO $$ Inicio del proceso para el directorio $$ /home/rom/prj/obsino-clisueno/src/basal/doc
+2025-08-04 20:55:16,806 $$ INFO $$ El directorio es válido $$ /home/rom/prj/obsino-clisueno/src/basal/doc
+2025-08-04 20:55:16,825 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/src/basal/doc/.JUAN JOSE.VERGEL DURAN - 09-07-2024 - BASAL.doc
+2025-08-04 20:55:16,862 $$ ERROR $$ Error al procesar .doc /home/rom/prj/obsino-clisueno/src/basal/doc/.JUAN JOSE.VERGEL DURAN - 09-07-2024 - BASAL.doc $$ [Errno 2] No such file or directory: 'catdoc'
+2025-08-04 20:55:16,862 $$ CRITICAL $$ Error al procesar el archivo /home/rom/prj/obsino-clisueno/src/basal/doc/.JUAN JOSE.VERGEL DURAN - 09-07-2024 - BASAL.doc $$ 'NoneType' object has no attribute 'replace'
+2025-08-04 20:55:16,863 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/src/basal/doc/WILFREDO DEL TORO RODRIGUEZ^.13-06-2023 BASAL.doc
+2025-08-04 20:55:16,886 $$ ERROR $$ Error al procesar .doc /home/rom/prj/obsino-clisueno/src/basal/doc/WILFREDO DEL TORO RODRIGUEZ^.13-06-2023 BASAL.doc $$ [Errno 2] No such file or directory: 'catdoc'
+2025-08-04 20:55:16,886 $$ CRITICAL $$ Error al procesar el archivo /home/rom/prj/obsino-clisueno/src/basal/doc/WILFREDO DEL TORO RODRIGUEZ^.13-06-2023 BASAL.doc $$ 'NoneType' object has no attribute 'replace'
+2025-08-04 20:55:16,886 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/src/basal/doc/GERARDO PARRA CASTRO - 15-04-2023 BASAL+CAPNOGRAFIA.doc
+2025-08-04 20:55:16,911 $$ ERROR $$ Error al procesar .doc /home/rom/prj/obsino-clisueno/src/basal/doc/GERARDO PARRA CASTRO - 15-04-2023 BASAL+CAPNOGRAFIA.doc $$ [Errno 2] No such file or directory: 'catdoc'
+2025-08-04 20:55:16,911 $$ CRITICAL $$ Error al procesar el archivo /home/rom/prj/obsino-clisueno/src/basal/doc/GERARDO PARRA CASTRO - 15-04-2023 BASAL+CAPNOGRAFIA.doc $$ 'NoneType' object has no attribute 'replace'
+2025-08-04 20:55:16,911 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/src/basal/doc/JERONIMO JEREZ RINCON PSG BASAL nov 9 2023.doc
+2025-08-04 20:55:16,932 $$ ERROR $$ Error al procesar .doc /home/rom/prj/obsino-clisueno/src/basal/doc/JERONIMO JEREZ RINCON PSG BASAL nov 9 2023.doc $$ [Errno 2] No such file or directory: 'catdoc'
+2025-08-04 20:55:16,932 $$ CRITICAL $$ Error al procesar el archivo /home/rom/prj/obsino-clisueno/src/basal/doc/JERONIMO JEREZ RINCON PSG BASAL nov 9 2023.doc $$ 'NoneType' object has no attribute 'replace'
+2025-08-04 20:55:16,935 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/src/basal/doc/ALBERTO GUERRERO HERNANDEZ . .18-07-2024  BASAL.doc
+2025-08-04 20:55:16,957 $$ ERROR $$ Error al procesar .doc /home/rom/prj/obsino-clisueno/src/basal/doc/ALBERTO GUERRERO HERNANDEZ . .18-07-2024  BASAL.doc $$ [Errno 2] No such file or directory: 'catdoc'
+2025-08-04 20:55:16,957 $$ CRITICAL $$ Error al procesar el archivo /home/rom/prj/obsino-clisueno/src/basal/doc/ALBERTO GUERRERO HERNANDEZ . .18-07-2024  BASAL.doc $$ 'NoneType' object has no attribute 'replace'
+2025-08-04 20:55:16,957 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/src/basal/doc/TEMPLATE BASAL.doc
+2025-08-04 20:55:16,981 $$ ERROR $$ Error al procesar .doc /home/rom/prj/obsino-clisueno/src/basal/doc/TEMPLATE BASAL.doc $$ [Errno 2] No such file or directory: 'catdoc'
+2025-08-04 20:55:16,981 $$ CRITICAL $$ Error al procesar el archivo /home/rom/prj/obsino-clisueno/src/basal/doc/TEMPLATE BASAL.doc $$ 'NoneType' object has no attribute 'replace'
+2025-08-04 20:55:16,981 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/src/basal/doc/ADELA  RODRIGUEZ MOGOLLON-13-07-2024-BASAL.doc
+2025-08-04 20:55:17,005 $$ ERROR $$ Error al procesar .doc /home/rom/prj/obsino-clisueno/src/basal/doc/ADELA  RODRIGUEZ MOGOLLON-13-07-2024-BASAL.doc $$ [Errno 2] No such file or directory: 'catdoc'
+2025-08-04 20:55:17,005 $$ CRITICAL $$ Error al procesar el archivo /home/rom/prj/obsino-clisueno/src/basal/doc/ADELA  RODRIGUEZ MOGOLLON-13-07-2024-BASAL.doc $$ 'NoneType' object has no attribute 'replace'
+2025-08-04 20:55:17,005 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/src/basal/doc/CRISTINA MAY  MOLINA PINEDA 15-11-2023 BASAL.doc
+2025-08-04 20:55:17,024 $$ ERROR $$ Error al procesar .doc /home/rom/prj/obsino-clisueno/src/basal/doc/CRISTINA MAY  MOLINA PINEDA 15-11-2023 BASAL.doc $$ [Errno 2] No such file or directory: 'catdoc'
+2025-08-04 20:55:17,024 $$ CRITICAL $$ Error al procesar el archivo /home/rom/prj/obsino-clisueno/src/basal/doc/CRISTINA MAY  MOLINA PINEDA 15-11-2023 BASAL.doc $$ 'NoneType' object has no attribute 'replace'
+2025-08-04 20:55:17,025 $$ INFO $$ Fin del proceso para el directorio: /home/rom/prj/obsino-clisueno/src/basal/doc

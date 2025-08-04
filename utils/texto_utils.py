@@ -3,6 +3,7 @@ import docx
 import subprocess
 import logging
 import re
+import shutil
 
 def extraer_regex(texto, patron):
     match = re.search(patron, texto)
@@ -85,12 +86,21 @@ def extraer_texto_rtf(archivo):
 
 # ########################################################################### DOC
 def extraer_texto_doc(archivo):
+    if shutil.which("catdoc") is None:
+        raise EnvironmentError("catdoc no está instalado. Instálalo con 'sudo apt install catdoc'.")
+    
     try:
-        resultado = subprocess.run(["catdoc", archivo], capture_output=True, text=True)
+        resultado = subprocess.run(
+            ["catdoc", archivo],
+            capture_output=True,
+            text=True,
+            check=False  # Explicitamente no lanzar excepción automática
+        )
         if resultado.returncode == 0:
             return resultado.stdout.strip()
         else:
             raise RuntimeError(f"catdoc no pudo procesar {archivo}: {resultado.stderr}")
+    
     except Exception as e:
         logging.error(f"Error al procesar .doc {archivo} $$ {e}")
         return None
