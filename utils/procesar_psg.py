@@ -7,7 +7,7 @@ def procesar_psg_doc(texto_relevante: str, archivo: str):
     datos = {}
 
     campos = [
-        ("nombre", r"(?i)nombre\s*:?\s*([a-z0-9.,\s]+)(?=\s*edad)"),
+        ("nombre", r"(?iu)nombre\s*:?\s*([\w.,'\s-]+?)(?=\s*\bedad\b)"),
         ("edad_anos", r"(?i)Edad\s*:?\s*(\d+)\s*anos?(?:(?:\s*,?\s*y?\s*\d+\s*meses?)?(?:\s*,?\s*y?\s*\d+\s*dias?)?)?.{0,100}?\s*Id"),
         ("edad_meses", r"(?i)Edad\s*:?\s*(?:\d+\s*anos?)?(?:\s*,?\s*y?\s*(\d+)\s*meses?)?(?:\s*,?\s*y?\s*\d+\s*dias?)?.{0,100}?\s*Id"),
         ("edad_dias", r"(?i)Edad\s*:?\s*(?:\d+\s*anos?)?(?:\s*,?\s*y?\s*\d+\s*meses?)?(?:\s*,?\s*y?\s*(\d+)\s*dias?)?.{0,100}?\s*Id"),
@@ -27,7 +27,7 @@ def procesar_psg_doc(texto_relevante: str, archivo: str):
         ("epworth", r"(?i)Epworth\s*:?\s*(\d+)\s*/24"),
         ("tiempo_en_cama", r"(?i)ARQUITECTURA DE SUENO:.*?Tiempo en Cama:\s*([\d]+(?:[.,]\d+)?)"),
         ("tiempo_sueno", r"(?i)ARQUITECTURA DE SUENO:.*?Tiempo Total de Sueno:\s*([\d]+(?:[.,]\d+)?)"),
-        ("eficiencia_sueno", r"(?i)ARQUITECTURA DE SUENO:.*?Eficiencia de Sueno:\s*([\d]+(?:[.,]\d+)?)%"),
+        ("eficiencia_sueno", r"(?i)ARQUITECTURA DE SUENO:.*?Eficiencia de Sueno:\s*([\d]+(?:[.,]\d+)?)\s*%"),
         ("latencia_sueno_total", r"(?i)ARQUITECTURA DE SUENO:.*?Latencia de Sueno\s*:?\s*([\d]+(?:[.,]\d+)?)"),
         ("latencia_sueno_rem", r"(?i)ARQUITECTURA DE SUENO:.*?Latencia de sueno REM\s*:?\s*([\d]+(?:[.,]\d+)?)"), 
         ("indice_microalertamientos", r"(?i)Microalertamientos.*?Indice Despertares\s*:?\s*([\d]+(?:[.,]\d+)?)\s*/Hr\.\s*DISTRIBUCION DE FASES DE SUENO"),
@@ -41,11 +41,12 @@ def procesar_psg_doc(texto_relevante: str, archivo: str):
         ("indice_desat_rem", r"(?i)OXIMETRIA:.*?Indice Desat \(#/hour\)\s+[\d]+(?:[.,]\d+)?\s+([\d]+(?:[.,]\d+)?)"),
         ("indice_desat_nrem", r"(?i)OXIMETRIA:.*?Indice Desat \(#/hour\)\s+(?:[\d]+(?:[.,]\d+)?\s+){2}([\d]+(?:[.,]\d+)?)"),
         ("indice_desat_total", r"(?i)OXIMETRIA:.*?Indice Desat \(#/hour\)\s+(?:[\d]+(?:[.,]\d+)?\s+){3}([\d]+(?:[.,]\d+)?)"),
-        ("oxim_menor90_total", r"(?i)OXIMETRIA:.*?<90 \(min\)\s+(?:[\d]+(?:[.,]\d+)?\s+){3}([\d]+(?:[.,]\d+)?)"),
-        ("oxim_menor80_total", r"(?i)OXIMETRIA:.*?<80 \(min\)\s+(?:[\d]+(?:[.,]\d+)?\s+){3}([\d]+(?:[.,]\d+)?)"),
-        ("oxim_menor70_total", r"(?i)OXIMETRIA:.*?<70 \(min\)\s+(?:[\d]+(?:[.,]\d+)?\s+){3}([\d]+(?:[.,]\d+)?)"),
-        ("oxim_menor60_total", r"(?i)OXIMETRIA:.*?<60 \(min\)\s+(?:[\d]+(?:[.,]\d+)?\s+){3}([\d]+(?:[.,]\d+)?)"),
-        ("t90", r"INTERPRETACION.*?T90\s*[:|]?\s*([\d.,]+)\s*%")
+        ("tiempo_desat_90_rem", r"(?i)OXIMETRIA[\s\S]*?<90\s*\(min\)\s+[0-9]+(?:[.,][0-9]+)?\s+([0-9]+(?:[.,][0-9]+)?)"),
+        ("tiempo_desat_90_nrem", r"(?i)OXIMETRIA[\s\S]*?<90\s*\(min\)(?:\s+[0-9]+(?:[.,][0-9]+)?){2}\s+([0-9]+(?:[.,][0-9]+)?)"),
+        ("tiempo_desat_80_rem", r"(?i)OXIMETRIA[\s\S]*?<80\s*\(min\)\s+[0-9]+(?:[.,][0-9]+)?\s+([0-9]+(?:[.,][0-9]+)?)"),
+        ("tiempo_desat_80_nrem", r"(?i)OXIMETRIA[\s\S]*?<80\s*\(min\)(?:\s+[0-9]+(?:[.,][0-9]+)?){2}\s+([0-9]+(?:[.,][0-9]+)?)"),
+        ("tiempo_desat_70_rem", r"(?i)OXIMETRIA[\s\S]*?<70\s*\(min\)\s+[0-9]+(?:[.,][0-9]+)?\s+([0-9]+(?:[.,][0-9]+)?)"),
+        ("tiempo_desat_70_nrem", r"(?i)OXIMETRIA[\s\S]*?<70\s*\(min\)(?:\s+[0-9]+(?:[.,][0-9]+)?){2}\s+([0-9]+(?:[.,][0-9]+)?)")
     ]
 
     # Tipo 1 es la tabla con "Suma AP" 
@@ -99,7 +100,7 @@ def procesar_psg_rtf(texto_relevante: str, archivo: str):
     datos = {}
 
     campos_comunes = [
-        ("nombre", r"(?i)Nombre\s*(?:del\s*paciente)?\s*[:|]?\s*\|?\s*([a-z0-9.,\s]+)(?=\s*\|?\s*(Edad|$))"),
+        ("nombre", r"(?iu)Nombre\s*(?:del\s*paciente)?\s*[:|]?\s*\|?\s*([\w.,'\s-]+?)(?=\s*\|?\s*\bEdad\b|\s*$)"),
         ("edad_anos", r"(?i)Edad\s*[:|]?\s*(\d+)\s*anos?.{0,100}?(Identificacion|Id)"),
         ("edad_meses", r"(?i)Edad.{0,100}?(\d+)\s*meses?.{0,100}?(Identificacion|Id)"),
         ("edad_dias", r"(?i)Edad.{0,100}?(\d+)\s*dias?.{0,100}?(Identificacion|Id)"),
@@ -131,11 +132,12 @@ def procesar_psg_rtf(texto_relevante: str, archivo: str):
         ("indice_desat_rem", r"(?i)OXIMETRIA.*?Indice\s+Desat\s+\(#/hour\)\|(?:[\d.,]*\|){1}([\d.,]+)"),
         ("indice_desat_nrem", r"(?i)OXIMETRIA.*?Indice\s+Desat\s+\(#/hour\)\|(?:[\d.,]*\|){2}([\d.,]+)"),
         ("indice_desat_total", r"(?i)OXIMETRIA.*?Indice\s+Desat\s+\(#/hour\)\|(?:[\d.,]*\|){3}([\d.,]+)"),
-        ("oxim_menor90_total", r"(?i)OXIMETRIA.*?<90\s*\(min\)\|(?:[\d.,]*\|){3}([\d.,]+)"),
-        ("oxim_menor80_total", r"(?i)OXIMETRIA.*?<80\s*\(min\)\|(?:[\d.,]*\|){3}([\d.,]+)"),
-        ("oxim_menor70_total", r"(?i)OXIMETRIA.*?<70\s*\(min\)\|(?:[\d.,]*\|){3}([\d.,]+)"),
-        ("oxim_menor60_total", r"(?i)OXIMETRIA.*?<60\s*\(min\)\|(?:[\d.,]*\|){3}([\d.,]+)"),
-        ("t90", r"(?i)INTERPRETACION.*?T90\s*[:|]?\s*([\d.,]+)\s*%")    
+        ("tiempo_desat_90_rem", r"(?i)OXIMETRIA[\s\S]*?<90\s*\(min\)\|[0-9]+(?:[.,][0-9]+)?\|([0-9]+(?:[.,][0-9]+)?)"),
+        ("tiempo_desat_90_nrem", r"(?i)OXIMETRIA[\s\S]*?<90\s*\(min\)\|(?:[0-9]+(?:[.,][0-9]+)?\|){2}([0-9]+(?:[.,][0-9]+)?)"),
+        ("tiempo_desat_80_rem", r"(?i)OXIMETRIA[\s\S]*?<80\s*\(min\)\|[0-9]+(?:[.,][0-9]+)?\|([0-9]+(?:[.,][0-9]+)?)"),
+        ("tiempo_desat_80_nrem", r"(?i)OXIMETRIA[\s\S]*?<80\s*\(min\)\|(?:[0-9]+(?:[.,][0-9]+)?\|){2}([0-9]+(?:[.,][0-9]+)?)"),
+        ("tiempo_desat_70_rem", r"(?i)OXIMETRIA[\s\S]*?<70\s*\(min\)\|[0-9]+(?:[.,][0-9]+)?\|([0-9]+(?:[.,][0-9]+)?)"),
+        ("tiempo_desat_70_nrem", r"(?i)OXIMETRIA[\s\S]*?<70\s*\(min\)\|(?:[0-9]+(?:[.,][0-9]+)?\|){2}([0-9]+(?:[.,][0-9]+)?)") 
     ]
 
     # Tipo 1 es la tabla con "Suma AP" (No he encontrado ejemplos de este caso en RTF)

@@ -14,6 +14,13 @@ import csv
 
 def procesar_archivo(archivo: Path) -> None:
     """Lee el contenido de un archivo y retorna el texto extraído o None si hay un error."""
+
+    # Excluir examenes con OXIGENO
+    nombre = archivo.name.upper()
+    patrones_excluir = ["O2", "OXIG", "OXÍG", "OXIGENO", "OXÍGENO"]
+    if any(pat in nombre for pat in patrones_excluir):
+        logging.info(f"Archivo excluido por patrón OXIGENO en filename: {archivo.name}")
+        return None
     
     _, extension = os.path.splitext(archivo)
     texto = ""

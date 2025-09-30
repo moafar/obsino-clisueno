@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime
 import warnings
 
-df = pd.read_csv("/home/rom/clisueno/output/unificado.csv", quoting=1)
+df = pd.read_csv("/home/rom/prj/obsino-clisueno/output/unificado.csv", quoting=1)
 print(f"Cargado dataframe con {df.shape[0]} filas")
 print(f"El dataframe tiene {len(df.columns)} columnas: \n {df.columns}")
 
@@ -18,13 +18,9 @@ variables_str = [
     'empresa',
     'fuente',
     'uuid'
-
-
 ]
 
 variables_int = [
-
-
 ]
 
 variables_float = [
@@ -51,21 +47,17 @@ variables_float = [
     'indice_desat_rem',
     'indice_desat_nrem',
     'indice_desat_total',
-    'oxim_menor90_total',
-    'oxim_menor80_total',
-    'oxim_menor70_total',
-    'oxim_menor60_total',
     't90',
+    't80',
+    't70',
     'ih',
     'iah',
     'numero_eventos_ah'
-
-
 ]
 
 variables_datetime = ['fecha_estudio']
 
-# Variables DATETIME ***********************************
+# Tratamiento de variables DATETIME ***********************************
 
 import pandas as pd
 from datetime import datetime
@@ -240,16 +232,19 @@ validar_transformar_float(df,variables_float)
 validar_transformar_datetime(df,variables_datetime)
 validar_transformar_str(df,variables_str)
 
+
+# Cálculo de edad en años decimales
 df["edad_anos_decimal"] = (
     df["edad_anos"].fillna(0) +
     df["edad_meses"].fillna(0) / 12 +
     df["edad_dias"].fillna(0) / 365.25
 )
 
+# === Limpieza y cálculo de peso en kg ===
 # Unificación de unidades: todo a minúsculas y sin espacios
 df["medida_peso"] = df["medida_peso"].str.lower().str.strip()
 
-# Definimos sets de unidades por tipo
+# Definir sets de unidades
 unidades_kg = {"kg", "kgs", "kgr", "kl"}
 unidades_g = {"g", "gr", "grs"}
 
@@ -265,15 +260,15 @@ df["peso_kg"] = df.apply(
 print("\nUnidades de peso no contempladas: \n")
 print(df[~df["medida_peso"].isin(unidades_kg.union(unidades_g))]["medida_peso"].value_counts())
 
-
-# Limpieza de texto
+# === Limpieza y cálculo de talla en cm ===
+# Unificación de unidades: todo a minúsculas y sin espacios
 df["medida_talla"] = df["medida_talla"].str.lower().str.strip()
 
 # Definir sets de unidades
 unidades_metros = {"m", "mts", "metros"}
 unidades_centimetros = {"c", "cm", "cms", "a"}
 
-# Reemplazar nulos por 0 (si lo consideras seguro)
+# Reemplazar nulos por 0
 df["talla"] = df["talla"].fillna(0)
 
 # Calcular talla en cm
@@ -288,15 +283,16 @@ df["talla_cm"] = df.apply(
 print("\nUnidades de talla no contempladas: \n")
 print(df[~df["medida_talla"].isin(["cm", "m"])]["medida_talla"].value_counts())
 
-# Limpieza del texto
+# === Limpieza y cálculo de cuello en cm ===
+# Unificación de unidades: todo a minúsculas y sin espacios
 df["medida_cuello"] = df["medida_cuello"].str.lower().str.strip()
 
-# Definir unidades válidas
+# Definir sets de unidades
 unidades_metros = {"m", "mts", "metros"}
 unidades_centimetros = {"c", "cm", "cms"}
 unidades_cuello_validas = unidades_metros.union(unidades_centimetros)
 
-# Rellenar nulos si aplica
+# Reemplazar nulos por 0
 df["cuello"] = df["cuello"].fillna(0)
 
 # Calcular cuello en cm
@@ -311,6 +307,7 @@ df["cuello_cm"] = df.apply(
 print("\nUnidades de cuello no contempladas: \n")
 print(df[~df["medida_cuello"].isin(unidades_cuello_validas)]["medida_cuello"].value_counts())
 
+# === Limpieza y cálculo de perímetro abdominal en cm ===
 # Limpieza del texto
 df["medida_perimetro_abdominal"] = df["medida_perimetro_abdominal"].str.lower().str.strip()
 
@@ -319,7 +316,7 @@ unidades_metros = {"m", "ms", "mts"}
 unidades_centimetros = {"cm", "cms", "cm.", ".cm", ".ccm", "ccm"}
 unidades_abdominal_validas = unidades_metros.union(unidades_centimetros)
 
-# Reemplazar nulos si aplica
+# Reemplazar nulos por 0
 df["perimetro_abdominal"] = df["perimetro_abdominal"].fillna(0)
 
 # Calcular perímetro abdominal en cm
@@ -334,13 +331,34 @@ df["perimetro_abdominal_cm"] = df.apply(
 print("\nUnidades de perímetro abdominal no contempladas: \n")
 print(df[~df["medida_perimetro_abdominal"].isin(unidades_abdominal_validas)]["medida_perimetro_abdominal"].value_counts())
 
+# Cálculo de T90, T80 y T70
+
+# Asegura numérico para todas las columnas usadas en txx
+cols_txx = [
+    'tiempo_desat_90_rem','tiempo_desat_90_nrem',
+    'tiempo_desat_80_rem','tiempo_desat_80_nrem',
+    'tiempo_desat_70_rem','tiempo_desat_70_nrem',
+    'tiempo_sueno'
+]
+validar_transformar_float(df, cols_txx)
+
+def txx(df, col_rem, col_nrem, col_total):
+    rem = df[col_rem].fillna(0)
+    nrem = df[col_nrem].fillna(0)
+    total = df[col_total]
+    out = (rem + nrem) / total * 100
+    return out.where(total > 0)
+
+df['t90'] = txx(df, 'tiempo_desat_90_rem', 'tiempo_desat_90_nrem', 'tiempo_sueno')
+df['t80'] = txx(df, 'tiempo_desat_80_rem', 'tiempo_desat_80_nrem', 'tiempo_sueno')
+df['t70'] = txx(df, 'tiempo_desat_70_rem', 'tiempo_desat_70_nrem', 'tiempo_sueno')
+
 columnas_finales = [
     'nombre','id', 'imc', 'solicita', 'empresa', 'fecha_estudio', 'epworth', 
     'tiempo_en_cama', 'tiempo_sueno', 'eficiencia_sueno', 'latencia_sueno_total',
     'latencia_sueno_rem', 'indice_microalertamientos', 'porcentaje_sueno_rem', 
     'porcentaje_sueno_profundo', 'iac', 'iao', 'iam', 'indice_desat_rem',
-    'indice_desat_nrem', 'indice_desat_total', 'oxim_menor90_total', 
-    'oxim_menor80_total', 'oxim_menor70_total', 'oxim_menor60_total', 't90',
+    'indice_desat_nrem', 'indice_desat_total', 't90', 't80', 't70',
     'numero_eventos_ah', 'ih', 'iah', 'fuente', 'uuid', 'edad_anos_decimal', 
     'peso_kg', 'talla_cm', 'cuello_cm', 'perimetro_abdominal_cm'
 ]
@@ -438,7 +456,7 @@ variables_percent = ['eficiencia_sueno', 'porcentaje_sueno_rem', 'porcentaje_sue
 
 spreadsheet_id="1KI8_Df7G9RUco-0FLPqTiFsyLC1r98T_pR3CsHZAu0s"
 hoja="Data"
-creds_path="/home/rom/clisueno/secrets/observatorio-ino-1-78cfc246d28f-key.json"
+creds_path="/home/rom/prj/obsino-clisueno/secrets/observatorio-ino-1-5f2c3c9029e4.json"
 
 exportar_df_a_google_sheets(
     df=df,

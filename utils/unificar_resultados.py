@@ -4,7 +4,7 @@ import glob
 from IPython.display import display, HTML
 import uuid
 
-carpeta = "/home/rom/clisueno/output"
+carpeta = "/home/rom/prj/obsino-clisueno/output"
 
 # Función que recorre la carpeta y analiza los archivos CSV para comparar estructura
 def analizar_csv(carpeta):
