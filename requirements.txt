@@ -11,3 +11,4 @@ gspread
 gspread-dataframe
 oauth2client
 ipython
+pyyaml

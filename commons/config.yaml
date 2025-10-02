@@ -1,0 +1,14 @@
+entrada:
+  ruta: "/ruta/a/tu/directorio_de_entrada"
+
+procesamiento:
+  tipos_validos: ["docx", "doc", "rtf"]
+  glob_patron: "**/*"          # opcional
+  barra_progreso: true         # opcional
+
+salida:
+  carpeta_csv: "/home/rom/prj/obsino-clisueno/output"
+  archivo_unificado: "unificado.csv"
+
+logging:
+  level: "INFO"                # DEBUG/INFO/WARNING/ERROR/CRITICAL

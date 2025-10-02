@@ -1,5 +1,5 @@
 import logging
-from utils.texto_utils import extraer_regex
+from commons.texto_utils import extraer_regex
 
 def procesar_autocpap_docx(texto_relevante: str):
     logging.info("Procesando examen AUTO CPAP (DOCX)*****************")

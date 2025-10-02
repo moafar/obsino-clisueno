@@ -1,8 +1,8 @@
 import logging
-from utils.texto_utils import extraer_regex
+from commons.texto_utils import extraer_regex
 import re
 
-def procesar_psg_doc(texto_relevante: str, archivo: str):
+def procesar_basal_doc(texto_relevante: str, archivo: str):
     logging.info("Procesando examen BASAL (DOC)") 
     datos = {}
 
@@ -75,6 +75,7 @@ def procesar_psg_doc(texto_relevante: str, archivo: str):
     # Detectar tipo de resumen
     tiene_suma_ap = re.search(r"\bSuma\s+AP\b", texto_relevante, re.IGNORECASE)
     tiene_rera = re.search(r"\bRERA\b", texto_relevante, re.IGNORECASE)
+    
     # Extraer patrones específicos según el tipo de resumen
     if tiene_suma_ap and tiene_rera:
         patrones_especificos = campos_tipo2  # Tipo 2: Suma AP + RERA
@@ -95,8 +96,8 @@ def procesar_psg_doc(texto_relevante: str, archivo: str):
 
     return datos
 
-def procesar_psg_rtf(texto_relevante: str, archivo: str):
-    logging.info("Procesando examen PSG (RTF)")
+def procesar_basal_rtf(texto_relevante: str, archivo: str):
+    logging.info("Procesando examen Basal (RTF)")
     datos = {}
 
     campos_comunes = [
@@ -142,23 +143,23 @@ def procesar_psg_rtf(texto_relevante: str, archivo: str):
 
     # Tipo 1 es la tabla con "Suma AP" (No he encontrado ejemplos de este caso en RTF)
     campos_tipo1 = [
-        ("numero_eventos_ah", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?Numero\|(?:[^\|\n]*\|){5}([^\|\n]*)"),
-        ("ih", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?(?:Indice\s+\(nº/h\s+TST\)|Indice\s+\[nº/h\])\|(?:[\d.,]+\|){3}([\d.,]+)"),
-        ("iah", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?(?:Indice\s+\(nº/h\s+TST\)|Indice\s+\[nº/h\])\|(?:[\d.,]+\|){4}([\d.,]+)"),
+       ("numero_eventos_ah", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?Numero\|(?:[^\|\n]*\|){5}([^\|\n]*)"),
+       ("ih", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?(?:Indice\s+\(nº/h\s+TST\)|Indice\s+\[nº/h\])\|(?:[\d.,]+\|){3}([\d.,]+)"),
+       ("iah", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?(?:Indice\s+\(nº/h\s+TST\)|Indice\s+\[nº/h\])\|(?:[\d.,]+\|){4}([\d.,]+)"),
     ]
 
     # Tipo 2 es la tabla con "Suma AP" y "RERA"
     campos_tipo2 = [
-        ("numero_eventos_ah", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?Numero\s*\|(?:[\d.,]+\|){7}([\d.,]+)"),
-        ("ih", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?(?:Indice\s+\(nº/h\s+TST\)|Indice\s+\[nº/h\])\|(?:[\d.,]+\|){4}([\d.,]+)"),
-        ("iah", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?(?:Indice\s+\(nº/h\s+TST\)|Indice\s+\[nº/h\])\|(?:[\d.,]+\|){5}([\d.,]+)"),
+       ("numero_eventos_ah", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?Numero\s*\|(?:[\d.,]+\|){7}([\d.,]+)"),
+       ("ih", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?(?:Indice\s+\(nº/h\s+TST\)|Indice\s+\[nº/h\])\|(?:[\d.,]+\|){4}([\d.,]+)"),
+       ("iah", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?(?:Indice\s+\(nº/h\s+TST\)|Indice\s+\[nº/h\])\|(?:[\d.,]+\|){5}([\d.,]+)"),
     ]
 
     # Tipo 3 es la tabla sencilla, que NO tiene "Suma AP" ni RERA
     campos_tipo3 = [
-        ("numero_eventos_ah", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?Numero\s*\|(?:[^\|\n]*\|){4}([^\|\n]*)"),
-        ("ih", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?(?:Indice\s+\(nº/h\s+TST\)|Indice\s+\[nº/h\])\|(?:[\d.,]+\|){3}([\d.,]+)"),
-        ("iah", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?(?:Indice\s+\(nº/h\s+TST\)|Indice\s+\[nº/h\])\|(?:[\d.,]+\|){4}([\d.,]+)"),
+       ("numero_eventos_ah", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?Numero\s*\|(?:[^\|\n]*\|){4}([^\|\n]*)"),
+       ("ih", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?(?:Indice\s+\(nº/h\s+TST\)|Indice\s+\[nº/h\])\|(?:[\d.,]+\|){3}([\d.,]+)"),
+       ("iah", r"(?i)Resumen\s+de\s+eventos\s+respiratorios\s+\(Tiempo\s+de\s+sueno\s+total\).*?(?:Indice\s+\(nº/h\s+TST\)|Indice\s+\[nº/h\])\|(?:[\d.,]+\|){4}([\d.,]+)"),
     ]
 
     # Extraer REGEX para patrones comunes
@@ -167,7 +168,8 @@ def procesar_psg_rtf(texto_relevante: str, archivo: str):
         datos[clave] = valor if valor else "N/A"
         if datos[clave] == "N/A":
             logging.warning(f"{clave}: N/A")
-
+            
+    
     # Detectar tipo de resumen
     tiene_suma_ap = re.search(r"\|\s*Suma\s+AP\s*\|", texto_relevante, re.IGNORECASE)
     tiene_rera = re.search(r"\|\s*RERA\s*\|", texto_relevante, re.IGNORECASE)

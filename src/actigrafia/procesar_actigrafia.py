@@ -1,5 +1,5 @@
 import logging
-from utils.texto_utils import extraer_regex
+from commons.texto_utils import extraer_regex
 
 def procesar_actigrafia_doc(texto_relevante: str):
     logging.info("Procesando examen ACTIGRAFIA")

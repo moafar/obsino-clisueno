@@ -1,15 +1,15 @@
 from pathlib import Path
 import os
 import logging
-from utils.texto_utils import extraer_texto_docx, extraer_texto_rtf, extraer_texto_doc, normalizar_texto, extraer_subcadenas, determinar_tipos_examenes
-from utils.procesar_psg import procesar_psg_doc, procesar_psg_rtf
-from utils.procesar_cpap import procesar_cpap_doc, procesar_cpap_rtf, procesar_cpap_docx
-from utils.procesar_dam import procesar_dam_doc, procesar_dam_rtf
-from utils.procesar_bpap import procesar_bpap_doc, procesar_bpap_rtf
-from utils.procesar_actigrafia import procesar_actigrafia_doc
-from utils.procesar_capnografia import procesar_capnografia_doc, procesar_capnografia_rtf
-from utils.procesar_autocpap import procesar_autocpap_docx
-from utils.procesar_poligrafia import procesar_poligrafia_docx
+from commons.texto_utils import extraer_texto_docx, extraer_texto_rtf, extraer_texto_doc, normalizar_texto, extraer_subcadenas, determinar_tipos_examenes
+from src.basal.procesar_basal import procesar_basal_doc, procesar_basal_rtf
+# from basal.xpap.procesar_cpap import procesar_cpap_doc, procesar_cpap_rtf, procesar_cpap_docx
+# from dam.procesar_dam import procesar_dam_doc, procesar_dam_rtf
+# from basal.xpap.procesar_bpap import procesar_bpap_doc, procesar_bpap_rtf
+# from actigrafia.procesar_actigrafia import procesar_actigrafia_doc
+# from capnografia.procesar_capnografia import procesar_capnografia_doc, procesar_capnografia_rtf
+# from autocpap.procesar_autocpap import procesar_autocpap_docx
+# from poligrafia.procesar_poligrafia import procesar_poligrafia_docx
 import csv
 
 def procesar_archivo(archivo: Path) -> None:
@@ -81,11 +81,11 @@ def procesar_archivo(archivo: Path) -> None:
                     logging.info(f"** INICIO ** Procesando archivo BASAL válido: {archivo}")
 
                     if extension == ".rtf":
-                        resultados_psg = procesar_psg_rtf(texto_relevante, archivo)
-                        nombre_archivo = "resultados_psg_rtf.csv"
+                        resultados_basal = procesar_basal_rtf(texto_relevante, archivo)
+                        nombre_archivo = "resultados_basal_rtf.csv"
                     elif extension == ".doc":
-                        resultados_psg = procesar_psg_doc(texto_relevante, archivo)
-                        nombre_archivo = "resultados_psg_doc.csv"
+                        resultados_basal = procesar_basal_doc(texto_relevante, archivo)
+                        nombre_archivo = "resultados_basal_doc.csv"
                     else:
                         logging.warning(f"Extensión no reconocida para archivo: {archivo}")
                         continue
@@ -96,10 +96,10 @@ def procesar_archivo(archivo: Path) -> None:
 
                     es_nuevo = not os.path.isfile(ruta)
                     with open(ruta, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.DictWriter(f, fieldnames=resultados_psg.keys())
+                        writer = csv.DictWriter(f, fieldnames=resultados_basal.keys())
                         if es_nuevo:
                             writer.writeheader()
-                        writer.writerow(resultados_psg)
+                        writer.writerow(resultados_basal)
 
                     logging.info(f"** FIN ** Procesamiento Basal terminado para {archivo}")
                     
