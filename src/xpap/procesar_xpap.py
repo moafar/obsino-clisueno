@@ -2,9 +2,9 @@ import logging
 from commons.texto_utils import extraer_regex
 import re
 
-def procesar_basal_doc(texto_relevante: str, archivo: str):
-    logging.info("Procesando examen BASAL (DOC)") 
-    datos = {} 
+def procesar_xpap_doc(texto_relevante: str, archivo: str):
+    logging.info("Procesando examen xpap (DOC)") 
+    datos = {}
 
     campos = [
         ("nombre", r"(?iu)nombre\s*:?\s*([\w.,'\s-]+?)(?=\s*\bedad\b)"),
@@ -46,7 +46,12 @@ def procesar_basal_doc(texto_relevante: str, archivo: str):
         ("tiempo_desat_80_rem", r"(?i)OXIMETRIA[\s\S]*?<80\s*\(min\)\s+[0-9]+(?:[.,][0-9]+)?\s+([0-9]+(?:[.,][0-9]+)?)"),
         ("tiempo_desat_80_nrem", r"(?i)OXIMETRIA[\s\S]*?<80\s*\(min\)(?:\s+[0-9]+(?:[.,][0-9]+)?){2}\s+([0-9]+(?:[.,][0-9]+)?)"),
         ("tiempo_desat_70_rem", r"(?i)OXIMETRIA[\s\S]*?<70\s*\(min\)\s+[0-9]+(?:[.,][0-9]+)?\s+([0-9]+(?:[.,][0-9]+)?)"),
-        ("tiempo_desat_70_nrem", r"(?i)OXIMETRIA[\s\S]*?<70\s*\(min\)(?:\s+[0-9]+(?:[.,][0-9]+)?){2}\s+([0-9]+(?:[.,][0-9]+)?)")
+        ("tiempo_desat_70_nrem", r"(?i)OXIMETRIA[\s\S]*?<70\s*\(min\)(?:\s+[0-9]+(?:[.,][0-9]+)?){2}\s+([0-9]+(?:[.,][0-9]+)?)"),
+        ("marca_equipo", r"(?is)PROCEDIMIENTO[\s\S]*?PAP[^.]{0,100}?marca\s+(\w+)\b[\s\S]*?INDICACION\s+DEL\s+EXAMEN"),
+        ("tipo_mascara", r"(?is)PROCEDIMIENTO[\s\S]*?se\s+utilizo\s+mascara\s+(?:de\s+tipo\s+)?(.+?)\s+tamano\b[\s\S]*?INDICACION\s+DEL\s+EXAMEN"),
+        ("tamano_mascara", r"(?is)PROCEDIMIENTO[\s\S]*?tamano\s+(?P<tam>[^.()]+?)\s*(?=\.\s*\()[\s\S]*?INDICACION\s+DEL\s+EXAMEN"),
+        ("presion_terapeutica", r"(?is)CONCLUSIONES[\s\S]*?a\s+una\s+presion\s+de\s+(?P<presion>\d+(?:[.,]\d+)?(?:\s*/\s*\d+(?:[.,]\d+)?)?)\s*cm\s+de\s+(?:h2o|agua)\b[\s\S]*?ARQUITECTURA\s+DE\s+SUENO"),
+        
     ]
 
     # Tipo 1 es la tabla con "Suma AP" 
@@ -96,8 +101,8 @@ def procesar_basal_doc(texto_relevante: str, archivo: str):
 
     return datos
 
-def procesar_basal_rtf(texto_relevante: str, archivo: str):
-    logging.info("Procesando examen Basal (RTF)")
+def procesar_xpap_rtf(texto_relevante: str, archivo: str):
+    logging.info("Procesando examen xpap (RTF)")
     datos = {}
 
     campos_comunes = [
@@ -138,7 +143,13 @@ def procesar_basal_rtf(texto_relevante: str, archivo: str):
         ("tiempo_desat_80_rem", r"(?i)OXIMETRIA[\s\S]*?<80\s*\(min\)\|[0-9]+(?:[.,][0-9]+)?\|([0-9]+(?:[.,][0-9]+)?)"),
         ("tiempo_desat_80_nrem", r"(?i)OXIMETRIA[\s\S]*?<80\s*\(min\)\|(?:[0-9]+(?:[.,][0-9]+)?\|){2}([0-9]+(?:[.,][0-9]+)?)"),
         ("tiempo_desat_70_rem", r"(?i)OXIMETRIA[\s\S]*?<70\s*\(min\)\|[0-9]+(?:[.,][0-9]+)?\|([0-9]+(?:[.,][0-9]+)?)"),
-        ("tiempo_desat_70_nrem", r"(?i)OXIMETRIA[\s\S]*?<70\s*\(min\)\|(?:[0-9]+(?:[.,][0-9]+)?\|){2}([0-9]+(?:[.,][0-9]+)?)") 
+        ("tiempo_desat_70_nrem", r"(?i)OXIMETRIA[\s\S]*?<70\s*\(min\)\|(?:[0-9]+(?:[.,][0-9]+)?\|){2}([0-9]+(?:[.,][0-9]+)?)"),
+        ("marca_equipo", r"(?is)PROCEDIMIENTO[\s\S]*?PAP[^.]{0,100}?marca\s+(\w+)\b[\s\S]*?INDICACION\s+DEL\s+EXAMEN"),
+        ("tipo_mascara", r"(?is)PROCEDIMIENTO[\s\S]*?se\s+utilizo\s+mascara\s+(?:de\s+tipo\s+)?(.+?)\s+tamano\b[\s\S]*?INDICACION\s+DEL\s+EXAMEN"),
+        ("tamano_mascara", r"(?is)PROCEDIMIENTO[\s\S]*?tamano\s+(?P<tam>[^.()]+?)\s*(?=\.\s*\()[\s\S]*?INDICACION\s+DEL\s+EXAMEN"),
+        ("presion_terapeutica", r"(?is)CONCLUSIONES[\s\S]*?a\s+una\s+presion\s+de\s+(?P<presion>\d+(?:[.,]\d+)?(?:\s*/\s*\d+(?:[.,]\d+)?)?)\s*cm\s+de\s+(?:h2o|agua)\b[\s\S]*?ARQUITECTURA\s+DE\s+SUENO"),
+       
+        
     ]
 
     # Tipo 1 es la tabla con "Suma AP" (No he encontrado ejemplos de este caso en RTF)
@@ -189,6 +200,71 @@ def procesar_basal_rtf(texto_relevante: str, archivo: str):
         if datos[clave] == "N/A":
             logging.warning(f"{clave}: N/A")
     
+    # Agregar el nombre del archivo a los datos
+    datos['fuente'] = archivo
+    
+    return datos
+
+def procesar_xpap_docx(texto_relevante: str, archivo: str):
+    
+    logging.info("Procesando examen xpap (DOCX)")
+    datos = {}
+
+    campos_comunes = [
+        ("nombre", r"(?iu)Nombre\s*(?:del\s*paciente)?\s*[:|]?\s*\|?\s*([\w.,'\s-]+?)(?=\s*\|?\s*\bEdad\b|\s*$)"),
+        ("edad_anos", r"(?i)Edad\s*[:|]?\s*(\d+)\s*anos?.{0,100}?(Identificacion|Id)"),
+        ("edad_meses", r"(?i)Edad.{0,100}?(\d+)\s*meses?.{0,100}?(Identificacion|Id)"),
+        ("edad_dias", r"(?i)Edad.{0,100}?(\d+)\s*dias?.{0,100}?(Identificacion|Id)"),
+        ("id", r"(?i)\b(?:Identificacion|Id)\b(?:\s*[:|]?\s*\|?\s*(?:Identificacion|Id)\b)*\s*[:|]?\s*\|?\s*(\d{6,})"),
+        ("peso", r"(?i)peso\b(?:\s*[:|]?\s*\|?\s*(?:\(\s*[a-z]+\s*\)\s*\|?)?\s*peso\b)*\s*[:|]?\s*\|?\s*(?:\(\s*[a-z]+\s*\)\s*\|?)?\s*(\d+(?:[.,]\d+)?)\s*\|?.*?talla"),
+        ("medida_peso", r"(?i)peso\b(?:\s*[:|]?\s*\|?\s*(?:\(\s*[a-z]+\s*\)\s*\|?)?\s*peso\b)*\s*[:|]?\s*\|?\s*(?:\(\s*([a-z]+)\s*\)\s*\|?)?\s*(\d+(?:[.,]\d+)?)\s*(?:\|?\s*\(?([a-z]+)\)?)?\s*\|?.*?talla"),
+        ("talla", r"(?i)talla\b(?:\s*[:|]?\s*\|?\s*(?:\(\s*[a-z]+\s*\)\s*\|?)?\s*talla\b)*\s*[:|]?\s*\|?\s*(?:\(\s*[a-z]+\s*\)\s*\|?)?\s*(\d+(?:[.,]\d+)?)\s*\|?.*?imc"),
+        ("medida_talla", r"(?i)talla\b(?:\s*[:|]?\s*\|?\s*(?:\(\s*[a-z]+\s*\)\s*\|?)?\s*talla\b)*\s*[:|]?\s*\|?\s*(?:\(\s*([a-z]+)\s*\)\s*\|?)?\s*(\d+(?:[.,]\d+)?)\s*(?:\|?\s*\(?([a-z]+)\)?)?\s*\|?.*?imc"),
+        ("imc", r"(?i)IMC\b(?:\s*[:|]?\s*\|?\s*IMC\b)*\s*[:|]?\s*\|?\s*([\d.,]+)(?:\s*[\d.,]+)*\s*\|?\s*Cuello"),
+        ("cuello", r"(?i)Cuello\b\s*[:|]?\s*\|?\s*(\d+)\s*[A-Za-z]+(?:\s*\d+\s*[A-Za-z]+)*\s*\|?\s*Perimetro\b"),
+        ("medida_cuello", r"(?i)Cuello\b\s*[:|]?\s*\|?\s*\d+\s*([A-Za-z]+)(?:\s*\d+\s*[A-Za-z]+)*\s*\|?\s*Perimetro\b"),
+        ("perimetro_abdominal", r"(?i)Perimetro\s*Abdominal\b\s*[:|]?\s*\|?\s*(\d+)\s*[A-Za-z]+(?:\s*\d+\s*[A-Za-z]+)*\s*\|?\s*Solicita\b"),
+        ("medida_perimetro_abdominal", r"(?i)Perimetro\s*Abdominal\b\s*[:|]?\s*\|?\s*\d+\s*([A-Za-z]+)(?:\s*\d+\s*[A-Za-z]+)*\s*\|?\s*Solicita\b"),
+        ("solicita", r"(?is)Solicita\b(?:\s*[:|]?\s*\|?\s*Solicita\b)*\s*[:|]?\s*\|?\s*([^\|]+?)\s*\|?\s*Empresa\b"),
+        ("empresa", r"(?i)(?:Empresa|Eps)\b(?:\s*[:|]?\s*\|?\s*(?:Empresa|Eps)\b)*\s*[:|]?\s*\|?\s*([A-Za-z0-9 .,-]{1,50}?)(?:\s+\1)*\s*\|?\s*(?=Fecha\b|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|$)"),
+        ("fecha_estudio", r"(?i)Fecha(?:\s+del\s+estudio)?(?:\s*[:|]?\s*\|?\s*Fecha\b)*\s*[:|]?\s*\|?\s*([\d]{1,2}/[\d]{1,2}/[\d]{2,4})\b.*?\bPROCEDIMIENTO"),
+        ("epworth", r"(?i)Escala\s*de\s*Epworth\s+(\d+)\s*/\s*\d+"),
+        ("tiempo_en_cama", r"(?i)Tiempo\s+en\s+Cama\b(?:\s*[:|]?\s*\|?\s*Tiempo\s+en\s+Cama\b)*\s*[:|]?\s*\|?\s*([\d]+(?:\.[\d]+)?)\s*(?:min(?:utos)?)?"),
+        ("tiempo_sueno", r"(?i)Tiempo\s+Total\s+de\s+Sueno\b(?:\s*[:|]?\s*\|?\s*Tiempo\s+Total\s+de\s+Sueno\b)*\s*[:|]?\s*\|?\s*([\d]+(?:\.[\d]+)?)\s*(?:min(?:utos)?)?"),
+        ("eficiencia_sueno", r"(?i)(?:ARQUITECTURA\s+DE\s+SUENO:.*)?Eficiencia\s+de\s+Sueno\b(?:\s*[:|]?\s*\|?\s*Eficiencia\s+de\s+Sueno\b)*\s*[:|]?\s*\|?\s*([\d]+(?:[.,]\d+)?)\s*%?"),
+        ("latencia_sueno_total", r"(?i)Latencia\s+de\s+Sueno\b(?:\s*[:|]?\s*\|?\s*Latencia\s+de\s+Sueno\b)*\s*[:|]?\s*\|?\s*([\d]+(?:[.,]\d+)?)\s*(?:min(?:utos)?)?"),
+        ("latencia_sueno_rem", r"(?i)Latencia\s+de\s+sueno\s+REM\b(?:\s*[:|]?\s*\|?\s*Latencia\s+de\s+sueno\s+REM\b)*\s*[:|]?\s*\|?\s*([\d]+(?:[.,]\d+)?)\s*(?:min(?:utos)?)?"),
+        ("indice_microalertamientos", r"(?i)Microalertamientos.*?Indice\s+Despertares\s*[:|]?\s*\|?\s*([\d.,]+)"),
+        ("porcentaje_sueno_rem", r"(?i)\bREM\b.*?([\d]+(?:[.,]\d+)?)(?=\s*S1\b)"),
+        ("porcentaje_sueno_rem", r"(?i)\bS3\b.*?([\d]+(?:[.,]\d+)?)(?=\s*AC\b)"),
+        ("iac", r"(?is)AC\s+AO\s+AM.*?Indice\s*\(\s*n[ºo]\s*/\s*h\s*TST\s*\)\s*([-+]?\d+(?:[.,]\d+)?)"),
+        ("iao", r"(?is)AC\s+AO\s+AM.*?Indice\s*\(\s*n[ºo]\s*/\s*h\s*TST\s*\)\s*[-+]?\d+(?:[.,]\d+)?\s+([-+]?\d+(?:[.,]\d+)?)"),
+        ("iam", r"(?is)AC\s+AO\s+AM.*?Indice\s*\(\s*n[ºo]\s*/\s*h\s*TST\s*\)\s*(?:[-+]?\d+(?:[.,]\d+)?\s+){2}([-+]?\d+(?:[.,]\d+)?)"),
+        ("indice_desat_rem", r"(?is)RESPIRACION\s+PERIODICA.*?Indice\s+Desat\s*\(#/hour\)\s*(?:[-+]?\d+(?:[.,]\d+)?\s+){1}([-+]?\d+(?:[.,]\d+)?)"),
+        ("indice_desat_nrem", r"(?is)RESPIRACION\s+PERIODICA.*?Indice\s+Desat\s*\(#/hour\)\s*(?:[-+]?\d+(?:[.,]\d+)?\s+){2}([-+]?\d+(?:[.,]\d+)?)"),
+        ("indice_desat_total", r"(?is)RESPIRACION\s+PERIODICA.*?Indice\s+Desat\s*\(#/hour\)\s*(?:[-+]?\d+(?:[.,]\d+)?\s+){3}([-+]?\d+(?:[.,]\d+)?)"),
+        ("tiempo_desat_90_rem", r"(?is)RESPIRACION\s+PERIODICA.*?<\s*90\s*\(min\)\s*[-+]?\d+(?:[.,]\d+)?\s+([-+]?\d+(?:[.,]\d+)?)"),
+        ("tiempo_desat_90_nrem", r"(?is)RESPIRACION\s+PERIODICA.*?<\s*90\s*\(min\)\s*(?:[-+]?\d+(?:[.,]\d+)?\s+){2}([-+]?\d+(?:[.,]\d+)?)"),
+        ("tiempo_desat_80_rem", r"(?is)RESPIRACION\s+PERIODICA.*?<\s*80\s*\(min\)\s*[-+]?\d+(?:[.,]\d+)?\s+([-+]?\d+(?:[.,]\d+)?)"),
+        ("tiempo_desat_80_nrem", r"(?is)RESPIRACION\s+PERIODICA.*?<\s*80\s*\(min\)\s*(?:[-+]?\d+(?:[.,]\d+)?\s+){2}([-+]?\d+(?:[.,]\d+)?)"),
+        ("tiempo_desat_70_rem", r"(?is)RESPIRACION\s+PERIODICA.*?<\s*70\s*\(min\)\s*[-+]?\d+(?:[.,]\d+)?\s+([-+]?\d+(?:[.,]\d+)?)"),
+        ("tiempo_desat_70_nrem", r"(?is)RESPIRACION\s+PERIODICA.*?<\s*70\s*\(min\)\s*(?:[-+]?\d+(?:[.,]\d+)?\s+){2}([-+]?\d+(?:[.,]\d+)?)"),
+        ("marca_equipo", r"(?is)PROCEDIMIENTO[\s\S]*?PAP[^.]{0,100}?marca\s+(\w+)\b[\s\S]*?INDICACION\s+DEL\s+EXAMEN"),
+        ("tipo_mascara", r"(?is)PROCEDIMIENTO[\s\S]*?se\s+utilizo\s+mascara\s+(?:de\s+tipo\s+)?(.+?)\s+tamano\b[\s\S]*?INDICACION\s+DEL\s+EXAMEN"),
+        ("tamano_mascara", r"(?is)PROCEDIMIENTO[\s\S]*?tamano\s+(?P<tam>[^.()]+?)\s*(?=\.\s*\()[\s\S]*?INDICACION\s+DEL\s+EXAMEN"),
+        ("presion_terapeutica", r"(?is)CONCLUSIONES[\s\S]*?a\s+una\s+presion\s+de\s+(?P<presion>\d+(?:[.,]\d+)?(?:\s*/\s*\d+(?:[.,]\d+)?)?)\s*cm\s+de\s+(?:h2o|agua)\b[\s\S]*?ARQUITECTURA\s+DE\s+SUENO"),
+        ("numero_eventos_ah", r"(?is)AC\s+AO\s+AM.*?Numero\s*(?:[-+]?\d+(?:[.,]\d+)?\s+){5}([-+]?\d+(?:[.,]\d+)?)"),
+        ("ih", r"(?is)AC\s+AO\s+AM.*?Indice\s*\(\s*n[ºo]\s*/\s*h\s*TST\s*\)\s*(?:[-+]?\d+(?:[.,]\d+)?\s+){4}([-+]?\d+(?:[.,]\d+)?)"),
+        ("iah", r"(?is)AC\s+AO\s+AM.*?Indice\s*\(\s*n[ºo]\s*/\s*h\s*TST\s*\)\s*(?:[-+]?\d+(?:[.,]\d+)?\s+){5}([-+]?\d+(?:[.,]\d+)?)")
+    ]
+
+    # Extraer REGEX para patrones comunes
+    for clave, patron in campos_comunes:
+        valor = extraer_regex(texto_relevante, patron)
+        datos[clave] = valor if valor else "N/A"
+        if datos[clave] == "N/A":
+            logging.warning(f"{clave}: N/A")
+            
     # Agregar el nombre del archivo a los datos
     datos['fuente'] = archivo
     

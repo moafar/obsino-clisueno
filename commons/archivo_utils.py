@@ -3,7 +3,7 @@ import os
 import logging
 from commons.texto_utils import extraer_texto_docx, extraer_texto_rtf, extraer_texto_doc, normalizar_texto, extraer_subcadenas, determinar_tipos_examenes
 from src.basal.procesar_basal import procesar_basal_doc, procesar_basal_rtf
-# from basal.xpap.procesar_cpap import procesar_cpap_doc, procesar_cpap_rtf, procesar_cpap_docx
+from src.xpap.procesar_xpap import procesar_xpap_doc, procesar_xpap_rtf, procesar_xpap_docx
 # from dam.procesar_dam import procesar_dam_doc, procesar_dam_rtf
 # from basal.xpap.procesar_bpap import procesar_bpap_doc, procesar_bpap_rtf
 # from actigrafia.procesar_actigrafia import procesar_actigrafia_doc
@@ -59,9 +59,9 @@ def procesar_archivo(archivo: Path) -> None:
     # Cadenas para extraer subcadenas (texto relevante) según el tipo de examen
     cadenas_busqueda = {
         "BASAL": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL", r"Saturacion\s+O2\s+Minima\s+durante\s+el\s+sueno"),
-        "CPAP": (r"^", r"CONCLUSION(?:ES)?"),
+        "CPAP": (r"^", r"$"),
         "DAM": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\s+CON\s+DISPOSITIVO\s+(?:DE\s+AVANCE\s+)?MANDIBULAR", r"CONCLUSION(?:ES)?"),
-        "BPAP": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+B[I]?PAP", r"CONCLUSION(?:ES)?"),
+        "BPAP": (r"^", r"$"),
         "ACTIGRAFIA": (r"Fecha", r"ESTADISTICAS DIARIAS"),
         "CAPNOGRAFIA": (r"INFORME\s+DE\s+CAPNOGRAFIA", r"CONCLUSION(?:ES)?"),
         "AUTOCPAP": (r"^", r"Informe\s+de\s+cumplimiento"),
@@ -103,31 +103,36 @@ def procesar_archivo(archivo: Path) -> None:
 
                     logging.info(f"** FIN ** Procesamiento Basal terminado para {archivo}")
                     
-                '''
-                elif tipo == "CPAP":
-                    logging.info(f"** INICIO ** Procesando archivo CPAP válido: {archivo}")
+                
+                if tipo == "CPAP" or tipo == "BPAP":
+                    logging.info(f"** INICIO ** Procesando archivo XPAP válido: {archivo}")
                     
                     if extension == ".rtf":
-                        resultados_cpap = procesar_cpap_rtf(texto_relevante)
-                        ruta = "resultados_cpap_rtf.csv"
+                        resultados_xpap = procesar_xpap_rtf(texto_relevante, archivo)
+                        nombre_archivo = "resultados_xpap_rtf.csv"
                     elif extension == ".doc":
-                        resultados_cpap = procesar_cpap_doc(texto_relevante)
-                        ruta = "resultados_cpap_doc.csv"
+                        resultados_xpap = procesar_xpap_doc(texto_relevante, archivo)
+                        nombre_archivo = "resultados_xpap_doc.csv"
                     elif extension == ".docx":
-                        resultados_cpap = procesar_cpap_docx(texto_relevante)
-                        ruta = "resultados_cpap_docx.csv"
+                        resultados_xpap = procesar_xpap_docx(texto_relevante, archivo)
+                        nombre_archivo = "resultados_xpap_docx.csv"
                     else:
                         logging.warning(f"Extensión no reconocida para archivo: {archivo}")
                         continue
+
+                    directorio_salida = "output"
+                    os.makedirs(directorio_salida, exist_ok=True)
+                    ruta = os.path.join(directorio_salida, nombre_archivo)
                     
                     es_nuevo = not os.path.isfile(ruta)
                     with open(ruta, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.DictWriter(f, fieldnames=resultados_cpap.keys()) 
+                        writer = csv.DictWriter(f, fieldnames=resultados_xpap.keys()) 
                         if es_nuevo:
                             writer.writeheader()
-                        writer.writerow(resultados_cpap)
-                    logging.info(f"** FIN ** Procesamiento CPAP terminado para {archivo}")
+                        writer.writerow(resultados_xpap)
+                    logging.info(f"** FIN ** Procesamiento XPAP terminado para {archivo}")
 
+                '''
                 elif tipo == "DAM": 
                     logging.info(f"** INICIO ** Procesando archivo DAM válido: {archivo}")
                     if extension == ".rtf":
@@ -219,7 +224,7 @@ def procesar_archivo(archivo: Path) -> None:
                     logging.info(f"** FIN ** Procesamiento AUTOCPAP terminado para {archivo}")
 
                 
-                if tipo == "POLIGRAFIA":
+                elif tipo == "POLIGRAFIA":
                     logging.info(f"** INICIO ** Procesando archivo POLIGRAFIA válido: {archivo}")
                     if extension == ".docx":
                         resultados_poligrafia = procesar_poligrafia_docx(texto_relevante)
@@ -234,6 +239,10 @@ def procesar_archivo(archivo: Path) -> None:
                             writer.writeheader()
                         writer.writerow(resultados_poligrafia)
                     logging.info(f"** FIN ** Procesamiento POLIGRAFIA terminado para {archivo}")
+                
+                else:
+                    logging.warning(f"Tipo de examen no manejado: {tipo}")
+                    continue
                 '''
             else:
                 logging.error(f"No se encontraron subcadenas para {tipo} en el archivo {archivo}.")

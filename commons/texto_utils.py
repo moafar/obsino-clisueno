@@ -145,7 +145,7 @@ def determinar_tipos_examenes(texto: str) -> list:
             "BASAL": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL"],
             "CPAP": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+CPAP"],
             "DAM": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\s+CON\s+DISPOSITIVO(\s+DE\s+AVANCE)?\s+MANDIBULAR"],
-            "BPAP": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+B[I]?PAP"],
+            "BPAP": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+(?:B[Ii][\s-]*PAP)"],
             "ACTIGRAFIA": [r"ESTADISTICAS\s+DIARIAS"],
             "CAPNOGRAFIA": [r"INFORME\s+DE\s+CAPNOGRAFIA"],
             "AUTOCPAP": [r"INFORME\s+DE\s+TITULACION\s+CON\s+AUTO\s+CPAP"],

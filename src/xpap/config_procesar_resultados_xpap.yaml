@@ -1,9 +1,11 @@
+# TODO: actualizar todo a XPAP (Viene de basal)
+
 input:
   csv_path: "/home/rom/prj/obsino-clisueno/output/unificado.csv"
 
 output:
   spreadsheet_id: "1KI8_Df7G9RUco-0FLPqTiFsyLC1r98T_pR3CsHZAu0s"
-  hoja: "Data_basal"
+  hoja: "Data_xpap"
   creds_path: "/home/rom/prj/obsino-clisueno/secrets/observatorio-ino-1-5f2c3c9029e4.json"
 
 variables:

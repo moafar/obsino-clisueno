@@ -2,6 +2,7 @@ from pathlib import Path
 import logging
 from tqdm import tqdm
 from commons.archivo_utils import procesar_archivo
+from typing import List, Optional
 
 def validar_directorio(path) -> Path:
     ruta = Path(path).resolve()
@@ -13,7 +14,7 @@ def validar_directorio(path) -> Path:
 
 def procesar_directorio(
     ruta: Path,
-    tipos_validos: list[str] | None = None,
+    tipos_validos: Optional[List[str]] = None,
     glob_patron: str = "**/*",
     barra_progreso: bool = True,
 ) -> dict:
