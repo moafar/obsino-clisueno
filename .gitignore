@@ -29,3 +29,4 @@ output/**/*          # Ignora todo en output/
 secrets/*.json       # Ignora archivos sensibles dentro de secrets/
 !secrets/.gitkeep    # Excepto .gitkeep
 
+secrets/

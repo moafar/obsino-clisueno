@@ -1,0 +1,76 @@
+# TODO: actualizar todo a XPAP (Viene de basal)
+
+input:
+  csv_path: "/home/rom/prj/obsino-clisueno/output/unificado_xpap.csv"
+
+output:
+  spreadsheet_id: "1KI8_Df7G9RUco-0FLPqTiFsyLC1r98T_pR3CsHZAu0s"
+  hoja: "Data_xpap"
+  creds_path: "/home/rom/prj/obsino-clisueno/secrets/observatorio-ino-1-5f2c3c9029e4.json"
+
+variables:
+  str:
+    - nombre
+    - id
+    - medida_peso
+    - medida_talla
+    - medida_cuello
+    - medida_perimetro_abdominal
+    - solicita
+    - empresa
+    - fuente
+    - uuid
+  int: []
+  float:
+    - edad_anos
+    - edad_meses
+    - edad_dias
+    - peso
+    - talla
+    - imc
+    - cuello
+    - perimetro_abdominal
+    - epworth
+    - tiempo_en_cama
+    - tiempo_sueno
+    - eficiencia_sueno
+    - latencia_sueno_total
+    - latencia_sueno_rem
+    - indice_microalertamientos
+    - porcentaje_sueno_rem
+    - porcentaje_sueno_profundo
+    - iac
+    - iao
+    - iam
+    - ih
+    - iah
+    - indice_desat_rem
+    - indice_desat_nrem
+    - indice_desat_total
+    - tiempo_desat_90_rem
+    - tiempo_desat_90_nrem
+    - tiempo_desat_80_rem
+    - tiempo_desat_80_nrem
+    - tiempo_desat_70_rem
+    - tiempo_desat_70_nrem
+    - numero_eventos_ah
+  datetime:
+    - fecha_estudio
+  percent:
+    - eficiencia_sueno
+    - porcentaje_sueno_rem
+    - porcentaje_sueno_profundo
+
+unidades:
+  peso:
+    kg: ["kg", "kgs", "kgr", "kl"]
+    g:  ["g", "gr", "grs"]
+  talla:
+    metros: ["m", "mts", "metros"]
+    centimetros: ["c", "cm", "cms", "a"]
+  cuello:
+    metros: ["m", "mts", "metros"]
+    centimetros: ["c", "cm", "cms"]
+  perimetro_abdominal:
+    metros: ["m", "ms", "mts"]
+    centimetros: ["cm", "cms", "cm.", ".cm", ".ccm", "ccm"]

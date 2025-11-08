@@ -1,0 +1,508 @@
+2025-11-08 10:57:06,920 $$ INFO $$ Inicio del proceso para el directorio $$ /home/rom/prj/obsino-clisueno/test_files
+2025-11-08 10:57:06,927 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/docx/ANA PEREZ RINCON 18-11-2024 BPAP..docx
+2025-11-08 10:57:06,993 $$ INFO $$ Procesando examen de BPAP
+2025-11-08 10:57:06,994 $$ INFO $$ ** INICIO ** Procesando archivo BPAP válido: /home/rom/prj/obsino-clisueno/test_files/docx/ANA PEREZ RINCON 18-11-2024 BPAP..docx
+2025-11-08 10:57:06,994 $$ INFO $$ Procesando examen xpap (DOCX)
+2025-11-08 10:57:06,995 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:06,995 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:07,002 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:07,010 $$ INFO $$ ** FIN ** Procesamiento BPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/docx/ANA PEREZ RINCON 18-11-2024 BPAP..docx
+2025-11-08 10:57:07,010 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/docx/JAIRO ROJAS GARCIA 2-11-2024 BPAP.docx
+2025-11-08 10:57:07,054 $$ INFO $$ Procesando examen de BPAP
+2025-11-08 10:57:07,054 $$ INFO $$ ** INICIO ** Procesando archivo BPAP válido: /home/rom/prj/obsino-clisueno/test_files/docx/JAIRO ROJAS GARCIA 2-11-2024 BPAP.docx
+2025-11-08 10:57:07,054 $$ INFO $$ Procesando examen xpap (DOCX)
+2025-11-08 10:57:07,054 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:07,054 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:07,055 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:07,055 $$ INFO $$ ** FIN ** Procesamiento BPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/docx/JAIRO ROJAS GARCIA 2-11-2024 BPAP.docx
+2025-11-08 10:57:07,056 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/docx/EDILMA PADILLA NIÑO 10-12-2024 BPAP.docx
+2025-11-08 10:57:07,135 $$ INFO $$ Procesando examen de BPAP
+2025-11-08 10:57:07,135 $$ INFO $$ ** INICIO ** Procesando archivo BPAP válido: /home/rom/prj/obsino-clisueno/test_files/docx/EDILMA PADILLA NIÑO 10-12-2024 BPAP.docx
+2025-11-08 10:57:07,135 $$ INFO $$ Procesando examen xpap (DOCX)
+2025-11-08 10:57:07,135 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:07,135 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:07,136 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:07,137 $$ INFO $$ ** FIN ** Procesamiento BPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/docx/EDILMA PADILLA NIÑO 10-12-2024 BPAP.docx
+2025-11-08 10:57:07,137 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/docx/TEMPLATE_BPAP.docx
+2025-11-08 10:57:07,196 $$ INFO $$ Procesando examen de BPAP
+2025-11-08 10:57:07,196 $$ INFO $$ ** INICIO ** Procesando archivo BPAP válido: /home/rom/prj/obsino-clisueno/test_files/docx/TEMPLATE_BPAP.docx
+2025-11-08 10:57:07,196 $$ INFO $$ Procesando examen xpap (DOCX)
+2025-11-08 10:57:07,196 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:07,196 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:07,197 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:07,198 $$ INFO $$ ** FIN ** Procesamiento BPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/docx/TEMPLATE_BPAP.docx
+2025-11-08 10:57:07,198 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/docx/ELKIN SALOMON BARRIOS GAMBOA 15-4-2025 CPAP.docx
+2025-11-08 10:57:07,234 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:07,234 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/docx/ELKIN SALOMON BARRIOS GAMBOA 15-4-2025 CPAP.docx
+2025-11-08 10:57:07,234 $$ INFO $$ Procesando examen xpap (DOCX)
+2025-11-08 10:57:07,234 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:07,234 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:07,235 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:07,236 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/docx/ELKIN SALOMON BARRIOS GAMBOA 15-4-2025 CPAP.docx
+2025-11-08 10:57:07,236 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/docx/MARCOS MUÑOZ JIMENEZ 8-6-2025 BPAP.docx
+2025-11-08 10:57:07,313 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:07,313 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/docx/MARCOS MUÑOZ JIMENEZ 8-6-2025 BPAP.docx
+2025-11-08 10:57:07,313 $$ INFO $$ Procesando examen xpap (DOCX)
+2025-11-08 10:57:07,313 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:07,313 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:07,314 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:07,314 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/docx/MARCOS MUÑOZ JIMENEZ 8-6-2025 BPAP.docx
+2025-11-08 10:57:07,315 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/docx/OTILIA ORDUÑAS DE CALDERON 19-09-2023 CPAP.2^.^.^.docx
+2025-11-08 10:57:07,383 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:07,383 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/docx/OTILIA ORDUÑAS DE CALDERON 19-09-2023 CPAP.2^.^.^.docx
+2025-11-08 10:57:07,383 $$ INFO $$ Procesando examen xpap (DOCX)
+2025-11-08 10:57:07,383 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:07,383 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:07,383 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:07,384 $$ WARNING $$ presion_terapeutica: N/A
+2025-11-08 10:57:07,384 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/docx/OTILIA ORDUÑAS DE CALDERON 19-09-2023 CPAP.2^.^.^.docx
+2025-11-08 10:57:07,384 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/docx/VIRGILIO MARTINEZ PEÑA 20-11-2024 CPAP.docx
+2025-11-08 10:57:07,426 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:07,426 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/docx/VIRGILIO MARTINEZ PEÑA 20-11-2024 CPAP.docx
+2025-11-08 10:57:07,426 $$ INFO $$ Procesando examen xpap (DOCX)
+2025-11-08 10:57:07,427 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:07,427 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:07,427 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:07,428 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/docx/VIRGILIO MARTINEZ PEÑA 20-11-2024 CPAP.docx
+2025-11-08 10:57:07,428 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/docx/WILSON ROJAS PORTILLA 2-10-2024 CPAP.docx
+2025-11-08 10:57:07,486 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:07,487 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/docx/WILSON ROJAS PORTILLA 2-10-2024 CPAP.docx
+2025-11-08 10:57:07,487 $$ INFO $$ Procesando examen xpap (DOCX)
+2025-11-08 10:57:07,487 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:07,487 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:07,488 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:07,489 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/docx/WILSON ROJAS PORTILLA 2-10-2024 CPAP.docx
+2025-11-08 10:57:07,490 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/docx/PEDRO GALVIZ OJEDA 08-07-2023 CPAP.docx
+2025-11-08 10:57:07,542 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:07,543 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/docx/PEDRO GALVIZ OJEDA 08-07-2023 CPAP.docx
+2025-11-08 10:57:07,543 $$ INFO $$ Procesando examen xpap (DOCX)
+2025-11-08 10:57:07,543 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:07,543 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:07,543 $$ WARNING $$ cuello: N/A
+2025-11-08 10:57:07,543 $$ WARNING $$ medida_cuello: N/A
+2025-11-08 10:57:07,544 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:07,544 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/docx/PEDRO GALVIZ OJEDA 08-07-2023 CPAP.docx
+2025-11-08 10:57:07,544 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/docx/TEMPLATE_CPAP.docx
+2025-11-08 10:57:07,589 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:07,589 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/docx/TEMPLATE_CPAP.docx
+2025-11-08 10:57:07,589 $$ INFO $$ Procesando examen xpap (DOCX)
+2025-11-08 10:57:07,589 $$ WARNING $$ edad_anos: N/A
+2025-11-08 10:57:07,589 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:07,590 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:07,590 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/docx/TEMPLATE_CPAP.docx
+2025-11-08 10:57:07,590 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/TEMPLATE_BPAP.rtf
+2025-11-08 10:57:07,756 $$ INFO $$ Procesando examen de BPAP
+2025-11-08 10:57:07,756 $$ INFO $$ ** INICIO ** Procesando archivo BPAP válido: /home/rom/prj/obsino-clisueno/test_files/rtf/TEMPLATE_BPAP.rtf
+2025-11-08 10:57:07,756 $$ INFO $$ Procesando examen xpap (RTF)
+2025-11-08 10:57:07,756 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:07,756 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:07,760 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:07,765 $$ INFO $$ ** FIN ** Procesamiento BPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/TEMPLATE_BPAP.rtf
+2025-11-08 10:57:07,765 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/SONIA GUTIERREZ VARGAS 02-09-2023 BASAL.rtf
+2025-11-08 10:57:08,028 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:08,028 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/rtf/SONIA GUTIERREZ VARGAS 02-09-2023 BASAL.rtf
+2025-11-08 10:57:08,028 $$ INFO $$ Procesando examen Basal (RTF)
+2025-11-08 10:57:08,028 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:08,028 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:08,029 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/SONIA GUTIERREZ VARGAS 02-09-2023 BASAL.rtf
+2025-11-08 10:57:08,029 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/ZAIREE KARINA GUALDRON HERNANDEZ-13-06-2023- CPAP.rtf
+2025-11-08 10:57:08,600 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:08,600 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/rtf/ZAIREE KARINA GUALDRON HERNANDEZ-13-06-2023- CPAP.rtf
+2025-11-08 10:57:08,600 $$ INFO $$ Procesando examen xpap (RTF)
+2025-11-08 10:57:08,600 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:08,600 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:08,600 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:08,601 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/ZAIREE KARINA GUALDRON HERNANDEZ-13-06-2023- CPAP.rtf
+2025-11-08 10:57:08,602 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/EDICTO ESTUPIÑAN CACERES 11-07-2024 BASAL.RTF
+2025-11-08 10:57:09,240 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:09,240 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/rtf/EDICTO ESTUPIÑAN CACERES 11-07-2024 BASAL.RTF
+2025-11-08 10:57:09,240 $$ INFO $$ Procesando examen Basal (RTF)
+2025-11-08 10:57:09,240 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:09,240 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:09,241 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/EDICTO ESTUPIÑAN CACERES 11-07-2024 BASAL.RTF
+2025-11-08 10:57:09,241 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/YOLANDA IVONNEE CASTILLO TORRES 18-07-2024 CPAP.RTF
+2025-11-08 10:57:09,959 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:09,959 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/rtf/YOLANDA IVONNEE CASTILLO TORRES 18-07-2024 CPAP.RTF
+2025-11-08 10:57:09,959 $$ INFO $$ Procesando examen xpap (RTF)
+2025-11-08 10:57:09,959 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:09,959 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:09,959 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:09,961 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/YOLANDA IVONNEE CASTILLO TORRES 18-07-2024 CPAP.RTF
+2025-11-08 10:57:09,961 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/RAMIRO AYALA MUÑOZ 03-04-2023  BASAL + CAPNO.rtf
+2025-11-08 10:57:10,225 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:10,225 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/rtf/RAMIRO AYALA MUÑOZ 03-04-2023  BASAL + CAPNO.rtf
+2025-11-08 10:57:10,225 $$ INFO $$ Procesando examen Basal (RTF)
+2025-11-08 10:57:10,225 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:10,225 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:10,227 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/RAMIRO AYALA MUÑOZ 03-04-2023  BASAL + CAPNO.rtf
+2025-11-08 10:57:10,227 $$ INFO $$ Omitido tipo no implementado: CAPNOGRAFIA
+2025-11-08 10:57:10,227 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/CONSUELO TOLEDO LEON BASAL 10-02-2025.RTF
+2025-11-08 10:57:10,832 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:10,832 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/rtf/CONSUELO TOLEDO LEON BASAL 10-02-2025.RTF
+2025-11-08 10:57:10,832 $$ INFO $$ Procesando examen Basal (RTF)
+2025-11-08 10:57:10,832 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:10,832 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:10,833 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/CONSUELO TOLEDO LEON BASAL 10-02-2025.RTF
+2025-11-08 10:57:10,833 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/ROBINSON GALVIS ARDILA 11-02-2025 BASAL+CAPNO+OXIGENO.rtf
+2025-11-08 10:57:10,833 $$ INFO $$ Archivo excluido por patrón OXIGENO en filename: ROBINSON GALVIS ARDILA 11-02-2025 BASAL+CAPNO+OXIGENO.rtf
+2025-11-08 10:57:10,833 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/ROSALBA VALBUENA CONTRERAS 08-04-2023 BASAL.RTF
+2025-11-08 10:57:11,373 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:11,373 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/rtf/ROSALBA VALBUENA CONTRERAS 08-04-2023 BASAL.RTF
+2025-11-08 10:57:11,373 $$ INFO $$ Procesando examen Basal (RTF)
+2025-11-08 10:57:11,373 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:11,373 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:11,374 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/ROSALBA VALBUENA CONTRERAS 08-04-2023 BASAL.RTF
+2025-11-08 10:57:11,374 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/JAVIER MARIN URRUTIA 08-04-2025 BIPAP.rtf
+2025-11-08 10:57:11,916 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:11,916 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/rtf/JAVIER MARIN URRUTIA 08-04-2025 BIPAP.rtf
+2025-11-08 10:57:11,916 $$ INFO $$ Procesando examen xpap (RTF)
+2025-11-08 10:57:11,916 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:11,916 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:11,916 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:11,917 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/JAVIER MARIN URRUTIA 08-04-2025 BIPAP.rtf
+2025-11-08 10:57:11,917 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/JUAN CAMILO DUARTE ROA -PSG CAPNO-BASAL marzo 23 2025.rtf
+2025-11-08 10:57:12,831 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:12,831 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/rtf/JUAN CAMILO DUARTE ROA -PSG CAPNO-BASAL marzo 23 2025.rtf
+2025-11-08 10:57:12,831 $$ INFO $$ Procesando examen Basal (RTF)
+2025-11-08 10:57:12,831 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:12,831 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:12,832 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:12,832 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/JUAN CAMILO DUARTE ROA -PSG CAPNO-BASAL marzo 23 2025.rtf
+2025-11-08 10:57:12,832 $$ INFO $$ Omitido tipo no implementado: CAPNOGRAFIA
+2025-11-08 10:57:12,833 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/IRMA BELKYS SIERRA VALERO 18-12-2023 BASAL.RTF
+2025-11-08 10:57:13,340 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:13,340 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/rtf/IRMA BELKYS SIERRA VALERO 18-12-2023 BASAL.RTF
+2025-11-08 10:57:13,340 $$ INFO $$ Procesando examen Basal (RTF)
+2025-11-08 10:57:13,340 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:13,340 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:13,341 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/IRMA BELKYS SIERRA VALERO 18-12-2023 BASAL.RTF
+2025-11-08 10:57:13,341 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/ALVARO NIÑO GAMBOA 10-04-2025 CPAP.rtf
+2025-11-08 10:57:13,580 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:13,581 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/rtf/ALVARO NIÑO GAMBOA 10-04-2025 CPAP.rtf
+2025-11-08 10:57:13,581 $$ INFO $$ Procesando examen xpap (RTF)
+2025-11-08 10:57:13,581 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:13,581 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:13,581 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:13,582 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/ALVARO NIÑO GAMBOA 10-04-2025 CPAP.rtf
+2025-11-08 10:57:13,582 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/PIEDAD AMAYA PRADA-17-04-2024-BASAL.RTF
+2025-11-08 10:57:14,256 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:14,256 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/rtf/PIEDAD AMAYA PRADA-17-04-2024-BASAL.RTF
+2025-11-08 10:57:14,256 $$ INFO $$ Procesando examen Basal (RTF)
+2025-11-08 10:57:14,256 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:14,256 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:14,257 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/PIEDAD AMAYA PRADA-17-04-2024-BASAL.RTF
+2025-11-08 10:57:14,257 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/DORIS AMANDA LAVERDE JIMENEZ-13-07-2024- BASAL.RTF
+2025-11-08 10:57:15,039 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:15,039 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/rtf/DORIS AMANDA LAVERDE JIMENEZ-13-07-2024- BASAL.RTF
+2025-11-08 10:57:15,039 $$ INFO $$ Procesando examen Basal (RTF)
+2025-11-08 10:57:15,039 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:15,039 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:15,040 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/DORIS AMANDA LAVERDE JIMENEZ-13-07-2024- BASAL.RTF
+2025-11-08 10:57:15,040 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/ANA VIRGINIA MONTAÑEZ PEÑA 04-10-2024 BASAL.RTF
+2025-11-08 10:57:15,643 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:15,643 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/rtf/ANA VIRGINIA MONTAÑEZ PEÑA 04-10-2024 BASAL.RTF
+2025-11-08 10:57:15,643 $$ INFO $$ Procesando examen Basal (RTF)
+2025-11-08 10:57:15,643 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:15,643 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:15,643 $$ WARNING $$ fecha_estudio: N/A
+2025-11-08 10:57:15,643 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:15,644 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/ANA VIRGINIA MONTAÑEZ PEÑA 04-10-2024 BASAL.RTF
+2025-11-08 10:57:15,644 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/YUDITH TATIANA GOMEZ CHIVATA 14-11-2023 CPAP.rtf
+2025-11-08 10:57:15,812 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:15,812 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/rtf/YUDITH TATIANA GOMEZ CHIVATA 14-11-2023 CPAP.rtf
+2025-11-08 10:57:15,812 $$ INFO $$ Procesando examen xpap (RTF)
+2025-11-08 10:57:15,813 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:15,813 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:15,813 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:15,814 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/YUDITH TATIANA GOMEZ CHIVATA 14-11-2023 CPAP.rtf
+2025-11-08 10:57:15,814 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/TEMPLATE_CPAP.rtf
+2025-11-08 10:57:16,000 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:16,000 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/rtf/TEMPLATE_CPAP.rtf
+2025-11-08 10:57:16,000 $$ INFO $$ Procesando examen xpap (RTF)
+2025-11-08 10:57:16,000 $$ WARNING $$ edad_anos: N/A
+2025-11-08 10:57:16,000 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:16,000 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:16,001 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/TEMPLATE_CPAP.rtf
+2025-11-08 10:57:16,001 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/FRANCISCO RAMON BALLESTEROS ALMAO 20-04-2025 BASAL.RTF
+2025-11-08 10:57:16,602 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:16,603 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/rtf/FRANCISCO RAMON BALLESTEROS ALMAO 20-04-2025 BASAL.RTF
+2025-11-08 10:57:16,603 $$ INFO $$ Procesando examen Basal (RTF)
+2025-11-08 10:57:16,603 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:16,603 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:16,604 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/FRANCISCO RAMON BALLESTEROS ALMAO 20-04-2025 BASAL.RTF
+2025-11-08 10:57:16,605 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/AMINTA SERRANO SANTAMARIA-24-04-2025-CPAP.RTF
+2025-11-08 10:57:17,090 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:17,090 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/rtf/AMINTA SERRANO SANTAMARIA-24-04-2025-CPAP.RTF
+2025-11-08 10:57:17,090 $$ INFO $$ Procesando examen xpap (RTF)
+2025-11-08 10:57:17,091 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,091 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,091 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:17,092 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/AMINTA SERRANO SANTAMARIA-24-04-2025-CPAP.RTF
+2025-11-08 10:57:17,092 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/YORGE ARENAS ANGARITA 14-05-2024 CPAP.rtf
+2025-11-08 10:57:17,257 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:17,258 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/rtf/YORGE ARENAS ANGARITA 14-05-2024 CPAP.rtf
+2025-11-08 10:57:17,258 $$ INFO $$ Procesando examen xpap (RTF)
+2025-11-08 10:57:17,258 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,258 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,258 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:17,259 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/YORGE ARENAS ANGARITA 14-05-2024 CPAP.rtf
+2025-11-08 10:57:17,259 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/TEMPLATE BASAL.RTF
+2025-11-08 10:57:17,934 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:17,934 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/rtf/TEMPLATE BASAL.RTF
+2025-11-08 10:57:17,934 $$ INFO $$ Procesando examen Basal (RTF)
+2025-11-08 10:57:17,935 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/rtf/TEMPLATE BASAL.RTF
+2025-11-08 10:57:17,936 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/rtf/MARIA DEL CARMEN PALOMINO DE CESPEDES 29-08-2025 BASAL+O2.rtf
+2025-11-08 10:57:17,936 $$ INFO $$ Archivo excluido por patrón OXIGENO en filename: MARIA DEL CARMEN PALOMINO DE CESPEDES 29-08-2025 BASAL+O2.rtf
+2025-11-08 10:57:17,936 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/LEONOR.PINTO CHAPARRO.08-04-2025 BIPAP.doc
+2025-11-08 10:57:17,939 $$ INFO $$ Procesando examen de BPAP
+2025-11-08 10:57:17,939 $$ INFO $$ ** INICIO ** Procesando archivo BPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/LEONOR.PINTO CHAPARRO.08-04-2025 BIPAP.doc
+2025-11-08 10:57:17,939 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:17,939 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,939 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,942 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:17,945 $$ INFO $$ ** FIN ** Procesamiento BPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/LEONOR.PINTO CHAPARRO.08-04-2025 BIPAP.doc
+2025-11-08 10:57:17,945 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/ORLANDO RINCON.27-04-2025 BPAP.doc
+2025-11-08 10:57:17,950 $$ INFO $$ Procesando examen de BPAP
+2025-11-08 10:57:17,950 $$ INFO $$ ** INICIO ** Procesando archivo BPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/ORLANDO RINCON.27-04-2025 BPAP.doc
+2025-11-08 10:57:17,950 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:17,950 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,950 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,952 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:17,953 $$ INFO $$ ** FIN ** Procesamiento BPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/ORLANDO RINCON.27-04-2025 BPAP.doc
+2025-11-08 10:57:17,953 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/TEMPLATE BPAP.doc
+2025-11-08 10:57:17,957 $$ INFO $$ Procesando examen de BPAP
+2025-11-08 10:57:17,957 $$ INFO $$ ** INICIO ** Procesando archivo BPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/TEMPLATE BPAP.doc
+2025-11-08 10:57:17,957 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:17,957 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,957 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,958 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:17,958 $$ INFO $$ ** FIN ** Procesamiento BPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/TEMPLATE BPAP.doc
+2025-11-08 10:57:17,959 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/~$ISTINA MAY  MOLINA PINEDA 15-11-2023 BASAL.doc
+2025-11-08 10:57:17,961 $$ INFO $$ Omitido tipo no implementado: DESCONOCIDO
+2025-11-08 10:57:17,961 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/.JUAN JOSE.VERGEL DURAN - 09-07-2024 - BASAL.doc
+2025-11-08 10:57:17,964 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:17,964 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/doc/.JUAN JOSE.VERGEL DURAN - 09-07-2024 - BASAL.doc
+2025-11-08 10:57:17,964 $$ INFO $$ Procesando examen BASAL (DOC)
+2025-11-08 10:57:17,964 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,964 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,965 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/doc/.JUAN JOSE.VERGEL DURAN - 09-07-2024 - BASAL.doc
+2025-11-08 10:57:17,965 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/WILFREDO DEL TORO RODRIGUEZ^.13-06-2023 BASAL.doc
+2025-11-08 10:57:17,967 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:17,968 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/doc/WILFREDO DEL TORO RODRIGUEZ^.13-06-2023 BASAL.doc
+2025-11-08 10:57:17,968 $$ INFO $$ Procesando examen BASAL (DOC)
+2025-11-08 10:57:17,968 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,968 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,970 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/doc/WILFREDO DEL TORO RODRIGUEZ^.13-06-2023 BASAL.doc
+2025-11-08 10:57:17,970 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/ANYI ZERITH PINEDA MARTINEZ 3-5-2024 CPAP.doc
+2025-11-08 10:57:17,972 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:17,972 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/ANYI ZERITH PINEDA MARTINEZ 3-5-2024 CPAP.doc
+2025-11-08 10:57:17,972 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:17,972 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,972 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,973 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:17,974 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/ANYI ZERITH PINEDA MARTINEZ 3-5-2024 CPAP.doc
+2025-11-08 10:57:17,974 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/GERARDO PARRA CASTRO - 15-04-2023 BASAL+CAPNOGRAFIA.doc
+2025-11-08 10:57:17,976 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:17,976 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/doc/GERARDO PARRA CASTRO - 15-04-2023 BASAL+CAPNOGRAFIA.doc
+2025-11-08 10:57:17,976 $$ INFO $$ Procesando examen BASAL (DOC)
+2025-11-08 10:57:17,976 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,976 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,977 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:17,977 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/doc/GERARDO PARRA CASTRO - 15-04-2023 BASAL+CAPNOGRAFIA.doc
+2025-11-08 10:57:17,977 $$ INFO $$ Omitido tipo no implementado: CAPNOGRAFIA
+2025-11-08 10:57:17,977 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/JANETH ADRIANA BALAGUERA GÛISA 15-06-2025 BASAL.doc
+2025-11-08 10:57:17,979 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:17,979 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/doc/JANETH ADRIANA BALAGUERA GÛISA 15-06-2025 BASAL.doc
+2025-11-08 10:57:17,979 $$ INFO $$ Procesando examen BASAL (DOC)
+2025-11-08 10:57:17,979 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,979 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,980 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/doc/JANETH ADRIANA BALAGUERA GÛISA 15-06-2025 BASAL.doc
+2025-11-08 10:57:17,980 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/DERLY MELITZA PEÑA PINEDA. .07-07-2025 BASAL + O2.doc
+2025-11-08 10:57:17,980 $$ INFO $$ Archivo excluido por patrón OXIGENO en filename: DERLY MELITZA PEÑA PINEDA. .07-07-2025 BASAL + O2.doc
+2025-11-08 10:57:17,980 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/YEISON ANDRES CARVAJAL ARCINIEGAS 19-04-2025 BIPAP+CAPNO.doc
+2025-11-08 10:57:17,982 $$ INFO $$ Procesando examen de BPAP
+2025-11-08 10:57:17,982 $$ INFO $$ ** INICIO ** Procesando archivo BPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/YEISON ANDRES CARVAJAL ARCINIEGAS 19-04-2025 BIPAP+CAPNO.doc
+2025-11-08 10:57:17,982 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:17,982 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,982 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,982 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:17,983 $$ INFO $$ ** FIN ** Procesamiento BPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/YEISON ANDRES CARVAJAL ARCINIEGAS 19-04-2025 BIPAP+CAPNO.doc
+2025-11-08 10:57:17,983 $$ INFO $$ Omitido tipo no implementado: CAPNOGRAFIA
+2025-11-08 10:57:17,983 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/JERONIMO JEREZ RINCON PSG BASAL nov 9 2023.doc
+2025-11-08 10:57:17,985 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:17,985 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/doc/JERONIMO JEREZ RINCON PSG BASAL nov 9 2023.doc
+2025-11-08 10:57:17,985 $$ INFO $$ Procesando examen BASAL (DOC)
+2025-11-08 10:57:17,985 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,985 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,985 $$ WARNING $$ medida_peso: N/A
+2025-11-08 10:57:17,985 $$ WARNING $$ talla: N/A
+2025-11-08 10:57:17,985 $$ WARNING $$ medida_talla: N/A
+2025-11-08 10:57:17,986 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:17,987 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/doc/JERONIMO JEREZ RINCON PSG BASAL nov 9 2023.doc
+2025-11-08 10:57:17,987 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/ALBERTO GUERRERO HERNANDEZ . .18-07-2024  BASAL.doc
+2025-11-08 10:57:17,988 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:17,988 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/doc/ALBERTO GUERRERO HERNANDEZ . .18-07-2024  BASAL.doc
+2025-11-08 10:57:17,988 $$ INFO $$ Procesando examen BASAL (DOC)
+2025-11-08 10:57:17,988 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,988 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,990 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/doc/ALBERTO GUERRERO HERNANDEZ . .18-07-2024  BASAL.doc
+2025-11-08 10:57:17,990 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/ADELA .ACOSTA DE MOLANO.28-05-2023 CPAP.doc
+2025-11-08 10:57:17,991 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:17,991 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/ADELA .ACOSTA DE MOLANO.28-05-2023 CPAP.doc
+2025-11-08 10:57:17,992 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:17,992 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,992 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,992 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:17,993 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/ADELA .ACOSTA DE MOLANO.28-05-2023 CPAP.doc
+2025-11-08 10:57:17,993 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/JOAN SEBASTIAN DCROZ CANCINO 31-05-2025 BASAL.doc
+2025-11-08 10:57:17,995 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:17,995 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/doc/JOAN SEBASTIAN DCROZ CANCINO 31-05-2025 BASAL.doc
+2025-11-08 10:57:17,995 $$ INFO $$ Procesando examen BASAL (DOC)
+2025-11-08 10:57:17,995 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,995 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,996 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/doc/JOAN SEBASTIAN DCROZ CANCINO 31-05-2025 BASAL.doc
+2025-11-08 10:57:17,996 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/template ABELARDO DURAN GIL TEMPLATE.doc
+2025-11-08 10:57:17,998 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:17,998 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/doc/template ABELARDO DURAN GIL TEMPLATE.doc
+2025-11-08 10:57:17,998 $$ INFO $$ Procesando examen BASAL (DOC)
+2025-11-08 10:57:17,998 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:17,998 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:17,999 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/doc/template ABELARDO DURAN GIL TEMPLATE.doc
+2025-11-08 10:57:17,999 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/ARCE CERPA .TONYS .12-11-2024 CPAP.doc
+2025-11-08 10:57:18,001 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:18,001 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/ARCE CERPA .TONYS .12-11-2024 CPAP.doc
+2025-11-08 10:57:18,001 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:18,001 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:18,001 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:18,001 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:18,002 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/ARCE CERPA .TONYS .12-11-2024 CPAP.doc
+2025-11-08 10:57:18,002 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/ALEXANDER.LOZADA ALVAREZ .13-02-2025 BPAP.doc
+2025-11-08 10:57:18,004 $$ INFO $$ Procesando examen de BPAP
+2025-11-08 10:57:18,004 $$ INFO $$ ** INICIO ** Procesando archivo BPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/ALEXANDER.LOZADA ALVAREZ .13-02-2025 BPAP.doc
+2025-11-08 10:57:18,004 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:18,004 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:18,004 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:18,005 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:18,006 $$ INFO $$ ** FIN ** Procesamiento BPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/ALEXANDER.LOZADA ALVAREZ .13-02-2025 BPAP.doc
+2025-11-08 10:57:18,006 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/ALVARO JAVIER CASTILLA MOZO..04-09-2025 CPAP - BPAP.doc
+2025-11-08 10:57:18,008 $$ INFO $$ Procesando examen de BPAP
+2025-11-08 10:57:18,008 $$ INFO $$ ** INICIO ** Procesando archivo BPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/ALVARO JAVIER CASTILLA MOZO..04-09-2025 CPAP - BPAP.doc
+2025-11-08 10:57:18,008 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:18,008 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:18,008 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:18,008 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:18,009 $$ INFO $$ ** FIN ** Procesamiento BPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/ALVARO JAVIER CASTILLA MOZO..04-09-2025 CPAP - BPAP.doc
+2025-11-08 10:57:18,009 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/ANA SIXTA.JEREZ VDA DE ANAYA-25-04-2025 - BPAP+ CAPNO.doc
+2025-11-08 10:57:18,011 $$ INFO $$ Procesando examen de BPAP
+2025-11-08 10:57:18,011 $$ INFO $$ ** INICIO ** Procesando archivo BPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/ANA SIXTA.JEREZ VDA DE ANAYA-25-04-2025 - BPAP+ CAPNO.doc
+2025-11-08 10:57:18,011 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:18,011 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:18,012 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:18,014 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:18,016 $$ INFO $$ ** FIN ** Procesamiento BPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/ANA SIXTA.JEREZ VDA DE ANAYA-25-04-2025 - BPAP+ CAPNO.doc
+2025-11-08 10:57:18,016 $$ INFO $$ Omitido tipo no implementado: CAPNOGRAFIA
+2025-11-08 10:57:18,016 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/ADRIANA LUCIA .PIMIENTO MORENO.01-04-2025 CPAP.doc
+2025-11-08 10:57:18,018 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:18,018 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/ADRIANA LUCIA .PIMIENTO MORENO.01-04-2025 CPAP.doc
+2025-11-08 10:57:18,018 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:18,018 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:18,018 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:18,018 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:18,019 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/ADRIANA LUCIA .PIMIENTO MORENO.01-04-2025 CPAP.doc
+2025-11-08 10:57:18,019 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/TEMPLATE BASAL.doc
+2025-11-08 10:57:18,021 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:18,021 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/doc/TEMPLATE BASAL.doc
+2025-11-08 10:57:18,021 $$ INFO $$ Procesando examen BASAL (DOC)
+2025-11-08 10:57:18,021 $$ WARNING $$ edad_anos: N/A
+2025-11-08 10:57:18,021 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:18,021 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ id: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ peso: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ medida_peso: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ talla: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ medida_talla: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ imc: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ cuello: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ medida_cuello: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ perimetro_abdominal: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ medida_perimetro_abdominal: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ solicita: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ empresa: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ fecha_estudio: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ tiempo_en_cama: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ tiempo_sueno: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ eficiencia_sueno: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ latencia_sueno_total: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ latencia_sueno_rem: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ indice_microalertamientos: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ porcentaje_sueno_rem: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ porcentaje_sueno_profundo: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ iac: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ iao: N/A
+2025-11-08 10:57:18,022 $$ WARNING $$ iam: N/A
+2025-11-08 10:57:18,023 $$ WARNING $$ ih: N/A
+2025-11-08 10:57:18,023 $$ WARNING $$ iah: N/A
+2025-11-08 10:57:18,023 $$ WARNING $$ indice_desat_rem: N/A
+2025-11-08 10:57:18,023 $$ WARNING $$ indice_desat_nrem: N/A
+2025-11-08 10:57:18,023 $$ WARNING $$ indice_desat_total: N/A
+2025-11-08 10:57:18,023 $$ WARNING $$ tiempo_desat_90_rem: N/A
+2025-11-08 10:57:18,023 $$ WARNING $$ tiempo_desat_90_nrem: N/A
+2025-11-08 10:57:18,023 $$ WARNING $$ tiempo_desat_80_rem: N/A
+2025-11-08 10:57:18,023 $$ WARNING $$ tiempo_desat_80_nrem: N/A
+2025-11-08 10:57:18,023 $$ WARNING $$ tiempo_desat_70_rem: N/A
+2025-11-08 10:57:18,023 $$ WARNING $$ tiempo_desat_70_nrem: N/A
+2025-11-08 10:57:18,023 $$ WARNING $$ numero_eventos_ah: N/A
+2025-11-08 10:57:18,023 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/doc/TEMPLATE BASAL.doc
+2025-11-08 10:57:18,023 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/FRANCISCO  MONTOYA FLOREZ-15-09-2025-BASAL+OXÍGENO.doc
+2025-11-08 10:57:18,023 $$ INFO $$ Archivo excluido por patrón OXIGENO en filename: FRANCISCO  MONTOYA FLOREZ-15-09-2025-BASAL+OXÍGENO.doc
+2025-11-08 10:57:18,023 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/ALEJANDRO DOLORES SANTIAGO AREVALO 20-12-2024 CPAP.doc
+2025-11-08 10:57:18,025 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:18,025 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/ALEJANDRO DOLORES SANTIAGO AREVALO 20-12-2024 CPAP.doc
+2025-11-08 10:57:18,025 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:18,025 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:18,025 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:18,026 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:18,027 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/ALEJANDRO DOLORES SANTIAGO AREVALO 20-12-2024 CPAP.doc
+2025-11-08 10:57:18,027 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/TEMPLATE CPAP.doc
+2025-11-08 10:57:18,029 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:18,029 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/TEMPLATE CPAP.doc
+2025-11-08 10:57:18,029 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:18,029 $$ WARNING $$ edad_anos: N/A
+2025-11-08 10:57:18,030 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:18,030 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:18,031 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/TEMPLATE CPAP.doc
+2025-11-08 10:57:18,031 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/ADELA  RODRIGUEZ MOGOLLON-13-07-2024-BASAL.doc
+2025-11-08 10:57:18,033 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:18,033 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/doc/ADELA  RODRIGUEZ MOGOLLON-13-07-2024-BASAL.doc
+2025-11-08 10:57:18,033 $$ INFO $$ Procesando examen BASAL (DOC)
+2025-11-08 10:57:18,033 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:18,033 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:18,035 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/doc/ADELA  RODRIGUEZ MOGOLLON-13-07-2024-BASAL.doc
+2025-11-08 10:57:18,035 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/GLORIA ARENALES ISABEL ROJAS 14-07-2025 BASAL.doc
+2025-11-08 10:57:18,036 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:18,036 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/doc/GLORIA ARENALES ISABEL ROJAS 14-07-2025 BASAL.doc
+2025-11-08 10:57:18,036 $$ INFO $$ Procesando examen BASAL (DOC)
+2025-11-08 10:57:18,036 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:18,036 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:18,037 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/doc/GLORIA ARENALES ISABEL ROJAS 14-07-2025 BASAL.doc
+2025-11-08 10:57:18,038 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/CRISTINA MAY  MOLINA PINEDA 15-11-2023 BASAL.doc
+2025-11-08 10:57:18,039 $$ INFO $$ Procesando examen de BASAL
+2025-11-08 10:57:18,039 $$ INFO $$ ** INICIO ** Procesando archivo BASAL válido: /home/rom/prj/obsino-clisueno/test_files/doc/CRISTINA MAY  MOLINA PINEDA 15-11-2023 BASAL.doc
+2025-11-08 10:57:18,039 $$ INFO $$ Procesando examen BASAL (DOC)
+2025-11-08 10:57:18,039 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:18,039 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:18,041 $$ INFO $$ ** FIN ** Procesamiento BASAL → unificado_basal.csv para /home/rom/prj/obsino-clisueno/test_files/doc/CRISTINA MAY  MOLINA PINEDA 15-11-2023 BASAL.doc
+2025-11-08 10:57:18,041 $$ INFO $$ Procesando archivo válido: /home/rom/prj/obsino-clisueno/test_files/doc/MARIA DEL ROSARIO CASTRO CIRO 28-07-2023 CPAP.doc
+2025-11-08 10:57:18,042 $$ INFO $$ Procesando examen de CPAP
+2025-11-08 10:57:18,042 $$ INFO $$ ** INICIO ** Procesando archivo CPAP válido: /home/rom/prj/obsino-clisueno/test_files/doc/MARIA DEL ROSARIO CASTRO CIRO 28-07-2023 CPAP.doc
+2025-11-08 10:57:18,042 $$ INFO $$ Procesando examen xpap (DOC)
+2025-11-08 10:57:18,042 $$ WARNING $$ edad_meses: N/A
+2025-11-08 10:57:18,042 $$ WARNING $$ edad_dias: N/A
+2025-11-08 10:57:18,043 $$ WARNING $$ epworth: N/A
+2025-11-08 10:57:18,043 $$ WARNING $$ latencia_sueno_rem: N/A
+2025-11-08 10:57:18,043 $$ WARNING $$ indice_desat_total: N/A
+2025-11-08 10:57:18,044 $$ INFO $$ ** FIN ** Procesamiento CPAP → unificado_xpap.csv para /home/rom/prj/obsino-clisueno/test_files/doc/MARIA DEL ROSARIO CASTRO CIRO 28-07-2023 CPAP.doc
+2025-11-08 10:57:18,083 $$ INFO $$ DataFrame combinado en memoria (global): forma=(58, 46)
+2025-11-08 10:57:18,084 $$ INFO $$ Reporte escrito: /home/rom/prj/obsino-clisueno/output/reporte_analisis_2025-11-08_10-57-18.md
+2025-11-08 10:57:18,084 $$ INFO $$ Fin del proceso para el directorio: /home/rom/prj/obsino-clisueno/test_files
