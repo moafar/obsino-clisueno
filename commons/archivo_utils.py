@@ -1,248 +1,226 @@
+from __future__ import annotations
 from pathlib import Path
-import os
-import logging
-from commons.texto_utils import extraer_texto_docx, extraer_texto_rtf, extraer_texto_doc, normalizar_texto, extraer_subcadenas, determinar_tipos_examenes
+import re, csv, logging, os
+from dataclasses import dataclass
+from typing import Callable, Dict, Optional, List
+
+# --- utils de texto ---
+from commons.texto_utils import (
+    extraer_texto_docx, extraer_texto_rtf, extraer_texto_doc,
+    normalizar_texto, extraer_subcadenas, determinar_tipos_examenes
+)
+
+# --- tus imports (src.*) ---
 from src.basal.procesar_basal import procesar_basal_doc, procesar_basal_rtf
 from src.xpap.procesar_xpap import procesar_xpap_doc, procesar_xpap_rtf, procesar_xpap_docx
-# from dam.procesar_dam import procesar_dam_doc, procesar_dam_rtf
-# from basal.xpap.procesar_bpap import procesar_bpap_doc, procesar_bpap_rtf
-# from actigrafia.procesar_actigrafia import procesar_actigrafia_doc
-# from capnografia.procesar_capnografia import procesar_capnografia_doc, procesar_capnografia_rtf
-# from autocpap.procesar_autocpap import procesar_autocpap_docx
-# from poligrafia.procesar_poligrafia import procesar_poligrafia_docx
-import csv
+from src.dam.procesar_dam import procesar_dam_doc, procesar_dam_rtf
+from src.actigrafia.procesar_actigrafia import procesar_actigrafia_doc
+from src.capnografia.procesar_capnografia import procesar_capnografia_doc, procesar_capnografia_rtf
+from src.autocpap.procesar_autocpap import procesar_autocpap_docx
+from src.poligrafia.procesar_poligrafia import procesar_poligrafia_docx
 
-def procesar_archivo(archivo: Path) -> None:
-    """Lee el contenido de un archivo y retorna el texto extraído o None si hay un error."""
+# --- configuración general ---
+OUTPUT_DIR = Path("output")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Excluir examenes con OXIGENO
-    nombre = archivo.name.upper()
-    patrones_excluir = ["O2", "OXIG", "OXÍG", "OXIGENO", "OXÍGENO"]
-    if any(pat in nombre for pat in patrones_excluir):
-        logging.info(f"Archivo excluido por patrón OXIGENO en filename: {archivo.name}")
-        return None
-    
-    _, extension = os.path.splitext(archivo)
-    texto = ""
-
+# Limpieza preventiva (opcional): elimina unificado.csv si quedara de versiones previas
+GENERIC_PATH = OUTPUT_DIR / "unificado.csv"
+if GENERIC_PATH.exists():
     try:
-        extension = extension.lower()
+        GENERIC_PATH.unlink()
+        logging.info("Eliminado output/unificado.csv residual de ejecuciones anteriores.")
+    except Exception as e:
+        logging.warning(f"No se pudo eliminar output/unificado.csv: {e}")
 
-        if extension == ".docx":
-            texto = extraer_texto_docx(archivo)
-        elif extension == ".rtf":
-            texto = extraer_texto_rtf(archivo)
-        elif extension == ".doc":
-            texto = extraer_texto_doc(archivo)
-        else:
-            logging.error(f"Extensión de archivo no soportada: {extension}")
-            return None        
-        
+EXCLUDE_PATTERNS = re.compile(r"(?:\bO2\b|OXIG|OXÍG|OXIGENO|OXÍGENO)", re.IGNORECASE)
+
+TEXT_EXTRACTORS: Dict[str, Callable[[Path], str]] = {
+    ".docx": extraer_texto_docx,
+    ".rtf":  extraer_texto_rtf,
+    ".doc":  extraer_texto_doc,
+}
+
+# Activa solo lo implementado
+TIPOS_ACTIVOS = {"BASAL", "CPAP", "BPAP"}
+
+def _extract_text(archivo: Path) -> Optional[str]:
+    ext = archivo.suffix.lower()
+    extractor = TEXT_EXTRACTORS.get(ext)
+    if not extractor:
+        logging.error(f"Extensión de archivo no soportada: {ext}")
+        return None
+    try:
+        return extractor(archivo)
     except Exception as e:
         logging.error(f"Error inesperado al leer {archivo} $$ {e}")
         return None
 
-    #print(texto)  # Para verificar el texto extraído
-    #logging.debug(f"Texto extraído: {texto}")
+# ---- utilidades CSV con unión de cabeceras ----
+def _read_existing_rows_and_header(path: Path) -> tuple[List[dict], List[str]]:
+    if not path.exists():
+        return [], []
+    with path.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        header = reader.fieldnames or []
+        rows = list(reader)
+    return rows, header
 
-    texto_normalizado = normalizar_texto(texto)  # Normalizar el texto extraído
-    #print(texto_normalizado)  # Para verificar el texto normalizado
-    logging.debug(f"Texto normalizado: {texto_normalizado}")
-    
-    tipos_examenes = determinar_tipos_examenes(texto_normalizado)  # <-- Llamada a la función para determinar el tipo de examen ***
-    #print(tipos_examenes)  # Para verificar los tipos de examen encontrados
-    
-    if not tipos_examenes:
+def _rewrite_with_header(path: Path, header: List[str], rows: List[dict]) -> None:
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=header)
+        writer.writeheader()
+        for r in rows:
+            writer.writerow({k: r.get(k, "") for k in header})
+
+def _append_row_unified(row: Dict, outfile: Path) -> None:
+    # Guardia dura: nunca escribir a unificado.csv
+    if outfile.name == "unificado.csv":
+        logging.error("Intento de escribir en 'unificado.csv' bloqueado. Revisa el mapeo UNIFIED_FILE_FOR.")
+        return
+
+    rows, header = _read_existing_rows_and_header(outfile)
+    new_keys = list(row.keys())
+
+    if not header:
+        _rewrite_with_header(outfile, new_keys, [row])
+        return
+
+    if set(header) != set(new_keys):
+        union = header[:]  # preservar orden previo
+        for k in new_keys:
+            if k not in union:
+                union.append(k)
+        rows.append(row)
+        _rewrite_with_header(outfile, union, rows)
+        return
+
+    with outfile.open("a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=header)
+        writer.writerow(row)
+
+# -----------------------------------------------
+
+@dataclass(frozen=True)
+class ExamSpec:
+    start_pattern: str
+    end_pattern: str
+    processors: Dict[str, Callable]  # por extensión
+
+EXAMS: Dict[str, ExamSpec] = {
+    "BASAL": ExamSpec(
+        r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL",
+        r"Saturacion\s+O2\s+Minima\s+durante\s+el\s+sueno",
+        {".rtf": procesar_basal_rtf, ".doc": procesar_basal_doc}
+    ),
+    "CPAP": ExamSpec(
+        r"^", r"$",
+        {".rtf": procesar_xpap_rtf, ".doc": procesar_xpap_doc, ".docx": procesar_xpap_docx}
+    ),
+    "BPAP": ExamSpec(
+        r"^", r"$",
+        {".rtf": procesar_xpap_rtf, ".doc": procesar_xpap_doc, ".docx": procesar_xpap_docx}
+    ),
+    # Definidos pero desactivados (no se escribirán)
+    "DAM": ExamSpec(
+        r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\s+CON\s+DISPOSITIVO\s+(?:DE\s+AVANCE\s+)?MANDIBULAR",
+        r"CONCLUSION(?:ES)?",
+        {".rtf": procesar_dam_rtf, ".doc": procesar_dam_doc}
+    ),
+    "ACTIGRAFIA": ExamSpec(
+        r"Fecha", r"ESTADISTICAS DIARIAS",
+        {".doc": procesar_actigrafia_doc}
+    ),
+    "CAPNOGRAFIA": ExamSpec(
+        r"INFORME\s+DE\s+CAPNOGRAFIA", r"CONCLUSION(?:ES)?",
+        {".rtf": procesar_capnografia_rtf, ".doc": procesar_capnografia_doc}
+    ),
+    "AUTOCPAP": ExamSpec(
+        r"^", r"Informe\s+de\s+cumplimiento",
+        {".docx": procesar_autocpap_docx}
+    ),
+    "POLIGRAFIA": ExamSpec(
+        r"^", r"Indicacion\s+del\s+estudio",
+        {".docx": procesar_poligrafia_docx}
+    ),
+}
+
+# SOLO los activos en el mapeo de salida
+UNIFIED_FILE_FOR: Dict[str, str] = {
+    "BASAL": "unificado_basal.csv",
+    "CPAP":  "unificado_xpap.csv",
+    "BPAP":  "unificado_xpap.csv",
+}
+
+def _outfile_for_tipo(tipo: str) -> Optional[Path]:
+    """
+    Devuelve el Path del CSV unificado para el tipo activo.
+    Sin fallback: si no está mapeado o no está activo, se omite.
+    """
+    if tipo not in TIPOS_ACTIVOS:
+        return None
+    nombre = UNIFIED_FILE_FOR.get(tipo)
+    if not nombre:
+        logging.warning(f"Tipo {tipo} activo sin archivo unificado configurado. Se omite escritura.")
+        return None
+    # Guardia adicional: bloquear cualquier genérico
+    if nombre == "unificado.csv":
+        logging.error("Nombre 'unificado.csv' no permitido. Ajusta UNIFIED_FILE_FOR.")
+        return None
+    return OUTPUT_DIR / nombre
+
+def procesar_archivo(archivo: Path) -> None:
+    """Procesa un archivo y escribe en un CSV unificado por tipo de examen (solo activos)."""
+    if EXCLUDE_PATTERNS.search(archivo.name):
+        logging.info(f"Archivo excluido por patrón OXIGENO en filename: {archivo.name}")
+        return
+
+    texto = _extract_text(archivo)
+    if not texto:
+        return
+
+    texto_norm = normalizar_texto(texto)
+    logging.debug(f"Texto normalizado: {texto_norm}")
+
+    tipos = determinar_tipos_examenes(texto_norm)
+    if not tipos:
         logging.warning(f"No se encontraron tipos de examen en el archivo {archivo}.")
         return
 
-    # Cadenas para extraer subcadenas (texto relevante) según el tipo de examen
-    cadenas_busqueda = {
-        "BASAL": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL", r"Saturacion\s+O2\s+Minima\s+durante\s+el\s+sueno"),
-        "CPAP": (r"^", r"$"),
-        "DAM": (r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\s+CON\s+DISPOSITIVO\s+(?:DE\s+AVANCE\s+)?MANDIBULAR", r"CONCLUSION(?:ES)?"),
-        "BPAP": (r"^", r"$"),
-        "ACTIGRAFIA": (r"Fecha", r"ESTADISTICAS DIARIAS"),
-        "CAPNOGRAFIA": (r"INFORME\s+DE\s+CAPNOGRAFIA", r"CONCLUSION(?:ES)?"),
-        "AUTOCPAP": (r"^", r"Informe\s+de\s+cumplimiento"),
-        "POLIGRAFIA": (r"^", r"Indicacion\s+del\s+estudio")
-    }
+    ext = archivo.suffix.lower()
 
-    for tipo in tipos_examenes:
+    for tipo in tipos:
+        if tipo not in TIPOS_ACTIVOS:
+            logging.info(f"Omitido tipo no implementado: {tipo}")
+            continue
+
+        spec = EXAMS.get(tipo)
         logging.info(f"Procesando examen de {tipo}")
-        if tipo in cadenas_busqueda:
-            inicio, fin = cadenas_busqueda[tipo]
-            logging.debug(f"Buscando subcadenas para {tipo}: Inicio: {inicio}, Fin: {fin}")
-            texto_relevante = extraer_subcadenas(texto_normalizado, inicio, fin) # <-- Llamada a la función para extraer SUBCADENAS ***
-            if texto_relevante:
-                logging.info(f"Subcadena encontrada para {tipo}: {texto_relevante}")
-                
-                if tipo == "BASAL":
-                    logging.info(f"** INICIO ** Procesando archivo BASAL válido: {archivo}")
+        if not spec:
+            logging.warning(f"Tipo de examen no manejado: {tipo}")
+            continue
 
-                    if extension == ".rtf":
-                        resultados_basal = procesar_basal_rtf(texto_relevante, archivo)
-                        nombre_archivo = "resultados_basal_rtf.csv"
-                    elif extension == ".doc":
-                        resultados_basal = procesar_basal_doc(texto_relevante, archivo)
-                        nombre_archivo = "resultados_basal_doc.csv"
-                    else:
-                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
-                        continue
+        texto_relevante = extraer_subcadenas(texto_norm, spec.start_pattern, spec.end_pattern)
+        if not texto_relevante:
+            logging.error(f"No se encontraron subcadenas para {tipo} en el archivo {archivo}.")
+            continue
 
-                    directorio_salida = "output"
-                    os.makedirs(directorio_salida, exist_ok=True)
-                    ruta = os.path.join(directorio_salida, nombre_archivo)
+        procesador = spec.processors.get(ext)
+        if not procesador:
+            logging.warning(f"Extensión {ext} no soportada para tipo {tipo} en archivo {archivo}.")
+            continue
 
-                    es_nuevo = not os.path.isfile(ruta)
-                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.DictWriter(f, fieldnames=resultados_basal.keys())
-                        if es_nuevo:
-                            writer.writeheader()
-                        writer.writerow(resultados_basal)
+        logging.info(f"** INICIO ** Procesando archivo {tipo} válido: {archivo}")
+        try:
+            try:
+                resultados = procesador(texto_relevante, archivo)  # (texto, archivo)
+            except TypeError:
+                resultados = procesador(texto_relevante)           # (texto)
+        except Exception as e:
+            logging.error(f"Error procesando {tipo} en {archivo}: {e}")
+            continue
 
-                    logging.info(f"** FIN ** Procesamiento Basal terminado para {archivo}")
-                    
-                
-                if tipo == "CPAP" or tipo == "BPAP":
-                    logging.info(f"** INICIO ** Procesando archivo XPAP válido: {archivo}")
-                    
-                    if extension == ".rtf":
-                        resultados_xpap = procesar_xpap_rtf(texto_relevante, archivo)
-                        nombre_archivo = "resultados_xpap_rtf.csv"
-                    elif extension == ".doc":
-                        resultados_xpap = procesar_xpap_doc(texto_relevante, archivo)
-                        nombre_archivo = "resultados_xpap_doc.csv"
-                    elif extension == ".docx":
-                        resultados_xpap = procesar_xpap_docx(texto_relevante, archivo)
-                        nombre_archivo = "resultados_xpap_docx.csv"
-                    else:
-                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
-                        continue
-
-                    directorio_salida = "output"
-                    os.makedirs(directorio_salida, exist_ok=True)
-                    ruta = os.path.join(directorio_salida, nombre_archivo)
-                    
-                    es_nuevo = not os.path.isfile(ruta)
-                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.DictWriter(f, fieldnames=resultados_xpap.keys()) 
-                        if es_nuevo:
-                            writer.writeheader()
-                        writer.writerow(resultados_xpap)
-                    logging.info(f"** FIN ** Procesamiento XPAP terminado para {archivo}")
-
-                '''
-                elif tipo == "DAM": 
-                    logging.info(f"** INICIO ** Procesando archivo DAM válido: {archivo}")
-                    if extension == ".rtf":
-                        resultados_dam = procesar_dam_rtf(texto_relevante)
-                        ruta = "resultados_dam_rtf.csv"
-                    elif extension == ".doc":   
-                        resultados_dam = procesar_dam_doc(texto_relevante)
-                        ruta = "resultados_dam_doc.csv"
-                    else:
-                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
-                        continue
-                    es_nuevo = not os.path.isfile(ruta)
-                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.DictWriter(f, fieldnames=resultados_dam.keys()) 
-                        if es_nuevo:
-                            writer.writeheader()
-                        writer.writerow(resultados_dam)
-                    logging.info(f"** FIN ** Procesamiento DAM terminado para {archivo}")
-
-                elif tipo == "BPAP": 
-                    logging.info(f"** INICIO ** Procesando archivo BPAP válido: {archivo}")
-                    if extension == ".rtf":
-                        resultados_bpap = procesar_bpap_rtf(texto_relevante)
-                        ruta = "resultados_bpap_rtf.csv"
-                    elif extension == ".doc":
-                        resultados_bpap = procesar_bpap_doc(texto_relevante)
-                        ruta = "resultados_bpap_doc.csv"
-                    else:
-                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
-                        continue
-                    es_nuevo = not os.path.isfile(ruta)
-                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.DictWriter(f, fieldnames=resultados_bpap.keys()) 
-                        if es_nuevo:
-                            writer.writeheader()
-                        writer.writerow(resultados_bpap)
-                    logging.info(f"** FIN ** Procesamiento BPAP terminado para {archivo}")
-
-                elif tipo == "ACTIGRAFIA":
-                    logging.info(f"** INICIO ** Procesando archivo ACTIGRAFIA válido: {archivo}")
-                    if extension == ".doc":
-                        resultados_actigrafia = procesar_actigrafia_doc(texto_relevante)
-                        ruta = "resultados_actigrafia_doc.csv"
-                    else:
-                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
-                        continue
-                    es_nuevo = not os.path.isfile(ruta)
-                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.DictWriter(f, fieldnames=resultados_actigrafia.keys()) 
-                        if es_nuevo:
-                            writer.writeheader()
-                        writer.writerow(resultados_actigrafia)
-                    logging.info(f"** FIN ** Procesamiento BPAP terminado para {archivo}")
-
-                elif tipo == "CAPNOGRAFIA":
-                    logging.info(f"** INICIO ** Procesando archivo CAPNOGRAFIA válido: {archivo}")
-                    if extension == ".rtf":
-                        resultados_capnografia = procesar_capnografia_rtf(texto_relevante)
-                        ruta = "resultados_capnografia_rtf.csv"
-                    elif extension == ".doc":
-                        resultados_capnografia = procesar_capnografia_doc(texto_relevante)
-                        ruta = "resultados_capnografia_doc.csv"
-                    else:
-                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
-                        continue
-                    es_nuevo = not os.path.isfile(ruta)
-                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.DictWriter(f, fieldnames=resultados_capnografia.keys()) 
-                        if es_nuevo:
-                            writer.writeheader()
-                        writer.writerow(resultados_capnografia)
-                    logging.info(f"** FIN ** Procesamiento BPAP terminado para {archivo}")
-
-                                
-                elif tipo == "AUTOCPAP":
-                    logging.info(f"** INICIO ** Procesando archivo AUTOCPAP válido: {archivo}")
-                    if extension == ".docx":
-                        resultados_autocpap = procesar_autocpap_docx(texto_relevante)
-                        ruta = "resultados_autocpap_docx.csv"
-                    else:
-                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
-                        continue
-                    es_nuevo = not os.path.isfile(ruta)
-                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.DictWriter(f, fieldnames=resultados_autocpap.keys()) 
-                        if es_nuevo:
-                            writer.writeheader()
-                        writer.writerow(resultados_autocpap)
-                    logging.info(f"** FIN ** Procesamiento AUTOCPAP terminado para {archivo}")
-
-                
-                elif tipo == "POLIGRAFIA":
-                    logging.info(f"** INICIO ** Procesando archivo POLIGRAFIA válido: {archivo}")
-                    if extension == ".docx":
-                        resultados_poligrafia = procesar_poligrafia_docx(texto_relevante)
-                        ruta = "resultados_poligrafia_docx.csv"
-                    else:
-                        logging.warning(f"Extensión no reconocida para archivo: {archivo}")
-                        continue
-                    es_nuevo = not os.path.isfile(ruta)
-                    with open(ruta, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.DictWriter(f, fieldnames=resultados_poligrafia.keys()) 
-                        if es_nuevo:
-                            writer.writeheader()
-                        writer.writerow(resultados_poligrafia)
-                    logging.info(f"** FIN ** Procesamiento POLIGRAFIA terminado para {archivo}")
-                
-                else:
-                    logging.warning(f"Tipo de examen no manejado: {tipo}")
-                    continue
-                '''
-            else:
-                logging.error(f"No se encontraron subcadenas para {tipo} en el archivo {archivo}.")
+        outfile = _outfile_for_tipo(tipo)
+        if not outfile:
+            continue  # sin archivo mapeado → no escribir
+        _append_row_unified(resultados, outfile)
+        logging.info(f"** FIN ** Procesamiento {tipo} → {outfile.name} para {archivo}")

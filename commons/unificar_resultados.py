@@ -1,76 +1,165 @@
-# analiza_csvs.py
-import os, glob, uuid
+# commons/unificar_resultados.py
+
+import os, glob, re, logging, datetime
+from typing import List, Optional, Dict
+from pathlib import Path
 import pandas as pd
 
-EXCLUIR_ARCHIVOS = {"unificado.csv"}          # excluye salidas previas
-IGNORAR_COLUMNAS = {"uuid"}                   # columnas sintéticas a ignorar
+logger = logging.getLogger(__name__)
 
-def _listar_csvs(carpeta: str) -> list[str]:
-    archivos = glob.glob(os.path.join(carpeta, "*.csv"))
-    return [p for p in archivos if os.path.basename(p) not in EXCLUIR_ARCHIVOS]
+EXCLUIR_PATRONES = [r"^unificado\.csv$"]   # excluye el genérico
+IGNORAR_COLUMNAS = {"uuid"}                # columnas sintéticas a ignorar
 
-def _cols_sin_ignoradas(df: pd.DataFrame) -> set[str]:
+
+# ---------------------- UTILIDADES ----------------------
+
+def _excluir(nombre: str) -> bool:
+    """Determina si un archivo debe excluirse según los patrones."""
+    return any(re.search(pat, nombre, flags=re.IGNORECASE) for pat in EXCLUIR_PATRONES)
+
+def _listar_csvs(carpeta: str) -> List[str]:
+    """Lista archivos CSV válidos dentro de una carpeta (sin los excluidos)."""
+    carpeta_abs = str(Path(carpeta).resolve())
+    encontrados = glob.glob(os.path.join(carpeta_abs, "*.csv"))
+    filtrados = [p for p in encontrados if not _excluir(os.path.basename(p))]
+    logger.debug("Carpeta=%s encontrados=%s usados=%s",
+                 carpeta_abs,
+                 [os.path.basename(x) for x in encontrados],
+                 [os.path.basename(x) for x in filtrados])
+    return filtrados
+
+def _cols_sin_ignoradas(df: pd.DataFrame) -> set:
+    """Devuelve las columnas del DataFrame ignorando las sintéticas."""
     return set(c for c in df.columns if c not in IGNORAR_COLUMNAS)
 
-def analizar_y_unificar(carpeta: str, nombre_salida: str = "unificado.csv") -> str:
-    archivos_csv = _listar_csvs(carpeta)
-    if not archivos_csv:
-        print("No se encontraron archivos CSV en la carpeta (o todos fueron excluidos).")
-        return ""
+def _timestamp() -> str:
+    """Devuelve timestamp YYYY-MM-DD_HH-MM-SS."""
+    return datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    print(f"Se detectaron {len(archivos_csv)} archivos CSV \n")
-    print("=== Iniciando unificación de CSV === \n", flush=True)
-    print("-"*50)
+def _write_text(path: Path, text: str) -> None:
+    """Escribe un texto en un archivo UTF-8."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    logger.info("Reporte escrito: %s", str(path))
 
-    columnas_por_archivo = {}
-    for archivo in archivos_csv:
-        df = pd.read_csv(archivo)
-        columnas_por_archivo[archivo] = {
-            "columnas": _cols_sin_ignoradas(df),
-            "forma": df.shape
+def _family_from_filename(nombre: str) -> str:
+    """
+    Extrae la familia (grupo) a partir de 'unificado_<familia>.csv'.
+    Si no coincide, devuelve 'otros'.
+    """
+    m = re.match(r"^unificado_([a-z0-9]+)\.csv$", nombre, flags=re.IGNORECASE)
+    return m.group(1).lower() if m else "otros"
+
+
+# ---------------------- FUNCIÓN PRINCIPAL ----------------------
+
+def analizar_y_unificar(
+    carpeta: str,
+) -> str:
+    """
+    Analiza los CSV generados en 'carpeta' y crea SIEMPRE un reporte Markdown
+    con nombre 'reporte_analisis_<timestamp>.md'. No crea CSVs adicionales.
+
+    Args:
+        carpeta: Ruta del directorio donde se encuentran los CSV (p.ej. "output").
+
+    Returns:
+        str: Ruta del reporte Markdown generado.
+    """
+    carpeta_abs = Path(carpeta).resolve()
+    archivos_csv = _listar_csvs(str(carpeta_abs))
+
+    # ================== Preparar datos ==================
+    info: Dict[str, Dict] = {}
+    if archivos_csv:
+        for archivo in archivos_csv:
+            df = pd.read_csv(archivo)
+            grupo = _family_from_filename(os.path.basename(archivo))
+            info[archivo] = {
+                "shape": df.shape,
+                "cols": _cols_sin_ignoradas(df),
+                "cols_all": list(df.columns),
+                "grupo": grupo,
+            }
+            logger.debug("Archivo=%s grupo=%s shape=%s cols=%s",
+                         archivo, grupo, df.shape, df.columns.tolist())
+
+    # Agrupar por grupo y calcular uniones de columnas por grupo
+    grupos: Dict[str, List[str]] = {}
+    union_por_grupo: Dict[str, set] = {}
+    if info:
+        for a, d in info.items():
+            grupos.setdefault(d["grupo"], []).append(a)
+        union_por_grupo = {
+            g: set().union(*[info[a]["cols"] for a in archivos])
+            for g, archivos in grupos.items()
         }
-        print(f"Archivo: {os.path.basename(archivo)} | Forma: {df.shape}")
 
-    todas = set().union(*[d["columnas"] for d in columnas_por_archivo.values()])
-    print("\nResumen columnas (ignorando: " + ", ".join(sorted(IGNORAR_COLUMNAS)) + "):")
-    for archivo, d in columnas_por_archivo.items():
-        cols = d["columnas"]
-        faltantes = list(todas - cols)
-        sobrantes = list(cols - todas)
-        print(f"- {os.path.basename(archivo)} | Faltantes: {faltantes} | Sobrantes: {sobrantes}")
+    # ================== Generar reporte ==================
+    ts = _timestamp()
+    rep_path = carpeta_abs / f"reporte_analisis_{ts}.md"
 
-    # Base = el primer archivo (sin columnas ignoradas)
-    archivo_base = archivos_csv[0]
-    df_base = pd.read_csv(archivo_base)
-    columnas_base = _cols_sin_ignoradas(df_base)
-    print(f"\nArchivo base: {os.path.basename(archivo_base)} con forma {df_base.shape}")
-    print("-"*100)
+    lineas: List[str] = []
+    lineas.append("# Reporte de análisis de CSV\n")
+    lineas.append(f"- Carpeta analizada: `{carpeta_abs}`")
+    lineas.append(f"- Archivos detectados: **{len(archivos_csv)}**\n")
 
-    dfs = []
-    for archivo in archivos_csv:
-        df_actual = pd.read_csv(archivo)
-        columnas_actual = _cols_sin_ignoradas(df_actual)
-        print(f"\nProcesando... {archivo} con forma {df_actual.shape}")
-        if columnas_base != columnas_actual:
-            print("  .... AVISO (esquema distinto, ignoradas las sintéticas):")
-            dif_base = columnas_base - columnas_actual
-            dif_act = columnas_actual - columnas_base
-            if dif_base: print(f" - Faltan columnas: {sorted(dif_base)}")
-            if dif_act:  print(f" - Columnas adicionales: {sorted(dif_act)}")
-        print("  .... ok")
-        dfs.append(df_actual)
+    if not archivos_csv:
+        lineas.append("No se encontraron archivos CSV (o todos fueron excluidos).")
+        _write_text(rep_path, "\n".join(lineas))
+        print(f"Reporte generado: {rep_path}")
+        print("Análisis completado (sin archivos).")
+        return str(rep_path)
 
-    print("\n" + "-"*100)
-    print(f"Se procesaron {len(dfs)} archivos CSV.")
-    df_unificado = pd.concat(dfs, ignore_index=True)
-    print("Se ha combinado el DataFrame.  El nuevo DataFrame tiene forma:", df_unificado.shape)
+    # Listado de archivos con forma y grupo
+    lineas.append("## Archivos procesados")
+    for a in archivos_csv:
+        shape = info[a]["shape"]
+        lineas.append(f"- `{os.path.basename(a)}` | grupo: `{info[a]['grupo']}` | forma: {shape[0]} filas × {shape[1]} cols")
 
-    # Escribir salida (y asegurarte de no leerla en la próxima corrida)
-    archivo_salida = os.path.join(carpeta, nombre_salida)
-    df_unificado["uuid"] = [str(uuid.uuid4()) for _ in range(len(df_unificado))]
-    df_unificado.to_csv(archivo_salida, index=False)
-    print(f"El DataFrame unificado se ha guardado en {archivo_salida} con forma {df_unificado.shape}")
-    return archivo_salida
+    # Resumen y mapa de faltantes POR GRUPO
+    lineas.append("\n## Resumen por grupo (ignorando: " + ", ".join(sorted(IGNORAR_COLUMNAS)) + ")")
+    for grupo, archivos in grupos.items():
+        lineas.append(f"\n### Grupo: `{grupo}`")
+        union_cols = union_por_grupo[grupo]
 
-if __name__ == "__main__":
-    print("Ejecuta analizar_y_unificar(carpeta) desde tu main.")
+        # Resumen de columnas por archivo (contra la unión del grupo)
+        for a in archivos:
+            faltantes = sorted(list(union_cols - info[a]["cols"]))
+            sobrantes = sorted(list(info[a]["cols"] - union_cols))
+            lineas.append(f"- **{os.path.basename(a)}**")
+            lineas.append(f"  - Faltantes: {faltantes if faltantes else '[]'}")
+            lineas.append(f"  - Adicionales: {sobrantes if sobrantes else '[]'}")
+
+        # Mapa de faltantes por columna (dentro del grupo)
+        lineas.append("\n#### Mapa de faltantes por columna")
+        faltantes_por_archivo = {a: sorted(list(union_cols - info[a]["cols"])) for a in archivos}
+        faltantes_por_columna: Dict[str, List[str]] = {}
+        for col in sorted(list(union_cols)):
+            archivos_donde_falta = [
+                os.path.basename(a) for a in archivos if col in faltantes_por_archivo[a]
+            ]
+            if archivos_donde_falta:
+                faltantes_por_columna[col] = archivos_donde_falta
+
+        if not faltantes_por_columna:
+            lineas.append("- No hay columnas faltantes dentro de este grupo.")
+        else:
+            for col, archivos_faltantes in faltantes_por_columna.items():
+                n = len(archivos_faltantes)
+                plural = "archivo" if n == 1 else "archivos"
+                lista_arch = ", ".join(archivos_faltantes)
+                lineas.append(f"- **{col}** → falta en {n} {plural}: {lista_arch}")
+
+        # Detalle de columnas por archivo (todas)
+        lineas.append("\n#### Detalle de columnas por archivo (todas, incluyendo ignoradas)")
+        for a in archivos:
+            lineas.append(f"- **{os.path.basename(a)}**: {info[a]['cols_all']}")
+
+    _write_text(rep_path, "\n".join(lineas))
+
+    # ================== Consola mínima ==================
+    print(f"Reporte generado: {rep_path}")
+    print("Análisis completado (solo reporte).")
+
+    return str(rep_path)
