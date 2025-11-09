@@ -1,5 +1,0 @@
-v.3.0.4 - SOY DIEGO
-v.3.0.3 - Ajuste de basal/procesar_subir.py para coincidir con la nueva estructura de la tabla (incluyendo t90, t80 y t70)
-v.3.0.2 - Ajuste de basal/procesar_basal.py para extraer valores de oximetria para calculo de t70, t80 y t90 
-v.3.0.1 - Ajste del script de extracción para unificar archivos de resultados a la vez que analiza desde main.py
-v.3.0.0 - Refactoring para aislar las funciones de cada examen, manteniendo el commons
