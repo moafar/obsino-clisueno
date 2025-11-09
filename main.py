@@ -1,7 +1,5 @@
-import argparse
-import time
-import sys
-import logging
+import argparse, sys, time, logging
+from dataclasses import dataclass
 from pathlib import Path
 import yaml
 
@@ -9,119 +7,150 @@ from commons.logger import setup_logger
 from commons.directorio_utils import validar_directorio, procesar_directorio
 from commons.unificar_resultados import analizar_y_unificar
 
-def main():
-    parser = argparse.ArgumentParser(
+EXIT_OK, EXIT_CFG, EXIT_INPUT, EXIT_PROCESS, EXIT_UNIFY = 0, 1, 2, 3, 4
+logger = logging.getLogger(__name__)
+
+@dataclass
+class Config:
+    logging_dir: Path
+    logging_level: str
+    entrada_ruta: Path | None
+    tipos_validos: list[str] | None
+    glob_patron: str
+    barra_progreso: bool
+    carpeta_csv: Path | None
+
+def parse_args():
+    p = argparse.ArgumentParser(
         description="Procesa un directorio y luego unifica CSVs",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument(
-        "directorio",
-        nargs="?",
-        default=None,
-        help="Ruta del directorio a analizar (si se omite, usa la del YAML)"
-    )
-    parser.add_argument(
-        "-c", "--config",
-        default="commons/config.yaml",
-        help="Ruta al archivo de configuración YAML"
-    )
-    parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Muestra información detallada (fuerza logging DEBUG)"
-    )
-    args = parser.parse_args()
+    p.add_argument("directorio", nargs="?", default=None,
+                   help="Ruta del directorio a analizar (si se omite, usa la del YAML)")
+    p.add_argument("-c","--config", default="commons/config.yaml",
+                   help="Ruta al archivo de configuración YAML")
+    p.add_argument("-v","--verbose", action="store_true",
+                   help="Muestra información detallada (logging DEBUG)")
+    p.add_argument("--no-process", action="store_true", help="No procesa; solo unifica CSVs")
+    p.add_argument("--no-unify", action="store_true", help="No unifica; solo procesa")
+    p.add_argument("--dry-run", action="store_true", help="Valida y muestra parámetros; no ejecuta")
+    return p.parse_args()
 
-    # --- Cargar configuración ---
+def load_config(path_cfg: str) -> Config:
     try:
-        with open(args.config, "r") as f:
-            cfg = yaml.safe_load(f) or {}
+        with open(path_cfg, "r") as f:
+            raw = yaml.safe_load(f) or {}
     except Exception as e:
-        print(f"Error leyendo {args.config}: {e}", file=sys.stderr)
-        return 1
+        raise RuntimeError(f"No se pudo leer {path_cfg}: {e}") from e
 
-    # --- Logging ---
-    log_dir = cfg.get("logging", {}).get("dir", "logs")
-    setup_logger(log_dir)
-    level_name = "DEBUG" if args.verbose else cfg.get("logging", {}).get("level", "INFO")
+    log = (raw.get("logging") or {})
+    ent = (raw.get("entrada") or {})
+    proc = (raw.get("procesamiento") or {})
+    sal = (raw.get("salida") or {})
+
+    cfg = Config(
+        logging_dir = Path(log.get("dir", "logs")),
+        logging_level = str(log.get("level", "INFO")).upper(),
+        entrada_ruta = Path(ent["ruta"]).resolve() if ent.get("ruta") else None,
+        tipos_validos = proc.get("tipos_validos"),
+        glob_patron = proc.get("glob_patron", "**/*"),
+        barra_progreso = bool(proc.get("barra_progreso", True)),
+        carpeta_csv = Path(sal["carpeta_csv"]).resolve() if sal.get("carpeta_csv") else None,
+    )
+ 
+    return cfg
+
+def setup_logging_from_config(cfg: Config, force_debug: bool):
+    setup_logger(cfg.logging_dir)
+    level_name = "DEBUG" if force_debug else cfg.logging_level
     logging.getLogger().setLevel(getattr(logging, level_name, logging.INFO))
 
-    # --- Resolver rutas desde CLI o YAML ---
-    ruta_cfg = (cfg.get("entrada") or {}).get("ruta")
-    if not args.directorio and not ruta_cfg:
-        print("Debe indicar un directorio por CLI o en config.yaml: entrada.ruta", file=sys.stderr)
-        return 2
-    path = args.directorio or ruta_cfg
+def resolve_input_dir(cli_dir: str | None, cfg: Config) -> Path:
+    path = Path(cli_dir).resolve() if cli_dir else cfg.entrada_ruta
+    if not path:
+        raise ValueError("Indica un directorio por CLI o en config.yaml: entrada.ruta")
+    v = validar_directorio(str(path))
+    return v if isinstance(v, Path) else path
 
-    # --- Validar directorio (soporta retorno Path o 1) ---
-    try:
-        logging.info(f"Inicio del proceso para el directorio $$ {path}")
-        v = validar_directorio(path)
-        ruta = v if isinstance(v, Path) else Path(path).resolve()
-    except ValueError as e:
-        logging.error(f"Error al validar el directorio {path} $$ {e}")
-        print(f"\nError: {e}", file=sys.stderr)
-        return 3
+def run_processing(ruta: Path, cfg: Config) -> tuple[dict, float]:
+    t0 = time.perf_counter()
+    res = procesar_directorio(
+        ruta,
+        tipos_validos=cfg.tipos_validos,
+        glob_patron=cfg.glob_patron,
+        barra_progreso=cfg.barra_progreso,
+    )
+    dt = time.perf_counter() - t0
+    return res, dt
 
-    # --- Parámetros de procesamiento desde YAML ---
-    p = cfg.get("procesamiento", {})
-    tipos_validos = p.get("tipos_validos", None)
-    glob_patron = p.get("glob_patron", "**/*")
-    barra = bool(p.get("barra_progreso", True))
-
-    # --- Procesar directorio ---
-    try:
-        inicio = time.time()
-        resultados = procesar_directorio(
-            ruta,
-            tipos_validos=tipos_validos,
-            glob_patron=glob_patron,
-            barra_progreso=barra,
-        )
-        tiempo = time.time() - inicio
-    except Exception as e:
-        logging.error(f"Se ha producido un error en procesar_directorio $$ {e}")
-        print(f"\nSe ha producido un error: {e}", file=sys.stderr)
-        return 4
-
-    # --- Salida por consola (respeta --verbose) ---
-    if args.verbose:
-        logging.info(f"Directorio analizado: {ruta}")
-        logging.info(f"Archivos procesados: {resultados['num_files']:,}")
-        logging.info(f"Subdirectorios encontrados: {resultados['num_dirs']:,}")
-        logging.info(f"Archivos válidos procesados: {resultados['archivos_validos']:,}")
-        logging.info(f"Archivos descartados por tipo no válido: {resultados['num_files'] - resultados['archivos_validos']:,}")
-        logging.info(f"Tiempo de análisis: {tiempo:.2f} s")
-        print(f"\n{' Directorio analizado ':-^50}")
-        print(f"Ruta completa: {ruta}")
-        print(f"Archivos procesados: {resultados['num_files']:,}")
-        print(f"Archivos válidos procesados: {resultados['archivos_validos']:,}")
-        print(f"Archivos descartados por tipo no válido: {resultados['num_files'] - resultados['archivos_validos']:,}")
-        print(f"Subdirectorios encontrados: {resultados['num_dirs']:,}")
-        print(f"Tiempo de análisis: {tiempo:.2f} s")
-        print('-' * 50)
+def report(res: dict, ruta: Path, dt: float, verbose: bool):
+    base = {
+        "ruta": str(ruta),
+        "num_files": res["num_files"],
+        "num_dirs": res["num_dirs"],
+        "validos": res["archivos_validos"],
+        "descartados": res["num_files"] - res["archivos_validos"],
+        "tiempo_s": f"{dt:.2f}",
+    }
+    logger.info(f"Resumen: {base}")
+    if verbose:
+        print(f"\n{' Resumen de procesamiento ':-^60}")
+        for k,v in base.items(): print(f"{k:>12}: {v}")
+        print("-"*60)
     else:
-        print(f"\nArchivos encontrados: {resultados['num_files']}")
-        print(f"Subdirectorios encontrados: {resultados['num_dirs']}")
-        print(f"Archivos válidos procesados: {resultados['archivos_validos']}")
-        print(f"Archivos descartados por tipo no válido: {resultados['num_files'] - resultados['archivos_validos']}\n")
+        print(f"\nArchivos: {base['num_files']} | Subdirs: {base['num_dirs']} | "
+              f"Válidos: {base['validos']} | Descartados: {base['descartados']} | "
+              f"Tiempo(s): {base['tiempo_s']}\n")
 
-    # --- Analizar y unificar CSVs ---
+def maybe_unify(cfg: Config) -> Path | None:
+    if not cfg.carpeta_csv:
+        logger.warning("No se configuró salida.carpeta_csv; se omite unificación.")
+        return None
+    out = analizar_y_unificar(str(cfg.carpeta_csv))
+    if out:
+        logger.info(f"Unificado: {out}")
+    return out
+
+def orchestrate():
+    args = parse_args()
     try:
-        carpeta_csv = (cfg.get("salida") or {}).get("carpeta_csv")
-        if not carpeta_csv:
-            logging.warning("No se configuró salida.carpeta_csv en el YAML; se omite la unificación de CSV.")
-        else:
-            archivo_unificado = analizar_y_unificar(carpeta_csv)
-            if archivo_unificado:
-                logging.info(f"Unificado generado: {archivo_unificado}")
-    except Exception as e:
-        logging.error(f"Fallo en analizar_y_unificar $$ {e}")
-        print(f"\nError unificando CSVs: {e}", file=sys.stderr)
-        return 5
+        cfg = load_config(args.config)
+        setup_logging_from_config(cfg, force_debug=args.verbose)
+        logger.info("Inicio del proceso")
 
-    logging.info(f"Fin del proceso para el directorio: {path}")
-    return 0
+        if args.dry_run:
+            logger.info("Dry-run: sin efectos")
+            print(f"Config: {cfg}")
+            return EXIT_OK
+
+        if not args.no_process:
+            ruta = resolve_input_dir(args.directorio, cfg)
+            logger.info(f"Procesando directorio: {ruta}")
+            res, dt = run_processing(ruta, cfg)
+            report(res, ruta, dt, args.verbose)
+
+        if not args.no_unify:
+            maybe_unify(cfg)
+
+        logger.info("Fin del proceso")
+        return EXIT_OK
+
+    except RuntimeError as e:
+        logger.error(e)
+        print(f"Error de configuración: {e}", file=sys.stderr)
+        return EXIT_CFG
+    except ValueError as e:
+        logger.error(e)
+        print(f"Entrada inválida: {e}", file=sys.stderr)
+        return EXIT_INPUT
+    except Exception as e:
+        # Decide según etapa si quieres distinguir PROCESS vs UNIFY; aquí genérico:
+        logger.exception("Fallo inesperado")
+        print(f"Error: {e}", file=sys.stderr)
+        return EXIT_PROCESS
+
+def main():
+    sys.exit(orchestrate())
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
