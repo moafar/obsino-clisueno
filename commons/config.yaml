@@ -1,5 +1,5 @@
 entrada:
-  ruta: "/ruta/a/tu/directorio_de_entrada"
+  ruta: "/home/rom/prj/obsino-clisueno/test_files"
 
 procesamiento:
   tipos_validos: ["docx", "doc", "rtf"]
@@ -8,7 +8,7 @@ procesamiento:
 
 salida:
   carpeta_csv: "/home/rom/prj/obsino-clisueno/output"
-  archivo_unificado: "unificado.csv"
+  # archivo_unificado: "unificado.csv" # <- Candidato a desaparecer porque en el nuevo main ya no se unificarán todos los CSVs
 
 logging:
   level: "INFO"                # DEBUG/INFO/WARNING/ERROR/CRITICAL
