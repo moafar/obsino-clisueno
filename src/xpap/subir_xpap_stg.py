@@ -1,242 +1,399 @@
-# -*- coding: utf-8 -*-
-import os
-import re
+#!/usr/bin/env python3
+"""
+ETL CSV básico: lee un CSV, aplica transformaciones y exporta el resultado
+a una hoja de Google Sheets.
+"""
+
+from __future__ import annotations
+import argparse
+import logging
+from pathlib import Path
+import sys
 import pandas as pd
-import numpy as np
-import yaml
-from datetime import datetime
+
 import gspread
-from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
+from gspread_dataframe import set_with_dataframe
 
-# ============================
-# 1) Config
-# ============================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(BASE_DIR, "config_basal.yaml")
-
-with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-    config = yaml.safe_load(f)
-
-csv_path       = config["input"]["csv_path"]
-spreadsheet_id = config["output"]["spreadsheet_id"]
-hoja           = config["output"]["hoja"]
-unidades       = config.get("unidades", {})
-
-# Cargar variables desde el nuevo YAML (ordenadas)
-vars_list = config.get("variables", [])
-column_names = [list(item.keys())[0] for item in vars_list]
-column_types = {list(item.keys())[0]: list(item.values())[0] for item in vars_list}
+# --- Configuración de salida a Google Sheets ---
+SPREADSHEET_ID = "1KI8_Df7G9RUco-0FLPqTiFsyLC1r98T_pR3CsHZAu0s"
+HOJA_NAME = "Data_xpap"
+CREDS_PATH = "/home/rom/prj/obsino-clisueno/secrets/observatorio-ino-1-72d3ff3d0513.json"
 
 
-# ============================
-# 2) Leer CSV sin encabezados
-# ============================
-df = pd.read_csv(
-    csv_path,
-    header=0,
-    names=column_names,
-    dtype=str,
-    keep_default_na=False
-)
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Aplica transformaciones a un CSV.")
+    # Acepta ruta posicional (input) o con bandera --input
+    p.add_argument("input", type=Path, nargs="?", help="Ruta del CSV de entrada")
+    p.add_argument(
+        "--input",
+        dest="input_flag",
+        type=Path,
+        help="Ruta del CSV de entrada (alternativa con bandera)",
+    )
+    p.add_argument("--verbose", action="store_true", help="Más logs")
+    args = p.parse_args()
 
-# Limpieza básica de espacios
-df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+    # Prioridad: si se usa --input, prevalece sobre la posicional
+    input_path = args.input_flag or args.input
+    if not input_path:
+        p.error("Debe indicar la ruta del CSV de entrada (posicional o con --input).")
 
-# ============================
-# 3) Tipado según YAML
-# ============================
-def _to_float(s: str):
-    if s is None:
-        return np.nan
-    t = str(s).strip()
-    if t == "":
-        return np.nan
-    t = re.sub(r"[^\d,.\-]", "", t)
-    if "," in t and "." in t:
-        t = t.replace(".", "").replace(",", ".")
-    elif "," in t:
-        t = t.replace(",", ".")
-    try:
-        return float(t)
-    except:
-        return np.nan
+    args.input = input_path
+    return args
 
-def _to_int(s: str):
-    v = _to_float(s)
-    if np.isnan(v):
-        return pd.NA
-    try:
-        return int(round(v))
-    except:
-        return pd.NA
 
-def _to_fraction(s: str):
+def setup_logging(verbose: bool = False) -> None:
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s | %(levelname)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+
+def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Convierte porcentajes (p.ej., '45' o '45,3') a fracción (0.45, 0.453).
-    Devuelve np.nan si no es convertible.
+    Transforma el DataFrame:
+      - anos_decimales (desde edad_*)
+      - Normaliza y crea: peso_kg, talla_cm, cuello_cm, perimetro_abdominal_cm
+      - Crea t90, t80, t70 (proporción tiempo desaturado)
+      - Elimina columnas de entrada usadas
+      - Renombra y reordena columnas al patrón final solicitado
     """
-    v = _to_float(s)
-    if np.isnan(v):
-        return np.nan
-    return np.float64(v / 100.0)
 
-for col, typ in column_types.items():
-    if col not in df.columns:
-        df[col] = ""
+    # --- helpers ---
+    def _to_float(x):
+        if pd.isna(x):
+            return pd.NA
+        s = str(x).strip().lower()
+        if s in {"", "na", "nan", "null"}:
+            return pd.NA
+        s = s.replace(",", ".")
+        import re
+        s = re.sub(r"[^0-9\.\-]", "", s)
+        if s in {"", ".", "-", "-.", ".-"}:
+            return pd.NA
+        try:
+            return float(s)
+        except Exception:
+            return pd.NA
 
-    if typ == "str":
-        df[col] = df[col].astype(str).str.strip()
+    def _to_int_or_zero(x):
+        val = _to_float(x)
+        if pd.isna(val):
+            return 0
+        try:
+            return int(val)
+        except Exception:
+            return 0
 
-    elif typ == "int":
-        df[col] = df[col].map(_to_int).astype("Int64")
+    def _anos_decimales(row):
+        y = _to_int_or_zero(row.get("edad_anos"))
+        m = _to_int_or_zero(row.get("edad_meses"))
+        d = _to_int_or_zero(row.get("edad_dias"))
+        return round(y + m / 12.0 + d / 365.25, 4)
 
-    elif typ == "float":
-        df[col] = df[col].map(_to_float).astype("Float64")
+    # --- unidades embebidas ---
+    unidades = {
+        "peso": {"kg": ["kg", "kgs", "kgr", "kl"], "g": ["g", "gr", "grs"]},
+        "talla": {
+            "metros": ["m", "mts", "metros"],
+            "centimetros": ["c", "cm", "cms", "a"],
+        },
+        "cuello": {
+            "metros": ["m", "mts", "metros"],
+            "centimetros": ["c", "cm", "cms"],
+        },
+        "perimetro_abdominal": {
+            "metros": ["m", "ms", "mts"],
+            "centimetros": ["cm", "cms", "cm.", ".cm", ".ccm", "ccm"],
+        },
+    }
 
-    elif typ == "percent":
-        df[col] = df[col].map(_to_fraction).astype("Float64")
+    # 1) anos_decimales
+    if {"edad_anos", "edad_meses", "edad_dias"}.issubset(df.columns):
+        df["anos_decimales"] = df.apply(_anos_decimales, axis=1).astype("Float64")
+        logging.info("Agregada columna anos_decimales.")
+    else:
+        logging.warning("No se encontraron columnas de edad (edad_anos/meses/dias).")
 
-    elif typ == "datetime":
-        s = (
-            df[col].astype("string")
-            .str.replace(r"[\u200B\u00A0]", "", regex=True)
-            .str.strip()
-            .str.replace(r"[.\-]", "/", regex=True)
-            .str.extract(r"(\d{1,2}/\d{1,2}/\d{2,4})")[0]
+    # 2) normalizar textos de unidad
+    for col in [
+        "medida_peso",
+        "medida_talla",
+        "medida_cuello",
+        "medida_perimetro_abdominal",
+    ]:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.lower().str.strip()
+
+    # sets desde config
+    peso_kg_cfg = set(map(str.lower, unidades["peso"]["kg"]))
+    peso_g_cfg = set(map(str.lower, unidades["peso"]["g"]))
+    t_m_cfg = set(map(str.lower, unidades["talla"]["metros"]))
+    t_cm_cfg = set(map(str.lower, unidades["talla"]["centimetros"]))
+    c_m_cfg = set(map(str.lower, unidades["cuello"]["metros"]))
+    c_cm_cfg = set(map(str.lower, unidades["cuello"]["centimetros"]))
+    p_m_cfg = set(map(str.lower, unidades["perimetro_abdominal"]["metros"]))
+    p_cm_cfg = set(map(str.lower, unidades["perimetro_abdominal"]["centimetros"]))
+
+    # 3) peso_kg
+    if {"peso", "medida_peso"}.issubset(df.columns):
+        df["peso_kg"] = pd.Series(pd.NA, index=df.index, dtype="Float64")
+        mask_kg = df["medida_peso"].isin(peso_kg_cfg)
+        mask_g = df["medida_peso"].isin(peso_g_cfg)
+        df.loc[mask_kg, "peso_kg"] = df.loc[mask_kg, "peso"].map(_to_float)
+        df.loc[mask_g, "peso_kg"] = df.loc[mask_g, "peso"].map(_to_float) / 1000.0
+        logging.info("Agregada columna peso_kg.")
+    else:
+        logging.warning("Faltan columnas para peso (peso y/o medida_peso).")
+
+    # 4) talla_cm
+    if {"talla", "medida_talla"}.issubset(df.columns):
+        df["talla_cm"] = pd.Series(pd.NA, index=df.index, dtype="Float64")
+        mask_tm = df["medida_talla"].isin(t_m_cfg)
+        mask_tc = df["medida_talla"].isin(t_cm_cfg)
+        df.loc[mask_tm, "talla_cm"] = df.loc[mask_tm, "talla"].map(_to_float) * 100.0
+        df.loc[mask_tc, "talla_cm"] = df.loc[mask_tc, "talla"].map(_to_float)
+        logging.info("Agregada columna talla_cm.")
+    else:
+        logging.warning("Faltan columnas para talla (talla y/o medida_talla).")
+
+    # 5) cuello_cm
+    if {"cuello", "medida_cuello"}.issubset(df.columns):
+        df["cuello_cm"] = pd.Series(pd.NA, index=df.index, dtype="Float64")
+        mask_cm = df["medida_cuello"].isin(c_m_cfg)
+        mask_cc = df["medida_cuello"].isin(c_cm_cfg)
+        df.loc[mask_cm, "cuello_cm"] = df.loc[mask_cm, "cuello"].map(_to_float) * 100.0
+        df.loc[mask_cc, "cuello_cm"] = df.loc[mask_cc, "cuello"].map(_to_float)
+        logging.info("Agregada columna cuello_cm.")
+    else:
+        logging.warning("Faltan columnas para cuello (cuello y/o medida_cuello).")
+
+    # 6) perimetro_abdominal_cm
+    if {"perimetro_abdominal", "medida_perimetro_abdominal"}.issubset(df.columns):
+        df["perimetro_abdominal_cm"] = pd.Series(
+            pd.NA, index=df.index, dtype="Float64"
         )
-        df[col] = pd.to_datetime(s, format="%d/%m/%Y", errors="coerce").dt.floor("D")
+        mask_pm = df["medida_perimetro_abdominal"].isin(p_m_cfg)
+        mask_pc = df["medida_perimetro_abdominal"].isin(p_cm_cfg)
+        df.loc[mask_pm, "perimetro_abdominal_cm"] = (
+            df.loc[mask_pm, "perimetro_abdominal"].map(_to_float) * 100.0
+        )
+        df.loc[mask_pc, "perimetro_abdominal_cm"] = df.loc[
+            mask_pc, "perimetro_abdominal"
+        ].map(_to_float)
+        logging.info("Agregada columna perimetro_abdominal_cm.")
+    else:
+        logging.warning(
+            "Faltan columnas para perímetro abdominal "
+            "(perimetro_abdominal y/o medida_perimetro_abdominal)."
+        )
+
+    # 7) proporciones de tiempo desaturación (t90, t80, t70)
+    def _txx(rem_col: str, nrem_col: str, total_col: str, target_name: str):
+        if not {rem_col, nrem_col, total_col}.issubset(df.columns):
+            logging.warning(
+                f"No se encontraron columnas requeridas para {target_name}."
+            )
+            return
+        try:
+            rem = df[rem_col].map(_to_float).astype("Float64")
+            nrem = df[nrem_col].map(_to_float).astype("Float64")
+            tot = df[total_col].map(_to_float).astype("Float64")
+
+            out = (rem.fillna(0) + nrem.fillna(0)) / tot
+            out = out.where(tot > 0)
+            out = out.round(2)  # redondeo a 2 decimales
+
+            df[target_name] = out.astype("Float64")
+            logging.info(f"Agregada columna {target_name}.")
+        except Exception as e:
+            logging.exception(f"Error calculando {target_name}: {e}")
+
+    _txx("tiempo_desat_90_rem", "tiempo_desat_90_nrem", "tiempo_sueno", "t90")
+    _txx("tiempo_desat_80_rem", "tiempo_desat_80_nrem", "tiempo_sueno", "t80")
+    _txx("tiempo_desat_70_rem", "tiempo_desat_70_nrem", "tiempo_sueno", "t70")
+
+    # 8) eliminar columnas de entrada usadas (pero conservamos tiempo_sueno)
+    cols_a_eliminar = [
+        "edad_anos",
+        "edad_meses",
+        "edad_dias",
+        "peso",
+        "medida_peso",
+        "talla",
+        "medida_talla",
+        "cuello",
+        "medida_cuello",
+        "perimetro_abdominal",
+        "medida_perimetro_abdominal",
+        "tiempo_desat_90_rem",
+        "tiempo_desat_90_nrem",
+        "tiempo_desat_80_rem",
+        "tiempo_desat_80_nrem",
+        "tiempo_desat_70_rem",
+        "tiempo_desat_70_nrem",
+        # ojo: NO borramos tiempo_sueno porque lo necesitamos como xpap_tiempo_sueno
+    ]
+    existentes = [c for c in cols_a_eliminar if c in df.columns]
+    if existentes:
+        df = df.drop(columns=existentes)
+        logging.info("Eliminadas columnas de entrada usadas: %s", existentes)
+
+    # 9) renombrar columnas al patrón final
+    rename_map = {
+        "nombre": "pte_nombre",
+        "id": "pte_id",
+        "imc": "pte_imc",
+        "solicita": "xpap_solicita",
+        "empresa": "xpap_empresa",
+        "fecha_estudio": "xpap_fecha_estudio",
+        "epworth": "xpap_epworth",
+        "tiempo_en_cama": "xpap_tiempo_en_cama",
+        "tiempo_sueno": "xpap_tiempo_sueno",
+        "eficiencia_sueno": "xpap_eficiencia_sueno",
+        "latencia_sueno_total": "xpap_latencia_sueno_total",
+        "latencia_sueno_rem": "xpap_latencia_sueno_rem",
+        "indice_microalertamientos": "xpap_indice_microalertamientos",
+        "porcentaje_sueno_rem": "xpap_porcentaje_sueno_rem",
+        "porcentaje_sueno_profundo": "xpap_porcentaje_sueno_profundo",
+        "iac": "xpap_iac",
+        "iao": "xpap_iao",
+        "iam": "xpap_iam",
+        "ih": "xpap_ih",
+        "iah": "xpap_iah",
+        "indice_desat_rem": "xpap_indice_desat_rem",
+        "indice_desat_nrem": "xpap_indice_desat_nrem",
+        "indice_desat_total": "xpap_indice_desat_total",
+        "numero_eventos_ah": "xpap_numero_eventos_ah",
+        "fuente": "xpap_fuente",
+        "uuid": "xpap_uuid",
+        "anos_decimales": "pte_anos_decimales",
+        "peso_kg": "pte_peso_kg",
+        "talla_cm": "pte_talla_cm",
+        "cuello_cm": "pte_cuello_cm",
+        "perimetro_abdominal_cm": "pte_perimetro_abdominal_cm",
+        "t90": "xpap_t90",
+        "t80": "xpap_t80",
+        "t70": "xpap_t70",
+        "version_control": "xpap_version_control",
+        # nuevas columnas de equipo/máscara/presión
+        "marca_equipo": "xpap_marca_equipo",
+        "tipo_mascara": "xpap_tipo_mascara",
+        "tamano_mascara": "xpap_tamano_mascara",
+        "presion_terapeutica": "xpap_presion_terapeutica",
+    }
+
+    df = df.rename(columns=rename_map)
+
+    # 10) reordenar y asegurar columnas finales
+    final_cols = [
+        "pte_nombre",
+        "pte_id",
+        "pte_imc",
+        "xpap_solicita",
+        "xpap_empresa",
+        "xpap_fecha_estudio",
+        "xpap_epworth",
+        "xpap_tiempo_en_cama",
+        "xpap_tiempo_sueno",
+        "xpap_eficiencia_sueno",
+        "xpap_latencia_sueno_total",
+        "xpap_latencia_sueno_rem",
+        "xpap_indice_microalertamientos",
+        "xpap_porcentaje_sueno_rem",
+        "xpap_porcentaje_sueno_profundo",
+        "xpap_iac",
+        "xpap_iao",
+        "xpap_iam",
+        "xpap_ih",
+        "xpap_iah",
+        "xpap_indice_desat_rem",
+        "xpap_indice_desat_nrem",
+        "xpap_indice_desat_total",
+        # nuevas en la misma zona que en el CSV de origen
+        "xpap_marca_equipo",
+        "xpap_tipo_mascara",
+        "xpap_tamano_mascara",
+        "xpap_presion_terapeutica",
+        "xpap_numero_eventos_ah",
+        "xpap_fuente",
+        "xpap_uuid",
+        "pte_anos_decimales",
+        "pte_peso_kg",
+        "pte_talla_cm",
+        "pte_cuello_cm",
+        "pte_perimetro_abdominal_cm",
+        "xpap_t90",
+        "xpap_t80",
+        "xpap_t70",
+        "xpap_version_control",
+    ]
+
+    for col in final_cols:
+        if col not in df.columns:
+            df[col] = pd.NA
+
+    df = df[final_cols]
+    logging.info("Columnas finales: %s", df.columns.tolist())
+
+    return df
 
 
-# ============================
-# 4) Normalizaciones
-# ============================
-def _anos_decimales(row):
-    y = 0 if pd.isna(row["pte_edad_anos"]) else int(row["pte_edad_anos"])
-    m = 0 if pd.isna(row["pte_edad_meses"]) else int(row["pte_edad_meses"])
-    d = 0 if pd.isna(row["pte_edad_dias"]) else int(row["pte_edad_dias"])
-    return round(y + m / 12.0 + d / 365.25, 4)
+def main() -> int:
+    args = parse_args()
+    setup_logging(args.verbose)
+
+    if not args.input.exists():
+        logging.error("No existe el archivo de entrada: %s", args.input)
+        return 2
+
+    try:
+        logging.info("Leyendo: %s", args.input)
+        df = pd.read_csv(args.input, dtype=str)
+        logging.info("Shape inicial: %s", df.shape)
+        logging.info("Columnas iniciales: %s", df.columns.tolist())
+    except Exception as e:
+        logging.exception("Error leyendo el CSV: %s", e)
+        return 3
+
+    try:
+        df_out = apply_transformations(df)
+        logging.info("Shape final: %s", df_out.shape)
+    except Exception as e:
+        logging.exception("Error al transformar datos: %s", e)
+        return 4
+
+    # Exportar directamente a Google Sheets
+    try:
+        logging.info("Iniciando exportación a Google Sheets...")
+
+        scope = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+            "https://www.googleapis.com/auth/spreadsheets",
+        ]
+        creds = Credentials.from_service_account_file(CREDS_PATH, scopes=scope)
+
+        client = gspread.authorize(creds)
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        worksheet = spreadsheet.worksheet(HOJA_NAME)
+
+        worksheet.clear()
+        set_with_dataframe(worksheet, df_out)
+
+        logging.info("Datos exportados correctamente a Google Sheets.")
+        print("✅ Datos exportados correctamente a Google Sheets.")
+    except Exception as e:
+        logging.exception("Error exportando a Google Sheets: %s", e)
+        print("❌ Error exportando a Google Sheets. Revisa el log.")
+        return 6
+
+    return 0
 
 
-df["pte_anos_decimales"] = df.apply(_anos_decimales, axis=1).astype("Float64")
-
-for col in ["pte_medida_peso","pte_medida_talla","pte_medida_cuello","pte_medida_perimetro_abdominal"]:
-    if col in df.columns:
-        df[col] = df[col].astype(str).str.lower().str.strip()
-
-peso_kg_cfg = set(unidades.get("peso", {}).get("kg", []))
-peso_g_cfg = set(unidades.get("peso", {}).get("g", []))
-t_m_cfg = set(unidades.get("talla", {}).get("metros", []))
-t_cm_cfg = set(unidades.get("talla", {}).get("centimetros", []))
-c_m_cfg = set(unidades.get("cuello", {}).get("metros", []))
-c_cm_cfg = set(unidades.get("cuello", {}).get("centimetros", []))
-p_m_cfg = set(unidades.get("perimetro_abdominal", {}).get("metros", []))
-p_cm_cfg = set(unidades.get("perimetro_abdominal", {}).get("centimetros", []))
-
-df["pte_peso_kg"] = pd.Series(pd.NA, index=df.index, dtype="Float64")
-mask_kg = df["pte_medida_peso"].isin(peso_kg_cfg)
-mask_g  = df["pte_medida_peso"].isin(peso_g_cfg)
-df.loc[mask_kg, "pte_peso_kg"] = df.loc[mask_kg, "pte_peso"].map(_to_float)
-df.loc[mask_g,  "pte_peso_kg"] = df.loc[mask_g,  "pte_peso"].map(_to_float) / 1000.0
-
-df["pte_talla_cm"] = pd.Series(pd.NA, index=df.index, dtype="Float64")
-mask_tm = df["pte_medida_talla"].isin(t_m_cfg)
-mask_tc = df["pte_medida_talla"].isin(t_cm_cfg)
-df.loc[mask_tm, "pte_talla_cm"] = df.loc[mask_tm, "pte_talla"].map(_to_float) * 100.0
-df.loc[mask_tc, "pte_talla_cm"] = df.loc[mask_tc, "pte_talla"].map(_to_float)
-
-df["pte_cuello_cm"] = pd.Series(pd.NA, index=df.index, dtype="Float64")
-mask_cm = df["pte_medida_cuello"].isin(c_m_cfg)
-mask_cc = df["pte_medida_cuello"].isin(c_cm_cfg)
-df.loc[mask_cm, "pte_cuello_cm"] = df.loc[mask_cm, "pte_cuello"].map(_to_float) * 100.0
-df.loc[mask_cc, "pte_cuello_cm"] = df.loc[mask_cc, "pte_cuello"].map(_to_float)
-
-df["pte_perimetro_abdominal_cm"] = pd.Series(pd.NA, index=df.index, dtype="Float64")
-mask_pm = df["pte_medida_perimetro_abdominal"].isin(p_m_cfg)
-mask_pc = df["pte_medida_perimetro_abdominal"].isin(p_cm_cfg)
-df.loc[mask_pm, "pte_perimetro_abdominal_cm"] = df.loc[mask_pm, "pte_perimetro_abdominal"].map(_to_float) * 100.0
-df.loc[mask_pc, "pte_perimetro_abdominal_cm"] = df.loc[mask_pc, "pte_perimetro_abdominal"].map(_to_float)
-
-
-# ============================
-# 5) t90, t80, t70 (% del tiempo de sueño)
-# ============================
-def _txx(rem_col, nrem_col, total_col, target_name):
-    rem  = df[rem_col].astype("Float64")
-    nrem = df[nrem_col].astype("Float64")
-    tot  = df[total_col].astype("Float64")
-    out = (rem.fillna(0) + nrem.fillna(0)) / tot
-    out = out.where(tot > 0)
-    df[target_name] = out.astype("Float64")
-
-
-_txx("basal_tiempo_desat_90_rem","basal_tiempo_desat_90_nrem","basal_tiempo_sueno","basal_t90")
-_txx("basal_tiempo_desat_80_rem","basal_tiempo_desat_80_nrem","basal_tiempo_sueno","basal_t80")
-_txx("basal_tiempo_desat_70_rem","basal_tiempo_desat_70_nrem","basal_tiempo_sueno","basal_t70")
-
-
-# ============================
-# 6) Renombrado final y exportación
-# ============================
-
-if "basal_version_control" not in df.columns:
-    df["basal_version_control"] = pd.NA
-
-# Ahora sí el orden final
-columnas_finales = [
-    "pte_nombre",
-    "pte_id",
-    "pte_imc",
-    "basal_solicita",
-    "basal_empresa",
-    "basal_fecha_estudio",
-    "basal_epworth",
-    "basal_tiempo_en_cama",
-    "basal_tiempo_sueno",
-    "basal_eficiencia_sueno",
-    "basal_latencia_sueno_total",
-    "basal_latencia_sueno_rem",
-    "basal_indice_microalertamientos",
-    "basal_porcentaje_sueno_rem",
-    "basal_porcentaje_sueno_profundo",
-    "basal_iac",
-    "basal_iao",
-    "basal_iam",
-    "basal_ih",
-    "basal_iah",
-    "basal_indice_desat_rem",
-    "basal_indice_desat_nrem",
-    "basal_indice_desat_total",
-    "basal_numero_eventos_ah",
-    "basal_fuente",
-    "basal_uuid",
-    "pte_anos_decimales",
-    "pte_peso_kg",
-    "pte_talla_cm",
-    "pte_cuello_cm",
-    "pte_perimetro_abdominal_cm",
-    "basal_t90",
-    "basal_t80",
-    "basal_t70",
-    "basal_version_control",
-]
-
-df = df[columnas_finales]
-#df.to_csv("exported.csv", index=False)
-
-
-creds_path = config["output"]["creds_path"]
-scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive",
-    "https://www.googleapis.com/auth/spreadsheets",
-]
-creds = Credentials.from_service_account_file(creds_path, scopes=scope)
-
-client = gspread.authorize(creds)
-spreadsheet = client.open_by_key(spreadsheet_id)
-worksheet = spreadsheet.worksheet(hoja)
-worksheet.clear()
-set_with_dataframe(worksheet, df)
-
-print("Datos exportados correctamente.")
+if __name__ == "__main__":
+    code = main()
+    sys.exit(code)
