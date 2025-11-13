@@ -1,30 +1,49 @@
+# ----------------------
 # Python
+# ----------------------
 __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
 venv/
 
+# ----------------------
 # Logs y salidas
-logs/**/*.log        # Ignora todos los .log en subdirectorios de logs/
-!logs/.gitkeep       # Excepto .gitkeep
+# ----------------------
+# Ignora todos los .log en subdirectorios de logs/
+logs/**/*.log
+# Excepto .gitkeep
+!logs/.gitkeep
 
-output/**/*          # Ignora todo en output/
-!output/.gitkeep     # Excepto .gitkeep
+# Ignora todo en output/
+output/**/*
+# Excepto .gitkeep
+!output/.gitkeep
 
-*.log                # Atrapa cualquier .log fuera de logs/
+# Atrapa cualquier .log fuera de logs/
+*.log
 
+# ----------------------
 # Archivos de datos
+# ----------------------
 *.csv
 *.xlsx
 
+# ----------------------
 # Entornos
+# ----------------------
 .env
 .env.*
 
+# ----------------------
 # VSCode
+# ----------------------
 .vscode/
 
+# ----------------------
 # Secretos
-secrets/*.json       # Ignora archivos sensibles dentro de secrets/
-!secrets/.gitkeep    # Excepto .gitkeep
+# ----------------------
+# Ignora archivos sensibles dentro de secrets/
+secrets/*.json
+# Excepto .gitkeep
+!secrets/.gitkeep
