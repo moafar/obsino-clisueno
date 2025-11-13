@@ -9,6 +9,7 @@ import argparse
 import logging
 from pathlib import Path
 import sys
+import re
 import pandas as pd
 
 import gspread
@@ -18,7 +19,61 @@ from gspread_dataframe import set_with_dataframe
 # --- Configuración de salida a Google Sheets ---
 SPREADSHEET_ID = "1KI8_Df7G9RUco-0FLPqTiFsyLC1r98T_pR3CsHZAu0s"
 HOJA_NAME = "Data_xpap"
-CREDS_PATH = "/home/rom/prj/obsino-clisueno/secrets/observatorio-ino-1-72d3ff3d0513.json"
+CREDS_PATH = "/home/rom/prj/obsino-clisueno/secrets/observatorio-ino-1-7a69d356b543.json"
+
+# --- Diccionario de tipos (data dictionary para XPAP) ---
+DATA_TYPES: dict[str, str] = {
+    "nombre": "str",
+    "edad_anos": "float",
+    "edad_meses": "float",
+    "edad_dias": "float",
+    "id": "str",
+    "peso": "float",
+    "medida_peso": "str",
+    "talla": "float",
+    "medida_talla": "str",
+    "imc": "float",
+    "cuello": "float",
+    "medida_cuello": "str",
+    "perimetro_abdominal": "float",
+    "medida_perimetro_abdominal": "str",
+    "solicita": "str",
+    "empresa": "str",
+    "fecha_estudio": "datetime",
+    "epworth": "float",
+    "tiempo_en_cama": "float",
+    "tiempo_sueno": "float",
+    "eficiencia_sueno": "float",
+    "latencia_sueno_total": "float",
+    "latencia_sueno_rem": "float",
+    "indice_microalertamientos": "float",
+    "porcentaje_sueno_rem": "float",
+    "porcentaje_sueno_profundo": "float",
+    "iac": "float",
+    "iao": "float",
+    "iam": "float",
+    "indice_desat_rem": "float",
+    "indice_desat_nrem": "float",
+    "indice_desat_total": "float",
+    "tiempo_desat_90_rem": "float",
+    "tiempo_desat_90_nrem": "float",
+    "tiempo_desat_80_rem": "float",
+    "tiempo_desat_80_nrem": "float",
+    "tiempo_desat_70_rem": "float",
+    "tiempo_desat_70_nrem": "float",
+    "marca_equipo": "str",
+    "tipo_mascara": "str",
+    "tamano_mascara": "str",
+    "presion_terapeutica": "str",
+    "numero_eventos_ah": "float",
+    "ih": "float",
+    "iah": "float",
+    "fuente": "str",
+}
+
+FLOAT_COLS = [c for c, t in DATA_TYPES.items() if t == "float"]
+STR_COLS = [c for c, t in DATA_TYPES.items() if t == "str"]
+DATETIME_COLS = [c for c, t in DATA_TYPES.items() if t == "datetime"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,6 +107,56 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
+def _clean_float_series(s: pd.Series) -> pd.Series:
+    """
+    Limpia una serie que debería ser numérica:
+    - trata nulos y textos vacíos
+    - normaliza coma/punto
+    - elimina caracteres no numéricos
+    - convierte a Float64 (nullable)
+    """
+    s_str = s.astype(str).str.strip()
+
+    null_mask = s_str.str.lower().isin({"", "na", "nan", "null", "none"})
+    s_str = s_str.where(~null_mask, None)
+
+    if s_str.isna().all():
+        return pd.Series(pd.NA, index=s.index, dtype="Float64")
+
+    s_str = s_str.str.replace(",", ".", regex=False)
+    s_str = s_str.str.replace(r"[^0-9\.\-]", "", regex=True)
+    s_str = s_str.where(~s_str.eq(""), None)
+
+    s_num = pd.to_numeric(s_str, errors="coerce").astype("Float64")
+    return s_num
+
+
+def normalize_dtypes(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normaliza columnas según DATA_TYPES:
+    - columnas float: limpia coma/punto y convierte a Float64
+    - columnas datetime: to_datetime (day-first)
+    - columnas str: se dejan como están (ya vienen como str)
+    """
+    for col in FLOAT_COLS:
+        if col in df.columns:
+            try:
+                df[col] = _clean_float_series(df[col])
+                logging.debug("Columna numérica normalizada: %s", col)
+            except Exception as e:
+                logging.exception("Error normalizando columna float %s: %s", col, e)
+
+    for col in DATETIME_COLS:
+        if col in df.columns:
+            try:
+                df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
+                logging.debug("Columna datetime normalizada: %s", col)
+            except Exception as e:
+                logging.exception("Error normalizando columna datetime %s: %s", col, e)
+
+    return df
+
+
 def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
     """
     Transforma el DataFrame:
@@ -70,7 +175,6 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
         if s in {"", "na", "nan", "null"}:
             return pd.NA
         s = s.replace(",", ".")
-        import re
         s = re.sub(r"[^0-9\.\-]", "", s)
         if s in {"", ".", "-", "-.", ".-"}:
             return pd.NA
@@ -267,6 +371,10 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
         "indice_desat_rem": "xpap_indice_desat_rem",
         "indice_desat_nrem": "xpap_indice_desat_nrem",
         "indice_desat_total": "xpap_indice_desat_total",
+        "marca_equipo": "xpap_marca_equipo",
+        "tipo_mascara": "xpap_tipo_mascara",
+        "tamano_mascara": "xpap_tamano_mascara",
+        "presion_terapeutica": "xpap_presion_terapeutica",
         "numero_eventos_ah": "xpap_numero_eventos_ah",
         "fuente": "xpap_fuente",
         "uuid": "xpap_uuid",
@@ -279,11 +387,6 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
         "t80": "xpap_t80",
         "t70": "xpap_t70",
         "version_control": "xpap_version_control",
-        # nuevas columnas de equipo/máscara/presión
-        "marca_equipo": "xpap_marca_equipo",
-        "tipo_mascara": "xpap_tipo_mascara",
-        "tamano_mascara": "xpap_tamano_mascara",
-        "presion_terapeutica": "xpap_presion_terapeutica",
     }
 
     df = df.rename(columns=rename_map)
@@ -313,7 +416,6 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
         "xpap_indice_desat_rem",
         "xpap_indice_desat_nrem",
         "xpap_indice_desat_total",
-        # nuevas en la misma zona que en el CSV de origen
         "xpap_marca_equipo",
         "xpap_tipo_mascara",
         "xpap_tamano_mascara",
@@ -352,19 +454,28 @@ def main() -> int:
 
     try:
         logging.info("Leyendo: %s", args.input)
+        # leemos todo como texto para controlar coma/punto después
         df = pd.read_csv(args.input, dtype=str)
-        logging.info("Shape inicial: %s", df.shape)
+        logging.info("Shape inicial (raw): %s", df.shape)
         logging.info("Columnas iniciales: %s", df.columns.tolist())
     except Exception as e:
         logging.exception("Error leyendo el CSV: %s", e)
         return 3
+
+    # normalizar tipos según DATA_TYPES (coma/punto y fechas)
+    try:
+        df = normalize_dtypes(df)
+        logging.info("Tipos normalizados según DATA_TYPES.")
+    except Exception as e:
+        logging.exception("Error al normalizar tipos: %s", e)
+        return 4
 
     try:
         df_out = apply_transformations(df)
         logging.info("Shape final: %s", df_out.shape)
     except Exception as e:
         logging.exception("Error al transformar datos: %s", e)
-        return 4
+        return 5
 
     # Exportar directamente a Google Sheets
     try:

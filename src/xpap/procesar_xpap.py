@@ -236,7 +236,7 @@ def procesar_xpap_docx(texto_relevante: str, archivo: str):
         ("latencia_sueno_rem", r"(?i)Latencia\s+de\s+sueno\s+REM\b(?:\s*[:|]?\s*\|?\s*Latencia\s+de\s+sueno\s+REM\b)*\s*[:|]?\s*\|?\s*([\d]+(?:[.,]\d+)?)\s*(?:min(?:utos)?)?"),
         ("indice_microalertamientos", r"(?i)Microalertamientos.*?Indice\s+Despertares\s*[:|]?\s*\|?\s*([\d.,]+)"),
         ("porcentaje_sueno_rem", r"(?i)\bREM\b.*?([\d]+(?:[.,]\d+)?)(?=\s*S1\b)"),
-        ("porcentaje_sueno_rem", r"(?i)\bS3\b.*?([\d]+(?:[.,]\d+)?)(?=\s*AC\b)"),
+        ("porcentaje_sueno_profundo", r"(?i)\bS3\b.*?([\d]+(?:[.,]\d+)?)(?=\s*AC\b)"),
         ("iac", r"(?is)AC\s+AO\s+AM.*?Indice\s*\(\s*n[ºo]\s*/\s*h\s*TST\s*\)\s*([-+]?\d+(?:[.,]\d+)?)"),
         ("iao", r"(?is)AC\s+AO\s+AM.*?Indice\s*\(\s*n[ºo]\s*/\s*h\s*TST\s*\)\s*[-+]?\d+(?:[.,]\d+)?\s+([-+]?\d+(?:[.,]\d+)?)"),
         ("iam", r"(?is)AC\s+AO\s+AM.*?Indice\s*\(\s*n[ºo]\s*/\s*h\s*TST\s*\)\s*(?:[-+]?\d+(?:[.,]\d+)?\s+){2}([-+]?\d+(?:[.,]\d+)?)"),
