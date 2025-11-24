@@ -2,6 +2,7 @@ import logging
 from commons.texto_utils import extraer_regex
 import re
 
+# Función principal para procesar exámenes xpap
 def procesar_xpap_doc(texto_relevante: str, archivo: str):
     logging.info("Procesando examen xpap (DOC)") 
     datos = {}
