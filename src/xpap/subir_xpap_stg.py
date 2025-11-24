@@ -347,7 +347,7 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
         df = df.drop(columns=existentes)
         logging.info("Eliminadas columnas de entrada usadas: %s", existentes)
         
-         
+    # Se agrega columna version_control con valor fijo
     # 9) agregar columna uuid
     df["uuid"] = [str(uuid.uuid4()) for _ in range(len(df))]
     
