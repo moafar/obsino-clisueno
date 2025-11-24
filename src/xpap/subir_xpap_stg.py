@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 import re
 import pandas as pd
+import uuid as uuid
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -345,8 +346,13 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
     if existentes:
         df = df.drop(columns=existentes)
         logging.info("Eliminadas columnas de entrada usadas: %s", existentes)
+        
+         
+    # 9) agregar columna uuid
+    df["uuid"] = [str(uuid.uuid4()) for _ in range(len(df))]
+    
 
-    # 9) renombrar columnas al patrón final
+    # 10) renombrar columnas al patrón final
     rename_map = {
         "nombre": "pte_nombre",
         "id": "pte_id",
@@ -391,7 +397,7 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.rename(columns=rename_map)
 
-    # 10) reordenar y asegurar columnas finales
+    # 11) reordenar y asegurar columnas finales
     final_cols = [
         "pte_nombre",
         "pte_id",
