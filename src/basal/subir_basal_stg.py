@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 import re
 import pandas as pd
-
+ 
 import gspread
 from google.oauth2.service_account import Credentials
 from gspread_dataframe import set_with_dataframe
@@ -19,7 +19,7 @@ from gspread_dataframe import set_with_dataframe
 # --- Configuración de salida a Google Sheets ---
 SPREADSHEET_ID = "1KI8_Df7G9RUco-0FLPqTiFsyLC1r98T_pR3CsHZAu0s"
 HOJA_NAME = "Data_basal"
-CREDS_PATH = "/home/rom/prj/obsino-clisueno/secrets/observatorio-ino-1-7a69d356b543.json"
+CREDS_PATH = "/home/rom/prj/obsino-clisueno/secrets/observatorio-ino-1-9ba25ca68001.json"
 
 # --- Diccionario de tipos (desde tu data dictionary) ---
 DATA_TYPES: dict[str, str] = {
@@ -159,10 +159,23 @@ def normalize_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     for col in DATETIME_COLS:
         if col in df.columns:
             try:
+                # --- Limpieza previa para evitar NaT ---
+                df[col] = (
+                    df[col]
+                    .astype(str)
+                    .str.strip()
+                    .str.replace("\u00a0", " ", regex=False)      # NBSP → espacio normal
+                    .str.replace("-", "/", regex=False)          # guiones → barras
+                    .str.replace(r"[^\d/]", "", regex=True)      # solo dígitos y /
+                )
+
+                # --- Conversión a datetime ---
                 df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
+
                 logging.debug("Columna datetime normalizada: %s", col)
             except Exception as e:
                 logging.exception("Error normalizando columna datetime %s: %s", col, e)
+
 
     return df
 
