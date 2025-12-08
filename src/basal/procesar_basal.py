@@ -1,10 +1,12 @@
 import logging
 from commons.texto_utils import extraer_regex
+from commons.archivo_utils import generar_hash_archivo
 import re
 
 def procesar_basal_doc(texto_relevante: str, archivo: str):
     logging.info("Procesando examen BASAL (DOC)") 
     datos = {} 
+    
 
     campos = [
         ("nombre", r"(?iu)nombre\s*:?\s*([\w.,'\s-]+?)(?=\s*\bedad\b)"),
@@ -94,11 +96,15 @@ def procesar_basal_doc(texto_relevante: str, archivo: str):
     # Agregar el nombre del archivo a los datos
     datos['fuente'] = archivo
 
+    # Generar UUID determinista (al final para que quede tras 'fuente')
+    datos['uuid'] = generar_hash_archivo(archivo)
+
     return datos
 
 def procesar_basal_rtf(texto_relevante: str, archivo: str):
     logging.info("Procesando examen Basal (RTF)")
     datos = {}
+
 
     campos_comunes = [
         ("nombre", r"(?iu)Nombre\s*(?:del\s*paciente)?\s*[:|]?\s*\|?\s*([\w.,'\s-]+?)(?=\s*\|?\s*\bEdad\b|\s*$)"),
@@ -191,5 +197,8 @@ def procesar_basal_rtf(texto_relevante: str, archivo: str):
     
     # Agregar el nombre del archivo a los datos
     datos['fuente'] = archivo
-    
+
+    # Generar UUID determinista (al final para que quede tras 'fuente')
+    datos['uuid'] = generar_hash_archivo(archivo)
+
     return datos

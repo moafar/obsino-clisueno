@@ -75,6 +75,10 @@ python main.py 'ruta/de/la/carpeta/a/procesar'
     - Procesamiento exitoso de un archivo
     - Fin del proceso
 - Si un archivo presenta errores, se omite y se registra el incidente sin detener el proceso.
+- **Gestión automática de archivos**:
+    - Generación de UUID único basado en contenido.
+    - Renombrado con prefijos según tipo (`bs_`, `xp_`, etc.).
+    - Archivado automático en carpetas por tipo/fecha (`procesados/YYYY-MM/`).
 - Se puede extender fácilmente para nuevas estructuras de informes.
 
 ## 📌 Autor

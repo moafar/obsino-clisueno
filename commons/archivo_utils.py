@@ -3,6 +3,19 @@ from pathlib import Path
 import re, csv, logging, os
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional, List
+import hashlib
+
+def generar_hash_archivo(ruta_archivo: str) -> str:
+    """Genera un hash MD5 del contenido del archivo para usar como UUID determinista."""
+    hash_md5 = hashlib.md5()
+    try:
+        with open(ruta_archivo, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+    except Exception as e:
+        logging.error(f"Error generando hash para {ruta_archivo}: {e}")
+        return "N/A"
 
 # --- utils de texto ---
 from commons.texto_utils import (
@@ -151,6 +164,20 @@ UNIFIED_FILE_FOR: Dict[str, str] = {
     "BPAP":  "unificado_xpap.csv",
 }
 
+# Mapeo de prefijos para renombrado
+PREFIXES: Dict[str, str] = {
+    "BASAL": "bs",
+    "CPAP": "xp",
+    "BPAP": "xp",
+    "DAM": "dm",
+    "ACTIGRAFIA": "ac",
+    "CAPNOGRAFIA": "cp",
+    "AUTOCPAP": "xp", # AutoCPAP también es XPAP
+    "POLIGRAFIA": "pg"
+}
+
+PROCESSED_DIR = Path("procesados")
+
 def _outfile_for_tipo(tipo: str) -> Optional[Path]:
     """
     Devuelve el Path del CSV unificado para el tipo activo.
@@ -167,6 +194,57 @@ def _outfile_for_tipo(tipo: str) -> Optional[Path]:
         logging.error("Nombre 'unificado.csv' no permitido. Ajusta UNIFIED_FILE_FOR.")
         return None
     return OUTPUT_DIR / nombre
+
+def _parse_date_folder(date_str: str) -> str:
+    """Extrae YYYY-MM de una fecha string para organizar carpetas."""
+    if not date_str or date_str == "N/A":
+        return "sin_fecha"
+    
+    # Normalizar separadores
+    norm = date_str.replace("-", "/").strip()
+    parts = norm.split("/")
+    
+    if len(parts) != 3:
+        return "sin_fecha"
+        
+    # Asumimos formatos comunes: DD/MM/YYYY o YYYY/MM/DD
+    try:
+        # Si el primer componente es año (yyyy)
+        if len(parts[0]) == 4:
+            return f"{parts[0]}-{parts[1].zfill(2)}"
+        # Si el último componente es año (yyyy) -> DD/MM/YYYY
+        if len(parts[2]) == 4:
+            return f"{parts[2]}-{parts[1].zfill(2)}"
+    except Exception:
+        pass
+        
+    return "sin_fecha"
+
+def _move_processed_file(archivo: Path, prefixes: set, date_str: str) -> None:
+    """Renombra y mueve el archivo procesado."""
+    if not prefixes:
+        return
+
+    # 1. Determinar carpeta destino
+    folder_name = _parse_date_folder(date_str)
+    dest_dir = PROCESSED_DIR / folder_name
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    # 2. Construir nuevo nombre
+    # Evitar duplicar prefijos si ya existen (aunque el usuario dijo que agregue)
+    # Ordenar prefijos para consistencia
+    prefix_str = "_".join(sorted(prefixes))
+    new_name = f"{prefix_str}_{archivo.name}"
+    
+    # 3. Mover archivo (shutil.move maneja copy+delete si es cross-fs, o rename si es mismo fs)
+    import shutil
+    dest_path = dest_dir / new_name
+    
+    try:
+        shutil.move(str(archivo), str(dest_path))
+        logging.info(f"Archivo movido y renombrado: {archivo.name} -> {dest_path}")
+    except Exception as e:
+        logging.error(f"Error moviendo archivo {archivo} a {dest_path}: {e}")
 
 def procesar_archivo(archivo: Path) -> None:
     """Procesa un archivo y escribe en un CSV unificado por tipo de examen (solo activos)."""
@@ -187,6 +265,10 @@ def procesar_archivo(archivo: Path) -> None:
         return
 
     ext = archivo.suffix.lower()
+    
+    processing_results = [] # (tipo, success)
+    detected_date = None
+    applied_prefixes = set()
 
     for tipo in tipos:
         if tipo not in TIPOS_ACTIVOS:
@@ -215,8 +297,21 @@ def procesar_archivo(archivo: Path) -> None:
                 resultados = procesador(texto_relevante, archivo)  # (texto, archivo)
             except TypeError:
                 resultados = procesador(texto_relevante)           # (texto)
+            
+            # Capturar fecha si aun no tenemos una
+            if not detected_date and "fecha_estudio" in resultados:
+                detected_date = resultados["fecha_estudio"]
+                
+             # Marcar éxito para este tipo
+            processing_results.append((tipo, True))
+            
+            # Agregar prefijo correspondiente
+            if prefix := PREFIXES.get(tipo):
+                applied_prefixes.add(prefix)
+
         except Exception as e:
             logging.error(f"Error procesando {tipo} en {archivo}: {e}")
+            processing_results.append((tipo, False))
             continue
 
         outfile = _outfile_for_tipo(tipo)
@@ -224,3 +319,7 @@ def procesar_archivo(archivo: Path) -> None:
             continue  # sin archivo mapeado → no escribir
         _append_row_unified(resultados, outfile)
         logging.info(f"** FIN ** Procesamiento {tipo} → {outfile.name} para {archivo}")
+
+    # Finalizar: Mover y renombrar si hubo al menos un éxito
+    if any(success for _, success in processing_results):
+        _move_processed_file(archivo, applied_prefixes, detected_date)

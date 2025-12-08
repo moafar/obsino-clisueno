@@ -1,3 +1,24 @@
+# v3.2.0 -- Deterministic processing & Archiving
+
+**Fecha:** 2025-12-08
+
+## Novedades
+
+1. **UUID Determinista**:  
+   Se implementó `generar_hash_archivo()` usando MD5 del contenido. Esto asegura que si se reprocesa el mismo archivo, el UUID generado sea idéntico, evitando duplicados lógicos en la base de datos de destino.
+
+2. **Renombrado Inteligente (Prefijos)**:  
+   Los archivos procesados ahora reciben un prefijo según su tipo:
+   - `bs_` para Basal
+   - `xp_` para XPAP
+   - Archivos con múltiples procesamientos (ej. Basal + CPAP) recibirán ambos prefijos (ej. `bs_xp_archivo.rtf`).
+
+3. **Estrategia de Archivado**:  
+   Se elimina el archivo de la carpeta de entrada y se mueve automáticamente a:
+   `procesados/YYYY-MM/`
+   La fecha (Año-Mes) se extrae del contenido del informe (`fecha_estudio`). Si no se detecta, va a `procesados/sin_fecha/`.
+
+---
 # v3.1.1 -- Notas de refactoring - módulo principal y unificación
 
 **Fecha:** 2025-11-09 21:40:36

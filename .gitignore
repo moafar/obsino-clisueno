@@ -47,3 +47,43 @@ output/**/*
 secrets/*.json
 # Excepto .gitkeep
 !secrets/.gitkeep
+# ----------------------
+# Archivos de prueba
+# ----------------------
+# Carpeta de archivos de prueba de la raíz
+test_files/
+test_files_copy/
+
+# Carpetas de pruebas de cada tipo de procesamiento
+src/actigrafia/test_files/
+src/actigrafia/test_files_copy/
+
+src/autocpap/test_files/
+src/autocpap/test_files_copy/
+
+src/basal/test_files/
+src/basal/test_files_copy/
+
+src/capnografia/test_files/
+src/capnografia/test_files_copy/
+
+src/dam/test_files/
+src/dam/test_files_copy/
+
+src/epoc/test_files/
+src/epoc/test_files_copy/
+
+src/poligrafia/test_files/
+src/poligrafia/test_files_copy/
+
+src/xpap/test_files/
+src/xpap/test_files_copy/
+
+# Otras carpetas temporales de prueba
+**/test_files copy/
+test_files copy/
+
+# Ignora todo en procesados/
+procesados/**/*
+# Excepto .gitkeep
+!procesados/.gitkeep
