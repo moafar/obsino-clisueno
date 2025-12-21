@@ -11,8 +11,7 @@ from pathlib import Path
 import sys
 import re
 import pandas as pd
-import uuid as uuid
-
+ 
 import gspread
 from google.oauth2.service_account import Credentials
 from gspread_dataframe import set_with_dataframe
@@ -20,9 +19,9 @@ from gspread_dataframe import set_with_dataframe
 # --- Configuración de salida a Google Sheets ---
 SPREADSHEET_ID = "1KI8_Df7G9RUco-0FLPqTiFsyLC1r98T_pR3CsHZAu0s"
 HOJA_NAME = "Data_xpap"
-CREDS_PATH = "/home/rom/prj/obsino-clisueno/secrets/observatorio-ino-1-9ba25ca68001.json"
+CREDS_PATH = "/home/rom/prj/obsino-clisueno/secrets/obsino_clisueno_key.json"
 
-# --- Diccionario de tipos (data dictionary para XPAP) ---
+# --- Diccionario de tipos de ENTRADA (data dictionary para XPAP) ---
 DATA_TYPES: dict[str, str] = {
     "nombre": "str",
     "edad_anos": "float",
@@ -70,6 +69,8 @@ DATA_TYPES: dict[str, str] = {
     "ih": "float",
     "iah": "float",
     "fuente": "str",
+    "uuid": "str",
+    "version_control": "str",
 }
 
 FLOAT_COLS = [c for c, t in DATA_TYPES.items() if t == "float"]
@@ -79,7 +80,6 @@ DATETIME_COLS = [c for c, t in DATA_TYPES.items() if t == "datetime"]
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Aplica transformaciones a un CSV.")
-    # Acepta ruta posicional (input) o con bandera --input
     p.add_argument("input", type=Path, nargs="?", help="Ruta del CSV de entrada")
     p.add_argument(
         "--input",
@@ -90,7 +90,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--verbose", action="store_true", help="Más logs")
     args = p.parse_args()
 
-    # Prioridad: si se usa --input, prevalece sobre la posicional
     input_path = args.input_flag or args.input
     if not input_path:
         p.error("Debe indicar la ruta del CSV de entrada (posicional o con --input).")
@@ -116,19 +115,29 @@ def _clean_float_series(s: pd.Series) -> pd.Series:
     - elimina caracteres no numéricos
     - convierte a Float64 (nullable)
     """
+    # pasar a string para limpiar homogéneo
     s_str = s.astype(str).str.strip()
 
+    # marcar como nulos algunos textos "vacíos"
     null_mask = s_str.str.lower().isin({"", "na", "nan", "null", "none"})
     s_str = s_str.where(~null_mask, None)
 
+    # si todo quedó nulo, devolver directamente
     if s_str.isna().all():
         return pd.Series(pd.NA, index=s.index, dtype="Float64")
 
+    # reemplazar coma por punto
     s_str = s_str.str.replace(",", ".", regex=False)
+
+    # quitar cualquier cosa que no sea dígito, punto o signo
     s_str = s_str.str.replace(r"[^0-9\.\-]", "", regex=True)
+
+    # strings vacíos -> nulos
     s_str = s_str.where(~s_str.eq(""), None)
 
+    # convertir a numérico
     s_num = pd.to_numeric(s_str, errors="coerce").astype("Float64")
+
     return s_num
 
 
@@ -137,8 +146,9 @@ def normalize_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     Normaliza columnas según DATA_TYPES:
     - columnas float: limpia coma/punto y convierte a Float64
     - columnas datetime: to_datetime (day-first)
-    - columnas str: se dejan como están (ya vienen como str)
+    - columnas str: las deja como están (ya vienen como str)
     """
+    # floats
     for col in FLOAT_COLS:
         if col in df.columns:
             try:
@@ -147,6 +157,7 @@ def normalize_dtypes(df: pd.DataFrame) -> pd.DataFrame:
             except Exception as e:
                 logging.exception("Error normalizando columna float %s: %s", col, e)
 
+    # datetime
     for col in DATETIME_COLS:
         if col in df.columns:
             try:
@@ -167,7 +178,6 @@ def normalize_dtypes(df: pd.DataFrame) -> pd.DataFrame:
             except Exception as e:
                 logging.exception("Error normalizando columna datetime %s: %s", col, e)
 
-
     return df
 
 
@@ -177,8 +187,8 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
       - anos_decimales (desde edad_*)
       - Normaliza y crea: peso_kg, talla_cm, cuello_cm, perimetro_abdominal_cm
       - Crea t90, t80, t70 (proporción tiempo desaturado)
-      - Elimina columnas de entrada usadas
-      - Renombra y reordena columnas al patrón final solicitado
+      - Elimina columnas de entrada usadas (conserva tiempo_sueno)
+      - Renombra, aplica reglas semánticas de salida (porcentajes) y reordena
     """
 
     # --- helpers ---
@@ -323,7 +333,7 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
 
             out = (rem.fillna(0) + nrem.fillna(0)) / tot
             out = out.where(tot > 0)
-            out = out.round(2)  # redondeo a 2 decimales
+            out = out.round(2)
 
             df[target_name] = out.astype("Float64")
             logging.info(f"Agregada columna {target_name}.")
@@ -334,7 +344,7 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
     _txx("tiempo_desat_80_rem", "tiempo_desat_80_nrem", "tiempo_sueno", "t80")
     _txx("tiempo_desat_70_rem", "tiempo_desat_70_nrem", "tiempo_sueno", "t70")
 
-    # 8) eliminar columnas de entrada usadas (pero conservamos tiempo_sueno)
+    # 8) eliminar columnas de entrada usadas
     cols_a_eliminar = [
         "edad_anos",
         "edad_meses",
@@ -353,17 +363,11 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
         "tiempo_desat_80_nrem",
         "tiempo_desat_70_rem",
         "tiempo_desat_70_nrem",
-        # ojo: NO borramos tiempo_sueno porque lo necesitamos como xpap_tiempo_sueno
     ]
     existentes = [c for c in cols_a_eliminar if c in df.columns]
     if existentes:
         df = df.drop(columns=existentes)
         logging.info("Eliminadas columnas de entrada usadas: %s", existentes)
-        
-         
-    # 9) agregar columna uuid
-    df["uuid"] = [str(uuid.uuid4()) for _ in range(len(df))]
-    
 
     # 10) renombrar columnas al patrón final
     rename_map = {
@@ -390,10 +394,6 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
         "indice_desat_rem": "xpap_indice_desat_rem",
         "indice_desat_nrem": "xpap_indice_desat_nrem",
         "indice_desat_total": "xpap_indice_desat_total",
-        "marca_equipo": "xpap_marca_equipo",
-        "tipo_mascara": "xpap_tipo_mascara",
-        "tamano_mascara": "xpap_tamano_mascara",
-        "presion_terapeutica": "xpap_presion_terapeutica",
         "numero_eventos_ah": "xpap_numero_eventos_ah",
         "fuente": "xpap_fuente",
         "uuid": "xpap_uuid",
@@ -406,15 +406,46 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
         "t80": "xpap_t80",
         "t70": "xpap_t70",
         "version_control": "xpap_version_control",
+        "marca_equipo": "xpap_marca_equipo",
+        "tipo_mascara": "xpap_tipo_mascara",
+        "tamano_mascara": "xpap_tamano_mascara",
+        "presion_terapeutica": "xpap_presion_terapeutica"
     }
 
     df = df.rename(columns=rename_map)
+
+    
+    # 10) normalizar porcentajes a decimal (85 -> 0.85 ; 0.85 -> 0.85)
+    PERCENT_OUT_COLS = [
+        "xpap_eficiencia_sueno",
+        "xpap_porcentaje_sueno_rem",
+        "xpap_porcentaje_sueno_profundo",
+        "xpap_t90",
+        "xpap_t80",
+        "xpap_t70",
+    ]
+
+    def _ensure_percent_decimal(series: pd.Series) -> pd.Series:
+        s = _clean_float_series(series)  # ya existe y devuelve Float64 nullable
+        # 85 -> 0.85 ; 0.85 -> 0.85
+        return (s / 100).where(s > 1, s)
+
+    # dentro de apply_transformations, justo después del rename:
+    for col in PERCENT_OUT_COLS:
+        if col in df.columns:
+            df[col] = _ensure_percent_decimal(df[col])
+            logging.info("Porcentaje normalizado a decimal: %s", col)
 
     # 11) reordenar y asegurar columnas finales
     final_cols = [
         "pte_nombre",
         "pte_id",
         "pte_imc",
+        "pte_anos_decimales",
+        "pte_peso_kg",
+        "pte_talla_cm",
+        "pte_cuello_cm",
+        "pte_perimetro_abdominal_cm",
         "xpap_solicita",
         "xpap_empresa",
         "xpap_fecha_estudio",
@@ -435,22 +466,17 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
         "xpap_indice_desat_rem",
         "xpap_indice_desat_nrem",
         "xpap_indice_desat_total",
+        "xpap_numero_eventos_ah",
+        "xpap_t90",
+        "xpap_t80",
+        "xpap_t70",
         "xpap_marca_equipo",
         "xpap_tipo_mascara",
         "xpap_tamano_mascara",
         "xpap_presion_terapeutica",
-        "xpap_numero_eventos_ah",
         "xpap_fuente",
         "xpap_uuid",
-        "pte_anos_decimales",
-        "pte_peso_kg",
-        "pte_talla_cm",
-        "pte_cuello_cm",
-        "pte_perimetro_abdominal_cm",
-        "xpap_t90",
-        "xpap_t80",
-        "xpap_t70",
-        "xpap_version_control",
+        "xpap_version_control"
     ]
 
     for col in final_cols:
@@ -473,8 +499,7 @@ def main() -> int:
 
     try:
         logging.info("Leyendo: %s", args.input)
-        # leemos todo como texto para controlar coma/punto después
-        df = pd.read_csv(args.input, dtype=str)
+        df = pd.read_csv(args.input, dtype=str)  # leemos todo como texto para controlar coma/punto después
         logging.info("Shape inicial (raw): %s", df.shape)
         logging.info("Columnas iniciales: %s", df.columns.tolist())
     except Exception as e:
@@ -498,13 +523,8 @@ def main() -> int:
 
     # Exportar directamente a Google Sheets
     try:
-
-        # Ver qué tiene realmente el DataFrame antes de subirlo
-        print(df_out[["pte_nombre", "xpap_fecha_estudio"]])
-        print(df_out["xpap_fecha_estudio"].dtype)
-        print(df_out["xpap_fecha_estudio"].isna())
-
         logging.info("Iniciando exportación a Google Sheets...")
+        #df_out.to_excel("xpap_stg_output.xlsx", index=False)  # debug local
 
         scope = [
             "https://spreadsheets.google.com/feeds",
@@ -531,5 +551,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    code = main()
-    sys.exit(code)
+    sys.exit(main())

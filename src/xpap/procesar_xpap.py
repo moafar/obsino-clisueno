@@ -1,5 +1,6 @@
 import logging
 from commons.texto_utils import extraer_regex
+from commons.archivo_utils import generar_hash_archivo, marcar_version_extraccion
 import re
 
 def procesar_xpap_doc(texto_relevante: str, archivo: str):
@@ -99,7 +100,14 @@ def procesar_xpap_doc(texto_relevante: str, archivo: str):
     # Agregar el nombre del archivo a los datos
     datos['fuente'] = archivo
 
+    # Generar UUID determinista como checksum del archivo
+    datos['uuid'] = generar_hash_archivo(archivo)
+
+    # Generar marca de version en el archivo procesado
+    datos['version_control'] = marcar_version_extraccion()
+
     return datos
+
 
 def procesar_xpap_rtf(texto_relevante: str, archivo: str):
     logging.info("Procesando examen xpap (RTF)")
@@ -202,8 +210,15 @@ def procesar_xpap_rtf(texto_relevante: str, archivo: str):
     
     # Agregar el nombre del archivo a los datos
     datos['fuente'] = archivo
+
+    # Generar UUID determinista como checksum del archivo
+    datos['uuid'] = generar_hash_archivo(archivo)
+
+    # Generar marca de version en el archivo procesado
+    datos['version_control'] = marcar_version_extraccion()
     
     return datos
+
 
 def procesar_xpap_docx(texto_relevante: str, archivo: str):
     
@@ -267,5 +282,11 @@ def procesar_xpap_docx(texto_relevante: str, archivo: str):
             
     # Agregar el nombre del archivo a los datos
     datos['fuente'] = archivo
+
+    # Generar UUID determinista como checksum del archivo
+    datos['uuid'] = generar_hash_archivo(archivo)
+
+    # Generar marca de version en el archivo procesado
+    datos['version_control'] = marcar_version_extraccion()
     
     return datos

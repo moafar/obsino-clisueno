@@ -19,57 +19,59 @@ from gspread_dataframe import set_with_dataframe
 # --- Configuración de salida a Google Sheets ---
 SPREADSHEET_ID = "1KI8_Df7G9RUco-0FLPqTiFsyLC1r98T_pR3CsHZAu0s"
 HOJA_NAME = "Data_basal"
-CREDS_PATH = "/home/rom/prj/obsino-clisueno/secrets/observatorio-ino-1-9ba25ca68001.json"
+CREDS_PATH = "/home/rom/prj/obsino-clisueno/secrets/obsino_clisueno_key.json"
 
-# --- Diccionario de tipos (desde tu data dictionary) ---
+# --- Diccionario de tipos de ENTRADA (data dictionary para BASAL) ---
 DATA_TYPES: dict[str, str] = {
-    "nombre": "str",
-    "edad_anos": "float",
-    "edad_meses": "float",
-    "edad_dias": "float",
-    "id": "str",
-    "peso": "float",
-    "medida_peso": "str",
-    "talla": "float",
-    "medida_talla": "str",
-    "imc": "float",
-    "cuello": "float",
-    "medida_cuello": "str",
-    "perimetro_abdominal": "float",
-    "medida_perimetro_abdominal": "str",
-    "solicita": "str",
-    "empresa": "str",
-    "fecha_estudio": "datetime",
-    "epworth": "float",
-    "tiempo_en_cama": "float",
-    "tiempo_sueno": "float",
-    "eficiencia_sueno": "float",
-    "latencia_sueno_total": "float",
-    "latencia_sueno_rem": "float",
-    "indice_microalertamientos": "float",
-    "porcentaje_sueno_rem": "float",
-    "iac": "float",
-    "iao": "float",
-    "iam": "float",
-    "indice_desat_rem": "float",
-    "indice_desat_nrem": "float",
-    "indice_desat_total": "float",
-    "tiempo_desat_90_rem": "float",
-    "tiempo_desat_90_nrem": "float",
-    "tiempo_desat_80_rem": "float",
-    "tiempo_desat_80_nrem": "float",
-    "tiempo_desat_70_rem": "float",
-    "tiempo_desat_70_nrem": "float",
-    "marca_equipo": "float",
-    "tipo_mascara": "float",
-    "tamano_mascara": "float",
-    "presion_terapeutica": "str",
-    "numero_eventos_ah": "float",
-    "ih": "float",
-    "iah": "float",
-    "fuente": "str",
-    "porcentaje_sueno_profundo": "float",
+    'nombre':'str',
+    'edad_anos':'float',
+    'edad_meses':'float',
+    'edad_dias':'float',
+    'id':'str',
+    'peso':'float',
+    'medida_peso':'str',
+    'talla':'float',
+    'medida_talla':'str',
+    'imc':'float',
+    'cuello':'float',
+    'medida_cuello':'str',
+    'perimetro_abdominal':'float',
+    'medida_perimetro_abdominal':'str',
+    'solicita':'str',
+    'empresa':'str',
+    'fecha_estudio':'datetime',
+    'epworth':'float',
+    'tiempo_en_cama':'float',
+    'tiempo_sueno':'float',
+    'eficiencia_sueno':'float',
+    'latencia_sueno_total':'float',
+    'latencia_sueno_rem':'float',
+    'indice_microalertamientos':'float',
+    'porcentaje_sueno_rem':'float',
+    'porcentaje_sueno_profundo':'float',
+    'iac':'float',
+    'iao':'float',
+    'iam':'float',
+    'indice_desat_rem':'float',
+    'indice_desat_nrem':'float',
+    'indice_desat_total':'float',
+    'tiempo_desat_90_rem':'float',
+    'tiempo_desat_90_nrem':'float',
+    'tiempo_desat_80_rem':'float',
+    'tiempo_desat_80_nrem':'float',
+    'tiempo_desat_70_rem':'float',
+    'tiempo_desat_70_nrem':'float',
+    'numero_eventos_ah':'float',
+    'ih':'float',
+    'iah':'float',
+    'fuente':'str',
+    'uuid':'str',
+    'version_control':'str'
 }
+
+
+
+
 
 FLOAT_COLS = [c for c, t in DATA_TYPES.items() if t == "float"]
 STR_COLS = [c for c, t in DATA_TYPES.items() if t == "str"]
@@ -175,7 +177,6 @@ def normalize_dtypes(df: pd.DataFrame) -> pd.DataFrame:
                 logging.debug("Columna datetime normalizada: %s", col)
             except Exception as e:
                 logging.exception("Error normalizando columna datetime %s: %s", col, e)
-
 
     return df
 
@@ -404,16 +405,47 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
         "t90": "basal_t90",
         "t80": "basal_t80",
         "t70": "basal_t70",
-        "version_control": "basal_version_control",
+        "version_control": "basal_version_control"
     }
+
+
+
+
 
     df = df.rename(columns=rename_map)
 
-    # 10) reordenar y asegurar columnas finales
+
+    # 10) normalizar porcentajes a decimal (85 -> 0.85 ; 0.85 -> 0.85)
+    PERCENT_OUT_COLS = [
+        "basal_eficiencia_sueno",
+        "basal_porcentaje_sueno_rem",
+        "basal_porcentaje_sueno_profundo",
+        "basal_t90",
+        "basal_t80",
+        "basal_t70",
+    ]
+
+    def _ensure_percent_decimal(series: pd.Series) -> pd.Series:
+        s = _clean_float_series(series)  # ya existe y devuelve Float64 nullable
+        # 85 -> 0.85 ; 0.85 -> 0.85
+        return (s / 100).where(s > 1, s)
+
+    # dentro de apply_transformations, justo después del rename:
+    for col in PERCENT_OUT_COLS:
+        if col in df.columns:
+            df[col] = _ensure_percent_decimal(df[col])
+            logging.info("Porcentaje normalizado a decimal: %s", col)
+
+    # 11) reordenar y asegurar columnas finales
     final_cols = [
         "pte_nombre",
         "pte_id",
         "pte_imc",
+        "pte_anos_decimales",
+        "pte_peso_kg",
+        "pte_talla_cm",
+        "pte_cuello_cm",
+        "pte_perimetro_abdominal_cm",
         "basal_solicita",
         "basal_empresa",
         "basal_fecha_estudio",
@@ -435,17 +467,16 @@ def apply_transformations(df: pd.DataFrame) -> pd.DataFrame:
         "basal_indice_desat_nrem",
         "basal_indice_desat_total",
         "basal_numero_eventos_ah",
-        "basal_fuente",
-        "basal_uuid",
-        "pte_anos_decimales",
-        "pte_peso_kg",
-        "pte_talla_cm",
-        "pte_cuello_cm",
-        "pte_perimetro_abdominal_cm",
         "basal_t90",
         "basal_t80",
         "basal_t70",
-        "basal_version_control",
+
+
+
+        
+        "basal_fuente",
+        "basal_uuid",
+        "basal_version_control"
     ]
 
     for col in final_cols:
@@ -468,8 +499,7 @@ def main() -> int:
 
     try:
         logging.info("Leyendo: %s", args.input)
-        # leemos todo como texto para controlar coma/punto después
-        df = pd.read_csv(args.input, dtype=str)
+        df = pd.read_csv(args.input, dtype=str) # leemos todo como texto para controlar coma/punto después
         logging.info("Shape inicial (raw): %s", df.shape)
         logging.info("Columnas iniciales: %s", df.columns.tolist())
     except Exception as e:
@@ -494,6 +524,7 @@ def main() -> int:
     # Exportar directamente a Google Sheets
     try:
         logging.info("Iniciando exportación a Google Sheets...")
+        # df_out.to_excel("basal_stg_output.xlsx", index=False)  # debug local
 
         scope = [
             "https://spreadsheets.google.com/feeds",
@@ -520,5 +551,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    code = main()
-    sys.exit(code)
+    sys.exit(main())

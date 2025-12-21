@@ -1,9 +1,9 @@
 import logging
 from commons.texto_utils import extraer_regex
-from commons.archivo_utils import generar_hash_archivo
+from commons.archivo_utils import generar_hash_archivo, marcar_version_extraccion
 import re
 
-def procesar_basal_doc(texto_relevante: str, archivo: str):
+def procesar_basal_doc(texto_relevante: str, archivo=None):
     logging.info("Procesando examen BASAL (DOC)") 
     datos = {} 
     
@@ -96,12 +96,15 @@ def procesar_basal_doc(texto_relevante: str, archivo: str):
     # Agregar el nombre del archivo a los datos
     datos['fuente'] = archivo
 
-    # Generar UUID determinista (al final para que quede tras 'fuente')
+    # Generar UUID determinista como checksum del archivo
     datos['uuid'] = generar_hash_archivo(archivo)
+
+    # Generar marca de versión en el archivo procesado
+    datos['version_control'] = marcar_version_extraccion()
 
     return datos
 
-def procesar_basal_rtf(texto_relevante: str, archivo: str):
+def procesar_basal_rtf(texto_relevante: str, archivo=None):
     logging.info("Procesando examen Basal (RTF)")
     datos = {}
 
@@ -198,7 +201,10 @@ def procesar_basal_rtf(texto_relevante: str, archivo: str):
     # Agregar el nombre del archivo a los datos
     datos['fuente'] = archivo
 
-    # Generar UUID determinista (al final para que quede tras 'fuente')
+    # Generar UUID determinista como checksum del archivo
     datos['uuid'] = generar_hash_archivo(archivo)
+
+    # Generar marca de versión en el archivo procesado
+    datos['version_control'] = marcar_version_extraccion()
 
     return datos

@@ -4,6 +4,10 @@ import re, csv, logging, os
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional, List
 import hashlib
+from datetime import datetime
+
+def marcar_version_extraccion() -> str:
+    return f"Extraido: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
 def generar_hash_archivo(ruta_archivo: str) -> str:
     """Genera un hash MD5 del contenido del archivo para usar como UUID determinista."""

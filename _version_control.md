@@ -1,3 +1,35 @@
+# v3.3.0 -- Alineación de scripts de extracción y de upload
+**Fecha:** 2025-12-21
+
+Archivos tocados:
+- archivo_utils.py
+- procesar_basal.py
+- procesar_xpap.py
+- subir_basal_stg.py
+- subir_xpap_stg.py
+
+## Novedades
+1. En procesar_xxx.py: se inserta el marcado de versión de extracción; cada registro se marca al momento de extraer con fecha/hora. Se añaden `fuente`, `uuid` y `version_control` al retorno de cada función.
+2. En subir_xxx_stg.py:
+   - Se definen columnas y tipos de entrada acordes a la nueva exportación (`fuente`, `uuid`, `version_control`).
+   - Se ajustan las columnas de salida en el `rename_map`.
+   - Las variables porcentuales se normalizan a decimales (siempre suben como 0.xx).
+   - Se reordenan columnas para dejar juntos datos calculados del paciente y los extraídos.
+
+---
+# v3.2.1 -- Robustez en hashing, prefijos y archivado
+
+**Fecha:** 2025-12-21
+
+## Novedades
+1. **Hash determinista multiplataforma:** `generar_hash_archivo()` normaliza finales de línea (LF/CRLF) antes del MD5, evitando UUID distintos por diferencias de EOL entre Windows/Linux.  
+2. **Prefijos compuestos consistentes:** Se estandariza el orden y concatenación de prefijos múltiples (ej. `bs_xp_cp_`) garantizando nombres únicos y legibles cuando un mismo archivo atraviesa más de dos pipelines.  
+3. **Archivado resiliente con trazabilidad:** Al faltar `fecha_estudio`, el archivo se mueve a `procesados/sin_fecha/` y se registra en log la causa, sin abortar el lote.  
+4. **Resumen operativo por mes:** Al final del pipeline se agrega un reporte de conteo de archivos archivados por `YYYY-MM` y totales sin fecha, visible en consola y log.  
+5. **CLI y códigos de salida afinados:** `--dry-run` valida rutas y permisos sin mover archivos; fallos de movimiento retornan códigos específicos y nunca borran la entrada original.  
+6. **Cobertura de pruebas ampliada:** Nuevos tests para hashing normalizado, prefijos múltiples, archivado con/sin fecha y fallos por permisos (se captura `PermissionError`, no se borra el original y queda registrado en log).
+
+---
 # v3.2.0 -- Deterministic processing & Archiving
 
 **Fecha:** 2025-12-08
