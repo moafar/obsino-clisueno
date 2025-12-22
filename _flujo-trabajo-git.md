@@ -50,4 +50,53 @@ git push origin --delete nombre_rama
 
 ---
 
-📅 Generado automáticamente el 2025-11-09 06:47
+# Checklist de publicación de versiones (Extractor PSG)
+
+## En local (desarrollo)
+
+- [ ] Ejecutar `git status`  
+  Confirmar que el working tree está **clean**.
+
+- [ ] Ejecutar `git push origin main`  
+  **Solo si** hay commits nuevos desde la última versión.
+
+- [ ] Crear el tag de versión  
+  ```bash
+  git tag vX.Y.Z
+  ```
+
+- [ ] Subir el tag al remoto  
+  ```bash
+  git push origin vX.Y.Z
+  ```
+
+---
+
+## En el servidor (ejecución)
+
+- [ ] Traer los tags del remoto  
+  ```bash
+  git fetch --tags
+  ```
+
+- [ ] Cambiar a la versión deseada  
+  ```bash
+  git checkout vX.Y.Z
+  ```
+
+- [ ] Verificar la versión activa  
+  ```bash
+  git describe --tags
+  ```
+
+---
+
+## Reglas de oro
+
+- [ ] El servidor **nunca** ejecuta desde `main`.
+- [ ] El servidor **nunca** recibe commits.
+- [ ] Cada ejecución productiva se hace desde un **tag**.
+- [ ] Rollback inmediato:  
+  ```bash
+  git checkout vVERSIÓN_ANTERIOR
+  ```

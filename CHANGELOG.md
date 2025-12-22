@@ -1,3 +1,6 @@
+# v3.3.1 -- Tagging de versionamiento
+A partir de ahora se manejan las versiones con tags de Git
+
 # v3.3.0 -- Alineación de scripts de extracción y de upload
 **Fecha:** 2025-12-21
 
@@ -195,3 +198,8 @@ Ajste del script de extracción para unificar archivos de resultados a la vez qu
 
 # v.3.0.0
 Refactoring para aislar las funciones de cada examen, manteniendo el commons
+
+## v3.3.1 - 2025-12-22
+
+- Renombrado _version_control.md a CHANGELOG.md.
+- Bump de versión de 3.3.0 a 3.3.1.
