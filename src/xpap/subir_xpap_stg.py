@@ -526,19 +526,6 @@ def main() -> int:
         logging.info("Iniciando exportación a Google Sheets...")
         #df_out.to_excel("xpap_stg_output.xlsx", index=False)  # debug local
 
-        scope = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive",
-            "https://www.googleapis.com/auth/spreadsheets",
-        ]
-        creds = Credentials.from_service_account_file(CREDS_PATH, scopes=scope)
-
-        client = gspread.authorize(creds)
-        spreadsheet = client.open_by_key(SPREADSHEET_ID)
-        worksheet = spreadsheet.worksheet(HOJA_NAME)
-
-        worksheet.clear()
-        set_with_dataframe(worksheet, df_out)
 
         logging.info("Datos exportados correctamente a Google Sheets.")
         print("✅ Datos exportados correctamente a Google Sheets.")
