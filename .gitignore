@@ -4,23 +4,15 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+
+# Virtual environments
 .venv/
 venv/
 
 # ----------------------
-# Logs y salidas
+# IDE
 # ----------------------
-logs/**/*.log
-!logs/.gitkeep
-output/**/*
-!output/.gitkeep
-*.log
-
-# ----------------------
-# Datos
-# ----------------------
-*.csv
-*.xlsx
+.vscode/
 
 # ----------------------
 # Entornos
@@ -29,15 +21,30 @@ output/**/*
 .env.*
 
 # ----------------------
-# VS Code
+# Logs
 # ----------------------
-.vscode/
+*.log
+logs/**/*.log
+extract/logs/**/*.log
+!logs/.gitkeep
 
 # ----------------------
-# Secretos
+# Outputs / Procesados
 # ----------------------
-secrets/*.json
-!secrets/.gitkeep
+output/**/*
+!output/.gitkeep
+extract/output/**/*
+!extract/output/.gitkeep
+extract/procesados/**/*
+!extract/procesados/.gitkeep
+procesados/**/*
+!procesados/.gitkeep
+
+# ----------------------
+# Datos
+# ----------------------
+*.csv
+*.xlsx
 
 # ----------------------
 # Archivos de prueba
@@ -47,9 +54,10 @@ secrets/*.json
 test_files_global/
 test_files_global_copy/
 
-
 # ----------------------
-# Procesados
+# Secretos
 # ----------------------
-procesados/**/*
-!procesados/.gitkeep
+secrets/*.json
+**/secrets/*.json
+!secrets/.gitkeep
+!**/secrets/.gitkeep

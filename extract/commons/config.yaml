@@ -1,0 +1,14 @@
+entrada:
+  ruta: "/home/rom/prj/obsino-clisueno/test_files"
+
+procesamiento:
+  tipos_validos: ["docx", "doc", "rtf"]
+  glob_patron: "**/*"          # opcional
+  barra_progreso: true         # opcional
+
+salida:
+  carpeta_csv: "/home/rom/prj/obsino-clisueno/output"
+  # archivo_unificado: "unificado.csv" # <- Candidato a desaparecer porque en el nuevo main ya no se unificarán todos los CSVs
+
+logging:
+  level: "INFO"                # DEBUG/INFO/WARNING/ERROR/CRITICAL
