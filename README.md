@@ -1,87 +1,96 @@
-# Extractor de Informes de laboratorio de sueño
+# clisueno ETL
 
-Este proyecto permite extraer información estructurada desde archivos de informes clínicos de Laboratorio de Sueño
+Proyecto ETL modular para procesamiento clínico de estudios de sueño, organizado en tres capas independientes:
 
-## Activar venv
-source venv/bin/activate
+- `extract`: extracción y estandarización inicial desde fuentes de documentos.
+- `transform`: transformación declarativa por pipeline de dominio (actualmente `psg`).
+- `load`: carga manual controlada a BigQuery con validaciones previas.
 
-## Instalar dependencias
-pip install -r requirements.txt
+## Arquitectura general
 
-## 📁 Estructura del proyecto
-
-```
-extractor_sueno/
-├── README.md
-├── requirements.txt
-├── main.py                        # Punto de entrada del proyecto
-│
-├── src/                           # Lógica principal
-│   ├── __init__.py
-│   ├── extractor.py               # Función para procesar archivos
-│   └── processor_autocpap.py      # Extracción específica por tipo
-│
-├── utils/                         # Funciones auxiliares
-│   ├── __init__.py
-│   └── logger.py                  # Configuración de Loguru
-│
-├── input/                         # Archivos .docx a procesar
-│
-├── output/                        # Resultados exportados (CSV, Excel)
-│   └── resultados.csv
-│
-├── logs/                          # Logs de errores de ejecución
+```text
+clisueno/
+    extract/
+    transform/
+    load/
 ```
 
-## ▶️ Cómo ejecutar
+## 1) Capa `extract`
 
-1. Instala las dependencias:
+Responsabilidad:
 
-```bash
-pip install -r requirements.txt
-```
+- Leer fuentes de entrada (reportes/documentos por flujo).
+- Extraer campos relevantes y normalizarlos a una salida tabular base.
+- Registrar trazabilidad y errores de parsing sin detener todo el procesamiento.
 
-Ojo!  Hay una dependencia adicional del sistema (no es de Python): `catdoc`
-Se instala con `sudo apt install catdoc`
+Entrada/salida esperada:
 
-2. Ejecuta el script pasando el directorio correspondiente:
+- Entrada: carpetas de archivos clínicos por flujo.
+- Salida: datasets estructurados para alimentar `transform`.
 
-```bash
-python main.py 'ruta/de/la/carpeta/a/procesar'
-```
+Referencia de detalle:
 
-> Los resultados se guardan en `resultados.csv`.
+- `extract/README.md`
 
-## 🛠 Dependencias
+## 2) Capa `transform`
 
-- `argparse` : Lectura de argumentos
-- `python-docx`: Lectura de documentos `.docx`
-- `pandas`: Estructura y exportación de datos
-- `tqdm`: Barra de progreso
-- `logging`: Logging avanzado
-- `python-dateutil`: Manejo de fechas
-- `openpyxl`: Exportación opcional a Excel
+Responsabilidad:
 
-## 📒 Notas
+- Aplicar reglas declarativas (schema + steps) para convertir datasets base en datasets analíticos.
+- Validar esquema de entrada y salida.
+- Ejecutar pipelines por subdominio clínico (ej. `psg`).
 
-- Se crean logs para:
-    - Inicio del proceso
-    - Errores de directorio
-    - Inicio de un nuevo subdirectorio
-    - Errores de subdirectorio
-    - Inicio de procesamiento de archivo
-    - Compatibilidad de archivo con la extracción
-    - Error en la extracción de un dato, incluyendo texto procesado
-    - Procesamiento exitoso de un archivo
-    - Fin del proceso
-- Si un archivo presenta errores, se omite y se registra el incidente sin detener el proceso.
-- **Gestión automática de archivos**:
-    - Generación de UUID único basado en contenido.
-    - Renombrado con prefijos según tipo (`bs_`, `xp_`, etc.).
-    - Archivado automático en carpetas por tipo/fecha (`procesados/YYYY-MM/`).
-- Se puede extender fácilmente para nuevas estructuras de informes.
+Entrada/salida esperada:
 
-## 📌 Autor
-Rafael Ortiz - ortizmartinez64gmail.com
-Proyecto desarrollado para el Instituto Neumológico del Oriente.
-2025
+- Entrada: dataset estructurado desde `extract`.
+- Salida: dataset transformado listo para `load`.
+
+Referencia de detalle:
+
+- `transform/README.md`
+
+## 3) Capa `load`
+
+Responsabilidad:
+
+- Cargar manualmente a BigQuery con control de ejecución por consola.
+- Mostrar configuración activa y solicitar confirmación humana.
+- Validar duplicados en lote y contra tabla destino (modo `WRITE_APPEND`).
+
+Entrada/salida esperada:
+
+- Entrada: archivos tabulares finales + configuración YAML por flujo.
+- Salida: inserción en tabla BigQuery objetivo.
+
+Referencia de detalle:
+
+- `load/README.md`
+
+## Flujo operativo end-to-end
+
+1. Ejecutar `extract` para generar dataset base.
+2. Ejecutar `transform` para obtener dataset estandarizado por pipeline.
+3. Ejecutar `load` para validar y cargar en BigQuery.
+
+## Convenciones del repositorio
+
+- Aislamiento por capa: `extract`, `transform` y `load` evolucionan de forma independiente.
+- Configuración declarativa: YAML por pipeline/flujo cuando aplica.
+- Ejecución manual controlada en `load` para minimizar riesgo operativo en cargas.
+
+## Control de versiones del proyecto
+
+El versionado se gestiona de forma global desde la raíz del repositorio:
+
+- `CHANGELOG.md`: historial consolidado de cambios del proyecto ETL.
+- `vX.Y.Z`: archivo marcador de la versión actual (ejemplo actual: `v4.0.0`).
+
+Las capas `extract`, `transform` y `load` deben registrar cambios de versión en este control central,
+evitando changelog/versionado aislado por subcarpeta.
+
+## Requisitos generales
+
+- Entorno virtual Python (`.venv`).
+- Dependencias por capa (`extract/requirements.txt`, `transform/requirements.txt`, `load/requirements.txt`).
+- Credenciales GCP para `load` en:
+    - `load/secrets/obsino-clisueno.json`

@@ -1,3 +1,111 @@
+# v4.0.0 -- Consolidación ETL en 3 capas y gobierno central del proyecto
+
+**Fecha:** 2026-02-28
+
+## Resumen ejecutivo
+
+Esta versión marca una evolución mayor del proyecto: se pasó de un foco operativo concentrado en extracción (`extract`) a una arquitectura ETL completa con tres capas explícitas y desacopladas (`extract`, `transform`, `load`).
+
+Además, se centralizó el gobierno documental y de versionado en la raíz del repositorio para que el control de cambios aplique al sistema completo y no a una sola capa.
+
+---
+
+## Decisiones de arquitectura tomadas
+
+1. **Separación explícita por capas ETL**
+  - Se formalizó la responsabilidad de cada capa:
+    - `extract`: extracción y normalización inicial desde documentos fuente.
+    - `transform`: transformación declarativa por pipeline (pipeline activo: `psg`).
+    - `load`: carga manual a BigQuery con controles operativos.
+  - Se evitó acoplar lógicas entre capas para mantener evolución independiente.
+
+2. **Diseño compartido en `load` (sin multiplicar código por flujo)**
+  - Se descartó replicar estructura por flujo cuando la lógica era la misma.
+  - Se adoptó una sola implementación (`load/main.py`) con configuración declarativa por flujo en YAML.
+
+3. **Despacho de configuración por flujo con rutas fijas**
+  - Se implementó selección por CLI (`--flow`).
+  - Cada flujo se resuelve a un YAML predefinido (sin ruta libre por parámetro), priorizando control operativo y reducción de errores de ejecución.
+
+4. **Carga manual y confirmada para BigQuery**
+  - Se eliminó el patrón HTTP/Cloud Function heredado para esta etapa.
+  - La ejecución es manual por consola con impresión de configuración y confirmación explícita del operador antes de cargar.
+
+5. **Centralización del versionado en la raíz del repositorio**
+  - El `CHANGELOG` y el archivo marcador de versión se gestionan globalmente.
+  - Se eliminó el manejo aislado de versión dentro de `extract`.
+
+---
+
+## Cambios funcionales relevantes
+
+### A) Capa `load`
+
+- Migración de lógica heredada a script manual integrado:
+  - validación de duplicados dentro del lote.
+  - validación de duplicados contra la tabla destino en BigQuery (modo `WRITE_APPEND`).
+- Incorporación de configuración declarativa por YAML de flujo.
+- Reestructuración de carpeta (`load` aplanada; se eliminó subcarpeta `uploader`).
+- Estandarización de secretos: credenciales en `load/secrets/`.
+- Eliminación de artefactos legacy (`bq_carga_manual.py` y enfoque HTTP para esta capa).
+
+### B) Capa `transform`
+
+- Unificación de documentación en un único README de capa.
+- Eliminación de README duplicado dentro de `transform/psg` para evitar divergencias documentales.
+
+### C) Capa `extract`
+
+- Conserva su rol de capa de origen del pipeline.
+- Se armonizó documentación para integrarse al modelo ETL completo.
+
+### D) Gobierno documental del repositorio
+
+- Creación/actualización de README global del proyecto con descripción de las tres capas.
+- Armonización de README por capa (`extract`, `transform`, `load`) con estructura homogénea.
+
+---
+
+## Nueva arquitectura (alto nivel)
+
+```text
+clisueno/
+  README.md
+  CHANGELOG.md
+  v4.0.0
+  extract/
+  transform/
+  load/
+   main.py
+   config/
+    psg.yaml
+   secrets/
+```
+
+Flujo operativo:
+
+1. `extract` genera dataset base.
+2. `transform` aplica reglas declarativas y produce dataset estandarizado.
+3. `load` valida y carga manualmente a BigQuery.
+
+---
+
+## Impacto / compatibilidad
+
+- **Cambio mayor (`major`)** por reorganización estructural y operacional del proyecto.
+- Se modifica el punto de gobierno de documentación/versionado (de subcapa a raíz).
+- Para `load`, cambia el modelo de ejecución esperado a consola + YAML por flujo (`--flow`).
+
+---
+
+## Guía de operación de versión a partir de v4
+
+- Registrar cambios del sistema completo en `CHANGELOG.md` (raíz).
+- Actualizar el archivo marcador `vX.Y.Z` en raíz en cada liberación.
+- Mantener los README de capa alineados con el README global.
+
+---
+
 # v3.3.1 -- Tagging de versionamiento
 A partir de ahora se manejan las versiones con tags de Git
 

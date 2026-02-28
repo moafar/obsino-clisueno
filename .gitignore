@@ -1,6 +1,4 @@
-# ----------------------
 # Python
-# ----------------------
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -9,55 +7,34 @@ __pycache__/
 .venv/
 venv/
 
-# ----------------------
 # IDE
-# ----------------------
 .vscode/
 
-# ----------------------
-# Entornos
-# ----------------------
+# Env files
 .env
 .env.*
 
-# ----------------------
 # Logs
-# ----------------------
 *.log
-logs/**/*.log
 extract/logs/**/*.log
-!logs/.gitkeep
 
-# ----------------------
-# Outputs / Procesados
-# ----------------------
-output/**/*
-!output/.gitkeep
+# Generated outputs / processed data
 extract/output/**/*
 !extract/output/.gitkeep
 extract/procesados/**/*
 !extract/procesados/.gitkeep
-procesados/**/*
-!procesados/.gitkeep
 
-# ----------------------
 # Datos
-# ----------------------
 *.csv
 *.xlsx
 
-# ----------------------
-# Archivos de prueba
-# ----------------------
+# Test input copies
 **/test_files/
 **/test_files_copy/
 test_files_global/
 test_files_global_copy/
 
-# ----------------------
 # Secretos
-# ----------------------
-secrets/*.json
+# Keep service-account JSONs untracked in any layer
 **/secrets/*.json
-!secrets/.gitkeep
 !**/secrets/.gitkeep
