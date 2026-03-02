@@ -1,0 +1,13 @@
+project_id: observatorio-ino-1
+dataset_id: clisueno
+table_id: tbl_xpap_test
+write_disposition: WRITE_APPEND
+service_account_json: 3_load/secrets/obsino_clisueno_key.json
+source_sheet_name: procesado
+shared_schema_yaml_path: 0_declarations/xpap.yaml
+schema_path_in_yaml: schema.load.input.columns
+schema_description: contrato compartido desde 0_declarations/xpap.yaml -> schema.load.input.columns (equivale a schema.transform.output.columns)
+
+uuid_field: xpap_uuid
+date_field: xpap_fecha_estudio
+migrated_field: xpap_migrado

@@ -1,3 +1,73 @@
+# v4.0.3 -- Unificación por flow y habilitación operativa de XPAP
+
+**Fecha:** 2026-03-02
+
+## Resumen ejecutivo
+
+Esta versión unifica la ejecución de las tres capas del ETL bajo el contrato `--flow`, corrige riesgos de operación por selección incorrecta de flujo y habilita el pipeline XPAP de extremo a extremo (extract -> transform -> load) con configuración declarativa dedicada.
+
+El foco principal fue modernizar `1_extract` (componente más legacy) para alinearlo con el patrón de `flow` ya usado en `3_load`, y completar la implementación real de XPAP en `2_transform` y `3_load` a partir de las reglas históricas del script legado.
+
+## Cambios incluidos
+
+### 1) Unificación de ejecución por `--flow`
+
+- `1_extract/main.py` ahora exige `--flow` y resuelve YAML por flujo (`config/<flow>.yaml`).
+- `2_transform/main.py` consolida el despacho unificado por `--flow` y mantiene soporte de input por flag (`--input`) y posicional.
+- `3_load/main.py` mantiene ejecución por `--flow` y se extiende con flow XPAP implementado.
+
+### 2) Modernización de `1_extract` (legacy)
+
+- Se elimina redundancia de `subflujos.activos`: los subflujos activos se infieren desde `subflujos.salida_unificada`.
+- Se desacopla la activación de subflujos de hardcodes internos y se controla por YAML de flow.
+- Se blinda configuración para evitar contaminación entre flows: prefijos solo aplican a subflujos activos del flow seleccionado.
+- Se separan configuraciones:
+  - `1_extract/config/psg.yaml` -> solo BASAL.
+  - `1_extract/config/xpap.yaml` -> CPAP/BPAP.
+
+### 3) Implementación real de XPAP en `2_transform`
+
+- Se crea pipeline dedicado `2_transform/xpap/` con:
+  - `main.py` (runner de flujo),
+  - `config.yaml` (declarativo),
+  - `core/transforms.py` (port de reglas legacy),
+  - `core/__init__.py`.
+- `2_transform/main.py` integra despacho real de `--flow xpap` (ya no scaffold).
+- Se incorpora validación preventiva de coherencia input-flow:
+  - si la ruta apunta a `xpap/input`, `--flow` debe ser `xpap` (análogamente para `psg`).
+- Se añade confirmación al final del procesamiento mostrando ruta del archivo generado.
+
+### 4) Contrato compartido y load XPAP
+
+- Se crea contrato compartido `0_declarations/xpap.yaml` con:
+  - `schema.transform.input.columns`,
+  - `schema.transform.output.columns`,
+  - `schema.load.input.columns` (alias del output de transform).
+- Se agrega `3_load/config/xpap.yaml` con destino:
+  - `dataset_id: clisueno`,
+  - `table_id: tbl_xpap_prd`,
+  - `uuid_field: xpap_uuid`,
+  - `date_field: xpap_fecha_estudio`.
+- `3_load/main.py` incorpora resolución de `--flow xpap` usando configuración fija por flow.
+
+### 5) Ajustes de UX operativa y documentación
+
+- Soporte de argumento posicional de input en runner unificado de transform.
+- Mensajes de error más explícitos para desalineaciones de flow/input.
+- Actualización de README de raíz y de capas para reflejar el contrato unificado por `--flow` y flujos disponibles.
+
+## Validación operativa
+
+- Se validó ejecución CLI de `extract`, `transform` y `load` con `--flow` en modo `dry-run` y ejecuciones reales controladas.
+- `transform --flow xpap` ejecuta correctamente y genera salida esperada en `2_transform/xpap/output`.
+- `load --flow xpap` recorre validaciones locales y autenticación; la carga final depende de existencia de la tabla destino en BigQuery.
+
+## Nota de despliegue
+
+- Para operación productiva de XPAP en `load`, la tabla `observatorio-ino-1.clisueno.tbl_xpap_prd` debe existir previamente en BigQuery con schema compatible con `0_declarations/xpap.yaml`.
+
+---
+
 # v4.0.2 -- Ajustes de versionado, rutas y contrato compartido
 
 **Fecha:** 2026-03-02

@@ -65,6 +65,7 @@ class LoaderConfig:
 BASE_DIR = Path(__file__).resolve().parents[1]
 FLOW_CONFIG_PATHS: dict[str, Path] = {
     "psg": BASE_DIR / "3_load" / "config" / "psg.yaml",
+    "xpap": BASE_DIR / "3_load" / "config" / "xpap.yaml",
 }
 
 

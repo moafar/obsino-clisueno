@@ -8,10 +8,10 @@ Contexto: ejecutar desde la raíz del repo con entorno virtual activo.
 source .venv/bin/activate
 
 # 1) Extract
-cd 1_extract && ../.venv/bin/python main.py /ruta/de/entrada
+cd 1_extract && ../.venv/bin/python main.py --flow psg /ruta/de/entrada
 
 # 2) Transform (ejemplo PSG)
-cd ../2_transform/psg && ../../.venv/bin/python main.py --input input/unificado_basal.csv
+cd ../2_transform && ../.venv/bin/python main.py --flow psg --input psg/input/unificado_basal.csv
 
 # 3) Load
 cd ../../3_load && ../.venv/bin/python main.py --flow <subproceso_ejemplo> --input input/archivo_ready-to-load.xlsx
@@ -113,10 +113,10 @@ Comandos base:
 
 ```bash
 # Desde 1_extract/
-python3 main.py /ruta/de/la/carpeta
+python3 main.py --flow psg /ruta/de/la/carpeta
 
 # Desde raíz del proyecto
-./.venv/bin/python 2_transform/<subproceso_ejemplo>/main.py --dry-run
+./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --dry-run
 ./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input 3_load/input/archivo_ready-to-load.xlsx
 # Alternativa posicional para load
 ./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> 3_load/input/archivo_ready-to-load.xlsx
@@ -132,8 +132,8 @@ Chuleta rápida:
 
 | Capa | Comando ejemplo | Efecto |
 |---|---|---|
-| `extract` | `python3 main.py /ruta/de/la/carpeta` *(desde `1_extract/`)* | Procesa + unifica (default). |
-| `transform` | `./.venv/bin/python 2_transform/<subproceso_ejemplo>/main.py --dry-run` | Valida y transforma sin escribir salida. |
+| `extract` | `python3 main.py --flow <subproceso_ejemplo> /ruta/de/la/carpeta` *(desde `1_extract/`)* | Procesa + unifica (default). |
+| `transform` | `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --dry-run` | Valida y transforma sin escribir salida. |
 | `load` | `./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input 3_load/input/archivo_ready-to-load.xlsx` | Carga manual con confirmación previa. |
 | `load` (posicional) | `./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> 3_load/input/archivo_ready-to-load.xlsx` | Igual que el anterior, pasando el Excel como argumento posicional. |
 

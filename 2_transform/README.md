@@ -8,15 +8,15 @@ Contexto: ejecutar desde la raíz del repo o desde `2_transform/psg` con `.venv`
 source .venv/bin/activate
 
 # Ejecución normal (PSG)
-cd 2_transform/psg
-../../.venv/bin/python main.py --input input/unificado_basal.csv
+cd 2_transform
+../.venv/bin/python main.py --flow psg --input psg/input/unificado_basal.csv
 ```
 
 Prueba rápida (dry-run):
 
 ```bash
-cd 2_transform/psg
-../../.venv/bin/python main.py --input input/unificado_basal.csv --dry-run
+cd 2_transform
+../.venv/bin/python main.py --flow psg --input psg/input/unificado_basal.csv --dry-run
 ```
 
 Transformación declarativa de datasets clínicos entre `extract` y `load`.
@@ -80,27 +80,35 @@ Ejemplos de nombres de subproceso:
 
 ## Pipeline por subproceso (ejemplo)
 
-Entrypoint:
+Entrypoints:
 
-- `2_transform/<subproceso_ejemplo>/main.py`
+- `2_transform/main.py` (unificado por `--flow`)
+- `2_transform/<subproceso_ejemplo>/main.py` (compatibilidad)
+
+Flows disponibles actualmente:
+
+- `psg`: implementado.
+- `xpap`: implementado.
 
 Chuleta operativa (desde raíz del proyecto):
 
 | Comando | Efecto |
 |---|---|
-| `./.venv/bin/python 2_transform/<subproceso_ejemplo>/main.py` | Auto-discovery de archivos válidos en `input/`. |
-| `./.venv/bin/python 2_transform/<subproceso_ejemplo>/main.py --dry-run` | Valida y transforma sin escribir salida. |
-| `./.venv/bin/python 2_transform/<subproceso_ejemplo>/main.py --input 2_transform/<subproceso_ejemplo>/input/archivo_entrada.csv` | Procesa un archivo específico. |
-| `./.venv/bin/python 2_transform/<subproceso_ejemplo>/main.py --output 2_transform/<subproceso_ejemplo>/output/mi_archivo.xlsx` | Fuerza ruta/nombre de salida. |
+| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo>` | Auto-discovery de archivos válidos en `<flow>/input/`. |
+| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --dry-run` | Valida y transforma sin escribir salida. |
+| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --input 2_transform/<subproceso_ejemplo>/input/archivo_entrada.csv` | Procesa un archivo específico. |
+| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> 2_transform/<subproceso_ejemplo>/input/archivo_entrada.csv` | Procesa un archivo específico usando argumento posicional. |
+| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --output 2_transform/<subproceso_ejemplo>/output/mi_archivo.xlsx` | Fuerza ruta/nombre de salida. |
 
 Comandos desde raíz del proyecto:
 
 ```bash
-./.venv/bin/python 2_transform/<subproceso_ejemplo>/main.py --dry-run
+./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --dry-run
 ```
 
 ```bash
-./.venv/bin/python 2_transform/<subproceso_ejemplo>/main.py \
+./.venv/bin/python 2_transform/main.py \
+  --flow <subproceso_ejemplo> \
   --config 2_transform/<subproceso_ejemplo>/config.yaml \
   --input 2_transform/<subproceso_ejemplo>/input/archivo_entrada.csv
 ```
@@ -108,7 +116,7 @@ Comandos desde raíz del proyecto:
 Comando desde `2_transform/`:
 
 ```bash
-../.venv/bin/python <subproceso_ejemplo>/main.py
+../.venv/bin/python main.py --flow <subproceso_ejemplo>
 ```
 
 Modos de ejecución soportados:
@@ -135,7 +143,8 @@ Salida por defecto:
 Si necesitas forzar una ruta/nombre de salida:
 
 ```bash
-./.venv/bin/python 2_transform/<subproceso_ejemplo>/main.py \
+./.venv/bin/python 2_transform/main.py \
+  --flow <subproceso_ejemplo> \
   --output 2_transform/<subproceso_ejemplo>/output/mi_archivo.xlsx
 ```
 
@@ -164,5 +173,5 @@ Crear `2_transform/<nuevo_subproceso>/` con:
 Luego ejecutar:
 
 ```bash
-./.venv/bin/python 2_transform/<nuevo_subproceso>/main.py --dry-run
+./.venv/bin/python 2_transform/main.py --flow <nuevo_subproceso> --dry-run
 ```

@@ -43,6 +43,11 @@ La configuración se resuelve por flujo:
 
 - `--flow <subproceso_ejemplo>` -> `3_load/config/<subproceso_ejemplo>.yaml`
 
+Estado actual de flows:
+
+- `psg`: implementado.
+- `xpap`: implementado.
+
 Ejemplos de nombre de subproceso:
 
 - `subproceso_respiratorio`

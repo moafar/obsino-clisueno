@@ -22,7 +22,7 @@ from commons.io import (
 )
 from commons.ops import register_builtin_operations
 from commons.schema import validate_input_schema, validate_output_schema
-from psg.core.transforms import register_psg_operations
+from xpap.core.transforms import register_xpap_operations
 
 SUPPORTED_INPUT_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 
@@ -117,7 +117,7 @@ def _resolve_output_target(
 
 
 def _confirm_execution(plans: list[tuple[Path, Path]], dry_run: bool) -> bool:
-    print("\nPlan de ejecución PSG:")
+    print("\nPlan de ejecución XPAP:")
     for input_file, output_file in plans:
         print(f"- Input: {input_file}")
         if dry_run:
@@ -142,7 +142,7 @@ def run(
 
     registry = OperationRegistry()
     register_builtin_operations(registry)
-    register_psg_operations(registry)
+    register_xpap_operations(registry)
 
     resolved_input_path = resolve_existing_path(input_path, search_bases)
     dataframe = read_dataset(str(resolved_input_path), config=pipeline_config.get("input", {}))
@@ -180,12 +180,12 @@ def run(
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Runner del pipeline PSG")
+    parser = argparse.ArgumentParser(description="Runner del pipeline XPAP")
     parser.add_argument(
         "--config",
         required=False,
-        default="psg/config.yaml",
-        help="Ruta al archivo config.yaml del pipeline PSG.",
+        default="xpap/config.yaml",
+        help="Ruta al archivo config.yaml del pipeline XPAP.",
     )
     parser.add_argument(
         "--input",
@@ -193,7 +193,7 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Ruta al archivo de entrada (xlsx/csv). "
-            "Si no se indica, procesa automáticamente todos los archivos válidos en psg/input/."
+            "Si no se indica, procesa automáticamente todos los archivos válidos en xpap/input/."
         ),
     )
     parser.add_argument(
@@ -202,7 +202,7 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Ruta de salida del archivo procesado. "
-            "Si no se indica, usa el nombre del input + '_ready-to-load' en psg/output/."
+            "Si no se indica, usa el nombre del input + '_ready-to-load' en xpap/output/."
         ),
     )
     parser.add_argument(
@@ -240,13 +240,13 @@ def execute(
 
     if not input_files:
         raise FileNotFoundError(
-            "No se encontraron archivos de entrada en psg/input/. "
+            "No se encontraron archivos de entrada en xpap/input/. "
             "Agrega al menos un .csv/.xlsx/.xls o usa --input."
         )
 
     if output_path and len(input_files) > 1:
         raise ValueError(
-            "No se puede usar --output con múltiples archivos detectados en psg/input/. "
+            "No se puede usar --output con múltiples archivos detectados en xpap/input/. "
             "Usa --input para procesar uno específico."
         )
 

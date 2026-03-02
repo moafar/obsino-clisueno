@@ -7,14 +7,14 @@ Contexto: ejecutar desde la raíz del repo o desde `1_extract/` con `.venv` acti
 ```bash
 source .venv/bin/activate
 cd 1_extract
-../.venv/bin/python main.py /ruta/de/la/carpeta
+../.venv/bin/python main.py --flow psg /ruta/de/la/carpeta
 ```
 
 Prueba rápida con carpeta del repo:
 
 ```bash
 cd /home/rom/obsino/clisueno/1_extract
-../.venv/bin/python main.py ./test_files
+../.venv/bin/python main.py --flow psg ./test_files
 ```
 
 Extracción estructurada desde reportes clínicos de laboratorio de sueño.
@@ -27,7 +27,7 @@ Extracción estructurada desde reportes clínicos de laboratorio de sueño.
 
 ## Entradas y salidas
 
-- Entrada: directorio configurado en `1_extract/commons/config.yaml` (`entrada.ruta`) o por CLI.
+- Entrada: directorio configurado en `1_extract/config/<flow>.yaml` (`entrada.ruta`) o por CLI.
 - Salida de procesamiento: archivos CSV en rutas de salida configuradas.
 - Salida de trazabilidad: logs en `1_extract/logs/`.
 
@@ -36,8 +36,9 @@ Extracción estructurada desde reportes clínicos de laboratorio de sueño.
 ```text
 1_extract/
     main.py
+    config/
+        psg.yaml
     commons/
-        config.yaml
         directorio_utils.py
         unificar_resultados.py
     src/
@@ -48,9 +49,9 @@ Extracción estructurada desde reportes clínicos de laboratorio de sueño.
 
 ## Configuración
 
-Archivo principal:
+Archivo principal por flujo:
 
-- `1_extract/commons/config.yaml`
+- `1_extract/config/<flow>.yaml`
 
 Secciones clave:
 
@@ -66,28 +67,28 @@ Chuleta operativa (desde `1_extract/`):
 
 | Comando | Efecto |
 |---|---|
-| `python3 main.py /ruta/de/la/carpeta` | Modo completo: procesa y luego unifica. |
-| `python3 main.py /ruta/de/la/carpeta --no-unify` | Solo procesamiento (sin unificación). |
-| `python3 main.py --no-process` | Solo unificación usando `salida.carpeta_csv` del YAML. |
-| `python3 main.py /ruta/de/la/carpeta --dry-run` | Simulación: valida parámetros/configuración sin ejecutar acciones. |
-| `python3 main.py /ruta/de/la/carpeta -v` | Modo verbose (logging en DEBUG). |
+| `python3 main.py --flow psg /ruta/de/la/carpeta` | Modo completo: procesa y luego unifica. |
+| `python3 main.py --flow psg /ruta/de/la/carpeta --no-unify` | Solo procesamiento (sin unificación). |
+| `python3 main.py --flow psg --no-process` | Solo unificación usando `salida.carpeta_csv` del YAML del flujo. |
+| `python3 main.py --flow psg /ruta/de/la/carpeta --dry-run` | Simulación: valida parámetros/configuración sin ejecutar acciones. |
+| `python3 main.py --flow psg /ruta/de/la/carpeta -v` | Modo verbose (logging en DEBUG). |
 
 Forma habitual (desde `1_extract/`):
 
 ```bash
-python3 main.py /ruta/de/la/carpeta
+python3 main.py --flow psg /ruta/de/la/carpeta
 ```
 
 Alternativa desde la raíz del proyecto:
 
 ```bash
-./.venv/bin/python 1_extract/main.py -c 1_extract/commons/config.yaml
+./.venv/bin/python 1_extract/main.py --flow psg
 ```
 
 Con directorio explícito por CLI (desde raíz):
 
 ```bash
-./.venv/bin/python 1_extract/main.py /ruta/a/entrada -c 1_extract/commons/config.yaml
+./.venv/bin/python 1_extract/main.py --flow psg /ruta/a/entrada
 ```
 
 Modos de ejecución soportados:
@@ -100,25 +101,25 @@ Modos de ejecución soportados:
 Dry-run:
 
 ```bash
-python3 main.py /ruta/de/la/carpeta --dry-run
+python3 main.py --flow psg /ruta/de/la/carpeta --dry-run
 ```
 
 Solo unificación:
 
 ```bash
-python3 main.py --no-process
+python3 main.py --flow psg --no-process
 ```
 
 Solo procesamiento:
 
 ```bash
-python3 main.py /ruta/de/la/carpeta --no-unify
+python3 main.py --flow psg /ruta/de/la/carpeta --no-unify
 ```
 
 Modo verbose (más detalle de logs):
 
 ```bash
-python3 main.py /ruta/de/la/carpeta -v
+python3 main.py --flow psg /ruta/de/la/carpeta -v
 ```
 
 ## Dependencias

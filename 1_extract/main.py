@@ -6,6 +6,7 @@ import yaml
 from commons.logger import setup_logger
 from commons.directorio_utils import validar_directorio, procesar_directorio
 from commons.unificar_resultados import analizar_y_unificar
+from commons.archivo_utils import configure_subflows
 
 EXIT_OK, EXIT_CFG, EXIT_INPUT, EXIT_PROCESS, EXIT_UNIFY = 0, 1, 2, 3, 4
 logger = logging.getLogger(__name__)
@@ -19,6 +20,15 @@ class Config:
     glob_patron: str
     barra_progreso: bool
     carpeta_csv: Path | None
+    subflujos_salida_unificada: dict[str, str] | None
+    subflujos_prefijos: dict[str, str] | None
+
+
+BASE_DIR = Path(__file__).resolve().parent
+FLOW_CONFIG_PATHS: dict[str, Path] = {
+    "psg": BASE_DIR / "config" / "psg.yaml",
+    "xpap": BASE_DIR / "config" / "xpap.yaml",
+}
 
 def parse_args():
     p = argparse.ArgumentParser(
@@ -27,14 +37,24 @@ def parse_args():
     )
     p.add_argument("directorio", nargs="?", default=None,
                    help="Ruta del directorio a analizar (si se omite, usa la del YAML)")
-    p.add_argument("-c","--config", default="commons/config.yaml",
-                   help="Ruta al archivo de configuración YAML")
+    p.add_argument("--flow", required=True, choices=sorted(FLOW_CONFIG_PATHS.keys()),
+                   help="Flujo a ejecutar (define el YAML de configuración fijo)")
+    p.add_argument("-c","--config", default=None,
+                   help="Ruta al archivo de configuración YAML (override opcional del flow)")
     p.add_argument("-v","--verbose", action="store_true",
                    help="Muestra información detallada (logging DEBUG)")
     p.add_argument("--no-process", action="store_true", help="No procesa; solo unifica CSVs")
     p.add_argument("--no-unify", action="store_true", help="No unifica; solo procesa")
     p.add_argument("--dry-run", action="store_true", help="Valida y muestra parámetros; no ejecuta")
     return p.parse_args()
+
+
+def resolve_config_yaml_path(flow: str) -> Path:
+    config_yaml_path = FLOW_CONFIG_PATHS.get(flow)
+    if not config_yaml_path:
+        available_flows = ", ".join(sorted(FLOW_CONFIG_PATHS.keys()))
+        raise RuntimeError(f"Flujo no soportado: {flow}. Flujos válidos: {available_flows}")
+    return config_yaml_path
 
 def load_config(path_cfg: str) -> Config:
     cfg_path = Path(path_cfg).resolve()
@@ -58,6 +78,7 @@ def load_config(path_cfg: str) -> Config:
     ent = (raw.get("entrada") or {})
     proc = (raw.get("procesamiento") or {})
     sal = (raw.get("salida") or {})
+    sub = (raw.get("subflujos") or {})
 
     cfg = Config(
         logging_dir = Path(log.get("dir", "logs")),
@@ -67,6 +88,8 @@ def load_config(path_cfg: str) -> Config:
         glob_patron = proc.get("glob_patron", "**/*"),
         barra_progreso = bool(proc.get("barra_progreso", True)),
         carpeta_csv = _resolve_from_config(sal.get("carpeta_csv")),
+        subflujos_salida_unificada = sub.get("salida_unificada"),
+        subflujos_prefijos = sub.get("prefijos"),
     )
  
     return cfg
@@ -125,8 +148,13 @@ def maybe_unify(cfg: Config) -> Path | None:
 def orchestrate():
     args = parse_args()
     try:
-        cfg = load_config(args.config)
+        config_path = args.config or str(resolve_config_yaml_path(args.flow))
+        cfg = load_config(config_path)
         setup_logging_from_config(cfg, force_debug=args.verbose)
+        configure_subflows(
+            unified_file_for=cfg.subflujos_salida_unificada,
+            prefixes=cfg.subflujos_prefijos,
+        )
         logger.info("Inicio del proceso")
 
         if args.dry_run:

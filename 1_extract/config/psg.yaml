@@ -1,0 +1,20 @@
+entrada:
+  ruta: "../test_files"
+
+procesamiento:
+  tipos_validos: ["docx", "doc", "rtf"]
+  glob_patron: "**/*"
+  barra_progreso: true
+
+salida:
+  carpeta_csv: "../output"
+
+subflujos:
+  salida_unificada:
+    BASAL: "unificado_basal.csv"
+  prefijos:
+    BASAL: "bs"
+
+logging:
+  level: "INFO"
+  dir: "logs"

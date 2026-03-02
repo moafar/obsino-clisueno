@@ -57,9 +57,6 @@ TEXT_EXTRACTORS: Dict[str, Callable[[Path], str]] = {
     ".doc":  extraer_texto_doc,
 }
 
-# Activa solo lo implementado
-TIPOS_ACTIVOS = {"BASAL", "CPAP", "BPAP"}
-
 def _extract_text(archivo: Path) -> Optional[str]:
     ext = archivo.suffix.lower()
     extractor = TEXT_EXTRACTORS.get(ext)
@@ -162,14 +159,14 @@ EXAMS: Dict[str, ExamSpec] = {
 }
 
 # SOLO los activos en el mapeo de salida
-UNIFIED_FILE_FOR: Dict[str, str] = {
+DEFAULT_UNIFIED_FILE_FOR: Dict[str, str] = {
     "BASAL": "unificado_basal.csv",
     "CPAP":  "unificado_xpap.csv",
     "BPAP":  "unificado_xpap.csv",
 }
 
 # Mapeo de prefijos para renombrado
-PREFIXES: Dict[str, str] = {
+DEFAULT_PREFIXES: Dict[str, str] = {
     "BASAL": "bs",
     "CPAP": "xp",
     "BPAP": "xp",
@@ -181,6 +178,41 @@ PREFIXES: Dict[str, str] = {
 }
 
 PROCESSED_DIR = Path("procesados")
+
+TIPOS_ACTIVOS = set(DEFAULT_UNIFIED_FILE_FOR.keys())
+UNIFIED_FILE_FOR: Dict[str, str] = dict(DEFAULT_UNIFIED_FILE_FOR)
+PREFIXES: Dict[str, str] = dict(DEFAULT_PREFIXES)
+
+
+def configure_subflows(
+    unified_file_for: Optional[Dict[str, str]] = None,
+    prefixes: Optional[Dict[str, str]] = None,
+) -> None:
+    global TIPOS_ACTIVOS, UNIFIED_FILE_FOR, PREFIXES
+
+    if unified_file_for:
+        UNIFIED_FILE_FOR = {
+            str(tipo).upper().strip(): str(nombre).strip()
+            for tipo, nombre in unified_file_for.items()
+            if str(tipo).strip() and str(nombre).strip()
+        }
+    else:
+        UNIFIED_FILE_FOR = dict(DEFAULT_UNIFIED_FILE_FOR)
+
+    TIPOS_ACTIVOS = set(UNIFIED_FILE_FOR.keys())
+
+    if prefixes:
+        PREFIXES = {
+            str(tipo).upper().strip(): str(prefijo).strip()
+            for tipo, prefijo in prefixes.items()
+            if str(tipo).strip() and str(prefijo).strip() and str(tipo).upper().strip() in TIPOS_ACTIVOS
+        }
+    else:
+        PREFIXES = {
+            tipo: prefijo
+            for tipo, prefijo in DEFAULT_PREFIXES.items()
+            if tipo in TIPOS_ACTIVOS
+        }
 
 def _outfile_for_tipo(tipo: str) -> Optional[Path]:
     """

@@ -1,0 +1,22 @@
+entrada:
+  ruta: "../test_files"
+
+procesamiento:
+  tipos_validos: ["docx", "doc", "rtf"]
+  glob_patron: "**/*"
+  barra_progreso: true
+
+salida:
+  carpeta_csv: "../output"
+
+subflujos:
+  salida_unificada:
+    CPAP: "unificado_xpap.csv"
+    BPAP: "unificado_xpap.csv"
+  prefijos:
+    CPAP: "xp"
+    BPAP: "xp"
+
+logging:
+  level: "INFO"
+  dir: "logs"
