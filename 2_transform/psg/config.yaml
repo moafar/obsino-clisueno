@@ -1,0 +1,26 @@
+metadata:
+  name: psg
+  version: 0.2.0
+  domain: psg
+
+input:
+  format: csv
+  header: 0
+
+schema:
+  input: {}
+  output: {}
+
+declarations:
+  input_schema_yaml_path: 0_declarations/psg.yaml
+  input_schema_path_in_yaml: schema.transform.input.columns
+  output_schema_yaml_path: 0_declarations/psg.yaml
+  output_schema_path_in_yaml: schema.transform.output.columns
+
+steps:
+  - op: psg_basal_transform
+    params: {}
+
+output:
+  format: xlsx
+  sheet_name: procesado

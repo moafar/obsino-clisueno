@@ -1,0 +1,111 @@
+metadata:
+  # Contrato compartido entre capas para el flujo PSG.
+  # Objetivo: mantener una única fuente de verdad para schemas reutilizados.
+  name: psg_shared_contract
+  version: 1.0.0
+  domain: psg
+
+schema:
+  # Sección explícita por capa consumidora.
+  # - transform.input: esquema esperado al entrar al pipeline transform.
+  # - transform.output: esquema resultante del pipeline transform.
+  # - load.input: esquema esperado por load; debe ser equivalente a transform.output.
+  transform:
+    input:
+      # Input canónico de la capa transform.
+      columns:
+        nombre: string
+        edad_anos: float
+        edad_meses: float
+        edad_dias: float
+        id: string
+        peso: float
+        medida_peso: string
+        talla: float
+        medida_talla: string
+        imc: float
+        cuello: float
+        medida_cuello: string
+        perimetro_abdominal: float
+        medida_perimetro_abdominal: string
+        solicita: string
+        empresa: string
+        fecha_estudio: datetime
+        epworth: float
+        tiempo_en_cama: float
+        tiempo_sueno: float
+        eficiencia_sueno: float
+        latencia_sueno_total: float
+        latencia_sueno_rem: float
+        indice_microalertamientos: float
+        porcentaje_sueno_rem: float
+        porcentaje_sueno_profundo: float
+        iac: float
+        iao: float
+        iam: float
+        indice_desat_rem: float
+        indice_desat_nrem: float
+        indice_desat_total: float
+        tiempo_desat_90_rem: float
+        tiempo_desat_90_nrem: float
+        tiempo_desat_80_rem: float
+        tiempo_desat_80_nrem: float
+        tiempo_desat_70_rem: float
+        tiempo_desat_70_nrem: float
+        numero_eventos_ah: float
+        ih: float
+        iah: float
+        fuente: string
+        uuid: string
+        version_control: string
+    output:
+      # Output canónico de la capa transform.
+      # Se define con ancla para reutilizar exactamente el mismo bloque en load.input.
+      columns: &transform_output_columns
+        pte_nombre: string
+        pte_id: string
+        pte_imc: float
+        pte_anos_decimales: float
+        pte_grupo_edad: string
+        pte_peso_kg: float
+        pte_talla_cm: float
+        pte_cuello_cm: float
+        pte_perimetro_abdominal_cm: float
+        basal_solicita: string
+        basal_empresa: string
+        basal_fecha_estudio: datetime
+        basal_epworth: float
+        cat_epworth: string
+        basal_tiempo_en_cama: float
+        basal_tiempo_sueno: float
+        basal_eficiencia_sueno: float
+        cat_efic_sueno: string
+        basal_latencia_sueno_total: float
+        basal_latencia_sueno_rem: float
+        basal_indice_microalertamientos: float
+        cat_indice_microalertamientos: string
+        basal_porcentaje_sueno_rem: float
+        cat_porc_sueno_rem: string
+        basal_porcentaje_sueno_profundo: float
+        cat_porc_sueno_profundo: string
+        basal_iac: float
+        basal_iao: float
+        basal_iam: float
+        basal_ih: float
+        basal_iah: float
+        cat_iah: string
+        basal_indice_desat_rem: float
+        basal_indice_desat_nrem: float
+        basal_indice_desat_total: float
+        basal_numero_eventos_ah: float
+        basal_t90: float
+        basal_t80: float
+        basal_t70: float
+        basal_fuente: string
+        basal_uuid: string
+        basal_version_control: string
+  load:
+    input:
+      # Input canónico de la capa load.
+      # Alias del output de transform para garantizar equivalencia 1:1 sin duplicación.
+      columns: *transform_output_columns

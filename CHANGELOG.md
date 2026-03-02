@@ -1,3 +1,91 @@
+# v4.0.2 -- Ajustes de versionado, rutas y contrato compartido
+
+**Fecha:** 2026-03-02
+
+## Resumen ejecutivo
+
+Esta versión corrige y consolida el gobierno de versionado posterior a `v4.0.1`, y documenta ajustes operativos que mejoran portabilidad entre entornos.
+
+Se elimina dependencia de rutas absolutas en configuración/ejecución del flujo ETL, reforzando resolución relativa al proyecto y consumo declarativo de contrato compartido.
+
+## Cambios incluidos
+
+### 1) Gobierno de versión
+
+- Se actualiza el archivo marcador de versión en raíz a `v4.0.2`.
+- Se mantiene el versionado exclusivamente en `CHANGELOG.md` (sin versión explícita en `README.md`).
+- Se preserva la entrada histórica de `v4.0.1` sin sobrescribirla.
+
+### 2) Eliminación de rutas absolutas (portabilidad)
+
+- Se estandariza el uso de rutas relativas al proyecto en comandos y configuración operativa.
+- `3_load/main.py` resuelve insumos con `BASE_DIR` + rutas relativas (`config`, `secrets`, `schema`, `input`).
+- `2_transform` incorpora resolución por bases de búsqueda (`cwd`, raíz proyecto, raíz de capa) para config/input/output.
+
+### 3) Contrato compartido y resolución declarativa de schema
+
+- `3_load/config/psg.yaml` consume contrato desde `0_declarations/psg.yaml` vía `shared_schema_yaml_path`.
+- `3_load` soporta selector declarativo `schema_path_in_yaml` (actual: `schema.load.input.columns`).
+- `2_transform/psg/config.yaml` resuelve input/output schema desde el mismo contrato compartido en `0_declarations`.
+
+### 4) Ajustes operativos de ejecución
+
+- `3_load` mantiene ejecución por `--flow` y admite Excel por `--input` o argumento posicional.
+- Se refuerza la documentación por capa (`0_declarations`, `2_transform`, `3_load`) alineando ejemplos y convención de rutas.
+
+---
+
+# v4.0.1 -- Orden de capas, contrato compartido y ajuste de versionado
+
+**Fecha:** 2026-03-01
+
+## Resumen ejecutivo
+
+Esta versión consolida mejoras de claridad operativa y gobierno de configuración sin cambiar el comportamiento funcional del pipeline ETL.
+
+Se ordenó la estructura raíz por secuencia de ejecución, se centralizó el contrato de schemas compartidos y se alineó la documentación/versionado con esa estructura.
+
+---
+
+## Cambios incluidos
+
+### 1) Estructura de carpetas ordenada por flujo
+
+Se renombraron carpetas raíz para reflejar explícitamente el orden operativo:
+
+- `0_declarations/`
+- `1_extract/`
+- `2_transform/`
+- `3_load/`
+
+Con esto, la navegación del repositorio muestra de forma inmediata la secuencia esperada del proceso.
+
+### 2) Contrato de schema compartido fuera de las capas
+
+Se consolidó el contrato PSG en `0_declarations/psg.yaml` con secciones explícitas por capa:
+
+- `schema.transform.input.columns`
+- `schema.transform.output.columns`
+- `schema.load.input.columns`
+
+Además, se dejó explícita la equivalencia entre capas:
+
+- `schema.load.input.columns` reutiliza el mismo bloque que `schema.transform.output.columns`.
+
+### 3) Ajustes de configuración y ejecución
+
+- `2_transform/psg/config.yaml` ahora consume input/output schema desde `0_declarations/psg.yaml`.
+- `3_load/config/psg.yaml` consume `schema.load.input.columns` desde el mismo contrato compartido.
+- `3_load/main.py` actualizó rutas internas para resolver configuración en la nueva estructura numerada.
+
+### 4) Documentación y gobierno
+
+- Se actualizaron README de raíz y por capa para reflejar nuevas rutas, comandos y convención de orden.
+- Se ajustó `CHANGELOG.md` para mantener coherencia con nombres de carpetas actuales.
+- Se actualiza archivo marcador de versión en raíz a `v4.0.1`.
+
+---
+
 # v4.0.0 -- Consolidación ETL en 3 capas y gobierno central del proyecto
 
 **Fecha:** 2026-02-28
@@ -19,9 +107,9 @@ Además, se centralizó el gobierno documental y de versionado en la raíz del r
     - `load`: carga manual a BigQuery con controles operativos.
   - Se evitó acoplar lógicas entre capas para mantener evolución independiente.
 
-2. **Diseño compartido en `load` (sin multiplicar código por flujo)**
+2. **Diseño compartido en `3_load` (sin multiplicar código por flujo)**
   - Se descartó replicar estructura por flujo cuando la lógica era la misma.
-  - Se adoptó una sola implementación (`load/main.py`) con configuración declarativa por flujo en YAML.
+  - Se adoptó una sola implementación (`3_load/main.py`) con configuración declarativa por flujo en YAML.
 
 3. **Despacho de configuración por flujo con rutas fijas**
   - Se implementó selección por CLI (`--flow`).
@@ -45,14 +133,14 @@ Además, se centralizó el gobierno documental y de versionado en la raíz del r
   - validación de duplicados dentro del lote.
   - validación de duplicados contra la tabla destino en BigQuery (modo `WRITE_APPEND`).
 - Incorporación de configuración declarativa por YAML de flujo.
-- Reestructuración de carpeta (`load` aplanada; se eliminó subcarpeta `uploader`).
-- Estandarización de secretos: credenciales en `load/secrets/`.
+- Reestructuración de carpeta (`3_load` aplanada; se eliminó subcarpeta `uploader`).
+- Estandarización de secretos: credenciales en `3_load/secrets/`.
 - Eliminación de artefactos legacy (`bq_carga_manual.py` y enfoque HTTP para esta capa).
 
 ### B) Capa `transform`
 
 - Unificación de documentación en un único README de capa.
-- Eliminación de README duplicado dentro de `transform/psg` para evitar divergencias documentales.
+- Eliminación de README duplicado dentro de `2_transform/psg` para evitar divergencias documentales.
 
 ### C) Capa `extract`
 
@@ -62,7 +150,7 @@ Además, se centralizó el gobierno documental y de versionado en la raíz del r
 ### D) Gobierno documental del repositorio
 
 - Creación/actualización de README global del proyecto con descripción de las tres capas.
-- Armonización de README por capa (`extract`, `transform`, `load`) con estructura homogénea.
+- Armonización de README por capa (`1_extract`, `2_transform`, `3_load`) con estructura homogénea.
 
 ---
 
@@ -73,9 +161,9 @@ clisueno/
   README.md
   CHANGELOG.md
   v4.0.0
-  extract/
-  transform/
-  load/
+  1_extract/
+  2_transform/
+  3_load/
    main.py
    config/
     psg.yaml
@@ -84,9 +172,9 @@ clisueno/
 
 Flujo operativo:
 
-1. `extract` genera dataset base.
-2. `transform` aplica reglas declarativas y produce dataset estandarizado.
-3. `load` valida y carga manualmente a BigQuery.
+1. `1_extract` genera dataset base.
+2. `2_transform` aplica reglas declarativas y produce dataset estandarizado.
+3. `3_load` valida y carga manualmente a BigQuery.
 
 ---
 
