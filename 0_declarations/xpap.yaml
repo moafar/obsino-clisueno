@@ -57,6 +57,7 @@ schema:
         pte_id: string
         pte_imc: float
         pte_anos_decimales: float
+        pte_grupo_edad: string
         pte_peso_kg: float
         pte_talla_cm: float
         pte_cuello_cm: float
@@ -65,19 +66,25 @@ schema:
         xpap_empresa: string
         xpap_fecha_estudio: datetime
         xpap_epworth: float
+        cat_epworth: string
         xpap_tiempo_en_cama: float
         xpap_tiempo_sueno: float
         xpap_eficiencia_sueno: float
+        cat_efic_sueno: string
         xpap_latencia_sueno_total: float
         xpap_latencia_sueno_rem: float
         xpap_indice_microalertamientos: float
+        cat_indice_microalertamientos: string
         xpap_porcentaje_sueno_rem: float
+        cat_porc_sueno_rem: string
         xpap_porcentaje_sueno_profundo: float
+        cat_porc_sueno_profundo: string
         xpap_iac: float
         xpap_iao: float
         xpap_iam: float
         xpap_ih: float
         xpap_iah: float
+        cat_iah: string
         xpap_indice_desat_rem: float
         xpap_indice_desat_nrem: float
         xpap_indice_desat_total: float

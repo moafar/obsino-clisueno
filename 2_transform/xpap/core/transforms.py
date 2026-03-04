@@ -62,6 +62,7 @@ FINAL_COLS = [
     "pte_id",
     "pte_imc",
     "pte_anos_decimales",
+    "pte_grupo_edad",
     "pte_peso_kg",
     "pte_talla_cm",
     "pte_cuello_cm",
@@ -70,19 +71,25 @@ FINAL_COLS = [
     "xpap_empresa",
     "xpap_fecha_estudio",
     "xpap_epworth",
+    "cat_epworth",
     "xpap_tiempo_en_cama",
     "xpap_tiempo_sueno",
     "xpap_eficiencia_sueno",
+    "cat_efic_sueno",
     "xpap_latencia_sueno_total",
     "xpap_latencia_sueno_rem",
     "xpap_indice_microalertamientos",
+    "cat_indice_microalertamientos",
     "xpap_porcentaje_sueno_rem",
+    "cat_porc_sueno_rem",
     "xpap_porcentaje_sueno_profundo",
+    "cat_porc_sueno_profundo",
     "xpap_iac",
     "xpap_iao",
     "xpap_iam",
     "xpap_ih",
     "xpap_iah",
+    "cat_iah",
     "xpap_indice_desat_rem",
     "xpap_indice_desat_nrem",
     "xpap_indice_desat_total",
@@ -107,6 +114,11 @@ def _clean_float_series(series: pd.Series) -> pd.Series:
     text = text.str.replace(r"[^0-9\.\-]", "", regex=True)
     text = text.where(~text.eq(""), pd.NA)
     return pd.to_numeric(text, errors="coerce").astype("Float64")
+
+
+def _to_percent_scale(series: pd.Series) -> pd.Series:
+    values = _clean_float_series(series)
+    return (values * 100).where(values <= 1, values).astype("Float64")
 
 
 def _normalize_dtypes(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -293,6 +305,66 @@ def _op_xpap_transform(dataframe: pd.DataFrame, **_: object) -> pd.DataFrame:
             continue
         values = _clean_float_series(df[column])
         df[column] = (values / 100).where(values > 1, values).astype("Float64")
+
+    if "xpap_eficiencia_sueno" in df.columns:
+        eficiencia = _clean_float_series(df["xpap_eficiencia_sueno"])
+        df["cat_efic_sueno"] = pd.Series("Sin dato", index=df.index, dtype="string")
+        df.loc[eficiencia < 0.41, "cat_efic_sueno"] = "Muy baja"
+        df.loc[(eficiencia >= 0.41) & (eficiencia < 0.85), "cat_efic_sueno"] = "Baja"
+        df.loc[eficiencia >= 0.85, "cat_efic_sueno"] = "Normal"
+
+    if "xpap_epworth" in df.columns:
+        epworth = _clean_float_series(df["xpap_epworth"])
+        df["cat_epworth"] = pd.Series("Sin dato", index=df.index, dtype="string")
+        df.loc[epworth < 10, "cat_epworth"] = "Normal"
+        df.loc[(epworth >= 10) & (epworth < 14), "cat_epworth"] = "Leve"
+        df.loc[(epworth >= 14) & (epworth < 18), "cat_epworth"] = "Moderada"
+        df.loc[epworth >= 18, "cat_epworth"] = "Grave"
+
+    if {"pte_anos_decimales", "xpap_iah"}.issubset(df.columns):
+        age_years = _clean_float_series(df["pte_anos_decimales"])
+        iah = _clean_float_series(df["xpap_iah"])
+        df["cat_iah"] = pd.Series("Inconsistente", index=df.index, dtype="string")
+
+        adult = age_years >= 12
+        pediatric = age_years < 12
+
+        df.loc[adult & (iah < 5), "cat_iah"] = "Normal"
+        df.loc[adult & (iah >= 5) & (iah < 15), "cat_iah"] = "Leve"
+        df.loc[adult & (iah >= 15) & (iah < 30), "cat_iah"] = "Moderado"
+        df.loc[adult & (iah >= 30), "cat_iah"] = "Grave"
+
+        df.loc[pediatric & (iah < 2), "cat_iah"] = "Normal"
+        df.loc[pediatric & (iah >= 2) & (iah < 5), "cat_iah"] = "Leve"
+        df.loc[pediatric & (iah >= 5) & (iah < 10), "cat_iah"] = "Moderado"
+        df.loc[pediatric & (iah >= 10), "cat_iah"] = "Grave"
+
+    if "pte_anos_decimales" in df.columns:
+        age_years = _clean_float_series(df["pte_anos_decimales"])
+        df["pte_grupo_edad"] = pd.Series(pd.NA, index=df.index, dtype="string")
+        df.loc[age_years < 12, "pte_grupo_edad"] = "Menor de 12"
+        df.loc[(age_years >= 12) & (age_years < 18), "pte_grupo_edad"] = "De 12 a 18"
+        df.loc[age_years >= 18, "pte_grupo_edad"] = "Mayor de 18"
+
+    if "xpap_indice_microalertamientos" in df.columns:
+        micro = _clean_float_series(df["xpap_indice_microalertamientos"])
+        df["cat_indice_microalertamientos"] = pd.Series("Sin dato", index=df.index, dtype="string")
+        df.loc[micro < 10, "cat_indice_microalertamientos"] = "Normal"
+        df.loc[micro >= 10, "cat_indice_microalertamientos"] = "Anormal"
+
+    if "xpap_porcentaje_sueno_profundo" in df.columns:
+        profundo = _to_percent_scale(df["xpap_porcentaje_sueno_profundo"])
+        df["cat_porc_sueno_profundo"] = pd.Series("Sin dato", index=df.index, dtype="string")
+        df.loc[profundo < 15, "cat_porc_sueno_profundo"] = "Bajo"
+        df.loc[(profundo >= 15) & (profundo < 30), "cat_porc_sueno_profundo"] = "Normal"
+        df.loc[profundo >= 30, "cat_porc_sueno_profundo"] = "Aumentado"
+
+    if "xpap_porcentaje_sueno_rem" in df.columns:
+        rem = _to_percent_scale(df["xpap_porcentaje_sueno_rem"])
+        df["cat_porc_sueno_rem"] = pd.Series("Sin dato", index=df.index, dtype="string")
+        df.loc[rem < 20, "cat_porc_sueno_rem"] = "Bajo"
+        df.loc[(rem >= 20) & (rem < 40), "cat_porc_sueno_rem"] = "Normal"
+        df.loc[rem >= 40, "cat_porc_sueno_rem"] = "Aumentado"
 
     for column in FINAL_COLS:
         if column not in df.columns:

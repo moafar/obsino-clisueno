@@ -1,3 +1,39 @@
+# v4.0.4 -- Sincronización de columnas calculadas de XPAP en transform/load
+
+**Fecha:** 2026-03-04
+
+## Resumen ejecutivo
+
+Esta versión alinea el pipeline XPAP con la capa de categorización clínica ya presente en PSG, incorporando en `transform` las columnas derivadas `pte_grupo_edad` y `cat_*`, y sincronizando el contrato compartido para que `load` valide y cargue el esquema completo actualizado.
+
+## Cambios incluidos
+
+### 1) XPAP transform con columnas de categorización
+
+- Se amplía `2_transform/xpap/core/transforms.py` para generar:
+  - `pte_grupo_edad`
+  - `cat_epworth`
+  - `cat_efic_sueno`
+  - `cat_indice_microalertamientos`
+  - `cat_porc_sueno_rem`
+  - `cat_porc_sueno_profundo`
+  - `cat_iah`
+- Se incorpora helper de escala de porcentaje para normalizar inputs en rango `[0,1]` o `[0,100]`.
+- Se actualiza `FINAL_COLS` de XPAP para incluir dichas variables en el output final.
+
+### 2) Contrato compartido XPAP sincronizado
+
+- Se actualiza `0_declarations/xpap.yaml` (`schema.transform.output.columns`).
+- `schema.load.input.columns` queda alineado automáticamente al mismo bloque (alias), garantizando compatibilidad de `3_load` con el nuevo esquema de 46 columnas.
+
+### 3) Validación operativa
+
+- Se valida ejecución de `extract --flow xpap` con `test_files`.
+- Se valida `transform --flow xpap` sobre `unificado_xpap.csv` con salida `ready-to-load` y presencia efectiva de columnas nuevas.
+- Se valida carga `load --flow xpap` usando el esquema actualizado.
+
+---
+
 # v4.0.3 -- Unificación por flow y habilitación operativa de XPAP
 
 **Fecha:** 2026-03-02
