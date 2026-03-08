@@ -1,5 +1,5 @@
 input:
-  csv_path: "1_extract/output/unificado_basal.csv"
+  csv_path: "staging/extract_psg_YYYY-MM-DD_HH-MM.csv"
 
 output:
   spreadsheet_id: "1KI8_Df7G9RUco-0FLPqTiFsyLC1r98T_pR3CsHZAu0s"

@@ -1,3 +1,86 @@
+# v4.1.0 -- Staging lineal, logging unificado y hardening de carga
+
+**Fecha:** 2026-03-08
+
+## Resumen ejecutivo
+
+Esta versión consolida un flujo ETL lineal compartido por `staging/`, elimina artefactos legacy y refuerza validaciones operativas en `load`.
+
+El objetivo principal es reducir errores por rutas dependientes de `cwd`, estandarizar convenciones entre capas y endurecer la seguridad de carga a BigQuery.
+
+## Cambios incluidos
+
+### 1) `1_extract`: rutas canónicas y salida por convención `extract_<flow>_<timestamp>.csv`
+
+- `1_extract/commons/archivo_utils.py` define `REPO_ROOT` y usa rutas absolutas:
+  - `OUTPUT_DIR -> <repo>/staging`
+  - `PROCESSED_DIR -> <repo>/procesados`
+- `1_extract/main.py` incorpora `--input` explícito (manteniendo compatibilidad posicional) y genera nombre de salida por flow/timestamp.
+- Logging por flow: `extract_<flow>_YYYY-MM-DD_HH-MM-SS.log` en `logs/` de raíz.
+- Se elimina dependencia implícita de `Path("output")` y `Path("procesados")` relativas al `cwd`.
+
+### 2) `2_transform`: autodiscovery desde `staging/` y deduplicación por UUID
+
+- `2_transform/psg/main.py` y `2_transform/xpap/main.py` dejan de usar `<flow>/input` y filtran entradas en `staging/` por prefijo `extract_<flow>_`.
+- Salida por defecto cambia a sufijo `_transformed` en `staging/`.
+- `2_transform/commons/engine/runner.py` agrega deduplicación de filas por columna `UUID` (keep first).
+- `2_transform/commons/logging/logger.py` centraliza logs por flow: `transform_<flow>_YYYY-MM-DD_HH-MM-SS.log`.
+
+### 3) `3_load`: autodiscovery seguro, validaciones tipadas y post-carga
+
+- `3_load/main.py` permite ejecución sin `--input` usando autodiscovery del archivo más reciente `extract_<flow>_*_transformed` en `staging/`.
+- Se restringe `--input` a rutas dentro de `staging/` y a la convención del flow.
+- Se fortalece normalización tipada para preservar compatibilidad con `pyarrow` y BigQuery.
+- Se mejora trazabilidad de duplicados en lote y contra BQ con detalle en log.
+- Tras carga exitosa, el archivo se renombra/mueve en `staging/` con sufijo `_loaded`.
+- Se agrega soporte explícito de lectura para entradas `.csv` y `.xlsx/.xls`.
+
+### 4) Limpieza de legacy y documentación
+
+- Se elimina `1_extract/procesados/.gitkeep` por quedar obsoleto.
+- Se eliminan scripts legacy de subida directa a Sheets:
+  - `1_extract/src/basal/subir_basal_stg.py`
+  - `1_extract/src/xpap/subir_xpap_stg.py`
+- Se actualiza documentación en raíz y por capa (`0_declarations`, `1_extract`, `2_transform`, `3_load`) para reflejar el handoff lineal por `staging/`.
+- `.gitignore` se alinea para ignorar `staging/` y `procesados/` de raíz.
+
+### 5) Dependencias
+
+- `3_load/requirements.txt` incorpora `pandas-gbq>=0.26.1`.
+
+---
+
+# v4.0.5 -- Normalización de rutas determinísticas en extract
+
+**Fecha:** 2026-03-08
+
+## Resumen ejecutivo
+
+Se normalizan rutas de `1_extract` para que no dependan del directorio de ejecución (`cwd`).
+Con esto, la salida de datos y el archivado de procesados quedan siempre en rutas únicas a nivel repositorio.
+
+## Cambios incluidos
+
+### 1) Rutas determinísticas en `1_extract`
+
+- `1_extract/commons/archivo_utils.py` define `REPO_ROOT` y usa rutas absolutas:
+  - `OUTPUT_DIR -> <repo>/staging`
+  - `PROCESSED_DIR -> <repo>/procesados`
+- Logging centralizado en ruta canónica del proyecto:
+  - `LOGS_DIR -> /home/rom/obsino/clisueno/logs`
+- Se elimina dependencia implícita de `Path("output")` y `Path("procesados")` relativas al `cwd`.
+
+### 2) Limpieza de estructura legacy
+
+- Se elimina `1_extract/procesados/.gitkeep` por quedar obsoleto.
+- La carpeta `1_extract/procesados/` deja de ser carpeta operativa.
+
+### 3) Documentación
+
+- Se actualiza `1_extract/README.md` para reflejar archivado en `procesados/` de la raíz del repo.
+
+---
+
 # v4.0.4 -- Sincronización de columnas calculadas de XPAP en transform/load
 
 **Fecha:** 2026-03-04

@@ -1,4 +1,5 @@
 import argparse, sys, time, logging
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 import yaml
@@ -35,12 +36,14 @@ def parse_args():
         description="Procesa un directorio y luego unifica CSVs",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    p.add_argument("directorio", nargs="?", default=None,
-                   help="Ruta del directorio a analizar (si se omite, usa la del YAML)")
+    p.add_argument("input_posicional", nargs="?", default=None,
+                   help="Ruta del directorio a analizar (argumento posicional opcional)")
     p.add_argument("--flow", required=True, choices=sorted(FLOW_CONFIG_PATHS.keys()),
                    help="Flujo a ejecutar (define el YAML de configuración fijo)")
     p.add_argument("-c","--config", default=None,
                    help="Ruta al archivo de configuración YAML (override opcional del flow)")
+    p.add_argument("--input", default=None,
+                   help="Ruta del directorio a analizar (si se omite, usa la del YAML)")
     p.add_argument("-v","--verbose", action="store_true",
                    help="Muestra información detallada (logging DEBUG)")
     p.add_argument("--no-process", action="store_true", help="No procesa; solo unifica CSVs")
@@ -80,8 +83,10 @@ def load_config(path_cfg: str) -> Config:
     sal = (raw.get("salida") or {})
     sub = (raw.get("subflujos") or {})
 
+    project_logs_dir = (BASE_DIR.parent / "logs").resolve()
+
     cfg = Config(
-        logging_dir = Path(log.get("dir", "logs")),
+        logging_dir = project_logs_dir,
         logging_level = str(log.get("level", "INFO")).upper(),
         entrada_ruta = _resolve_from_config(ent.get("ruta")),
         tipos_validos = proc.get("tipos_validos"),
@@ -94,8 +99,8 @@ def load_config(path_cfg: str) -> Config:
  
     return cfg
 
-def setup_logging_from_config(cfg: Config, force_debug: bool):
-    setup_logger(cfg.logging_dir)
+def setup_logging_from_config(cfg: Config, force_debug: bool, flow: str):
+    setup_logger(str(cfg.logging_dir), flow_name=flow)
     level_name = "DEBUG" if force_debug else cfg.logging_level
     logging.getLogger().setLevel(getattr(logging, level_name, logging.INFO))
 
@@ -136,24 +141,38 @@ def report(res: dict, ruta: Path, dt: float, verbose: bool):
               f"Válidos: {base['validos']} | Descartados: {base['descartados']} | "
               f"Tiempo(s): {base['tiempo_s']}\n")
 
-def maybe_unify(cfg: Config) -> Path | None:
+def maybe_unify(cfg: Config) -> None:
     if not cfg.carpeta_csv:
         logger.warning("No se configuró salida.carpeta_csv; se omite unificación.")
+        return
+    analizar_y_unificar(str(cfg.carpeta_csv))
+
+
+def build_timestamped_output_map(
+    flow: str,
+    configured_outputs: dict[str, str] | None,
+) -> dict[str, str] | None:
+    if not configured_outputs:
         return None
-    out = analizar_y_unificar(str(cfg.carpeta_csv))
-    if out:
-        logger.info(f"Unificado: {out}")
-    return out
+
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    file_name = f"extract_{flow}_{ts}.csv"
+    return {tipo: file_name for tipo in configured_outputs}
 
 def orchestrate():
     args = parse_args()
     try:
         config_path = args.config or str(resolve_config_yaml_path(args.flow))
         cfg = load_config(config_path)
-        setup_logging_from_config(cfg, force_debug=args.verbose)
+        setup_logging_from_config(cfg, force_debug=args.verbose, flow=args.flow)
+        runtime_output_map = build_timestamped_output_map(
+            flow=args.flow,
+            configured_outputs=cfg.subflujos_salida_unificada,
+        )
         configure_subflows(
-            unified_file_for=cfg.subflujos_salida_unificada,
+            unified_file_for=runtime_output_map,
             prefixes=cfg.subflujos_prefijos,
+            output_dir=cfg.carpeta_csv,
         )
         logger.info("Inicio del proceso")
 
@@ -163,7 +182,8 @@ def orchestrate():
             return EXIT_OK
 
         if not args.no_process:
-            ruta = resolve_input_dir(args.directorio, cfg)
+            resolved_input = args.input or args.input_posicional
+            ruta = resolve_input_dir(resolved_input, cfg)
             logger.info(f"Procesando directorio: {ruta}")
             res, dt = run_processing(ruta, cfg)
             report(res, ruta, dt, args.verbose)

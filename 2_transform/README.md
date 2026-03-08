@@ -9,14 +9,14 @@ source .venv/bin/activate
 
 # Ejecución normal (PSG)
 cd 2_transform
-../.venv/bin/python main.py --flow psg --input psg/input/unificado_basal.csv
+../.venv/bin/python main.py --flow psg --input ../staging/extract_psg_YYYY-MM-DD_HH-MM.csv
 ```
 
 Prueba rápida (dry-run):
 
 ```bash
 cd 2_transform
-../.venv/bin/python main.py --flow psg --input psg/input/unificado_basal.csv --dry-run
+../.venv/bin/python main.py --flow psg --input ../staging/extract_psg_YYYY-MM-DD_HH-MM.csv --dry-run
 ```
 
 Transformación declarativa de datasets clínicos entre `extract` y `load`.
@@ -33,24 +33,26 @@ Transformación declarativa de datasets clínicos entre `extract` y `load`.
 2_transform/
   commons/
   requirements.txt
-  <subproceso_ejemplo>/
+  psg/
+  xpap/
+  <flow>/
     config.yaml
     main.py
     core/
-    input/
-    output/
 ```
 
 - `commons/`: motor genérico de pipeline (I/O, validadores, operaciones, runner).
-- `<subproceso>/`: implementación de dominio por flujo clínico.
+- `<flow>/`: implementación de dominio por flujo clínico.
+- `staging/` (en raiz del repo): area compartida de entrada/salida entre capas.
 
 ## Flujo estándar
 
 1. Leer input (`xlsx` o `csv`).
 2. Validar esquema de entrada.
 3. Ejecutar transformaciones declarativas (`steps`).
-4. Validar esquema de salida.
-5. Escribir dataset procesado.
+4. Limpiar duplicados por `UUID` (se conserva la primera fila por UUID, cuando exista esa columna).
+5. Validar esquema de salida.
+6. Escribir dataset procesado.
 
 ## Configuración
 
@@ -83,7 +85,7 @@ Ejemplos de nombres de subproceso:
 Entrypoints:
 
 - `2_transform/main.py` (unificado por `--flow`)
-- `2_transform/<subproceso_ejemplo>/main.py` (compatibilidad)
+- `2_transform/<flow>/main.py` (compatibilidad)
 
 Flows disponibles actualmente:
 
@@ -94,11 +96,11 @@ Chuleta operativa (desde raíz del proyecto):
 
 | Comando | Efecto |
 |---|---|
-| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo>` | Auto-discovery de archivos válidos en `<flow>/input/`. |
+| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo>` | Auto-discovery de archivos válidos en `staging/`, filtrados por `extract_<flow>_...`. |
 | `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --dry-run` | Valida y transforma sin escribir salida. |
-| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --input 2_transform/<subproceso_ejemplo>/input/archivo_entrada.csv` | Procesa un archivo específico. |
-| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> 2_transform/<subproceso_ejemplo>/input/archivo_entrada.csv` | Procesa un archivo específico usando argumento posicional. |
-| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --output 2_transform/<subproceso_ejemplo>/output/mi_archivo.xlsx` | Fuerza ruta/nombre de salida. |
+| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --input staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM.csv` | Procesa un archivo específico. |
+| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM.csv` | Procesa un archivo específico usando argumento posicional. |
+| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --output staging/mi_archivo.xlsx` | Fuerza ruta/nombre de salida. |
 
 Comandos desde raíz del proyecto:
 
@@ -110,7 +112,7 @@ Comandos desde raíz del proyecto:
 ./.venv/bin/python 2_transform/main.py \
   --flow <subproceso_ejemplo> \
   --config 2_transform/<subproceso_ejemplo>/config.yaml \
-  --input 2_transform/<subproceso_ejemplo>/input/archivo_entrada.csv
+  --input staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM.csv
 ```
 
 Comando desde `2_transform/`:
@@ -121,37 +123,37 @@ Comando desde `2_transform/`:
 
 Modos de ejecución soportados:
 
-- Auto-discovery (por defecto): si no se pasa `--input`, procesa todos los archivos válidos en `<subproceso_ejemplo>/input/`.
+- Auto-discovery (por defecto): si no se pasa `--input`, procesa todos los archivos válidos de ese flow en `staging/`.
 - Archivo específico: usar `--input <ruta_archivo>`.
-- Salida automática (por defecto): si no se pasa `--output`, genera `<input>_ready-to-load` en `<subproceso_ejemplo>/output/`.
+- Salida automática (por defecto): si no se pasa `--output`, genera `<input>_transformed` en `staging/`.
 - Salida explícita: usar `--output <ruta_salida>`.
 - Simulación: `--dry-run` ejecuta validaciones/transformaciones sin escribir archivo.
 
 Entrada por defecto:
 
-- Si no se pasa `--input`, el runner procesa automáticamente todos los archivos válidos (`.csv`, `.xlsx`, `.xls`) que encuentre en `2_transform/<subproceso_ejemplo>/input/`.
+- Si no se pasa `--input`, el runner procesa automáticamente todos los archivos válidos (`.csv`, `.xlsx`, `.xls`) que encuentre en `staging/` y correspondan al flow (`extract_<flow>_...`).
 - Si quieres procesar uno específico, usa `--input <ruta_archivo>`.
 
 Salida por defecto:
 
 - Si no se pasa `--output`, el runner genera automáticamente el nombre como:
-  - `<nombre_input>_ready-to-load.<extensión>`
+  - `<nombre_input>_transformed.<extensión>`
 - La extensión se define con `output.format` en `config.yaml` (`xlsx` o `csv`).
-- Para el input `unificado_basal.csv`, la salida será:
-  - `2_transform/<subproceso_ejemplo>/output/unificado_basal_ready-to-load.xlsx`
+- Para el input `extract_psg_YYYY-MM-DD_HH-MM.csv`, la salida será:
+  - `staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.xlsx`
 
 Si necesitas forzar una ruta/nombre de salida:
 
 ```bash
 ./.venv/bin/python 2_transform/main.py \
   --flow <subproceso_ejemplo> \
-  --output 2_transform/<subproceso_ejemplo>/output/mi_archivo.xlsx
+  --output staging/mi_archivo.xlsx
 ```
 
 ## Notas operativas
 
 - El runner admite entrada `csv`, `xlsx` y `xls`.
-- Si no se especifica `--output`, el nombre se genera como `<input>_ready-to-load`.
+- Si no se especifica `--output`, el nombre se genera como `<input>_transformed`.
 - El formato final se define con `output.format` en `config.yaml`.
 
 ## Dependencias
@@ -162,16 +164,19 @@ Si necesitas forzar una ruta/nombre de salida:
 
 ## Extensión a nuevos pipelines
 
-Crear `2_transform/<nuevo_subproceso>/` con:
+Crear `2_transform/<nuevo_flow>/` con:
 
 - `config.yaml`
 - `main.py`
 - `core/`
-- `input/`
-- `output/`
 
 Luego ejecutar:
 
 ```bash
-./.venv/bin/python 2_transform/main.py --flow <nuevo_subproceso> --dry-run
+./.venv/bin/python 2_transform/main.py --flow <nuevo_flow> --dry-run
 ```
+
+Logs de esta capa:
+
+- Carpeta: `/home/rom/obsino/clisueno/logs`
+- Convencion: `transform_<flow>_YYYY-MM-DD_HH-MM-SS.log`

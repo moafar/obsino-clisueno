@@ -9,8 +9,15 @@ import yaml
 TRANSFORM_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = TRANSFORM_ROOT.parent
 PIPELINE_ROOT = Path(__file__).resolve().parent
+FLOW_NAME = PIPELINE_ROOT.name
+STAGING_DIR = PROJECT_ROOT / "staging"
+EXTRACT_FILE_PREFIX = f"extract_{FLOW_NAME}_"
 if str(TRANSFORM_ROOT) not in sys.path:
     sys.path.insert(0, str(TRANSFORM_ROOT))
+
+from commons.logging import configure_flow_logging
+
+configure_flow_logging(FLOW_NAME)
 
 from commons.engine import OperationRegistry, run_pipeline
 from commons.io import (
@@ -32,14 +39,18 @@ def _search_bases() -> list[Path]:
 
 
 def _discover_input_files() -> list[Path]:
-    input_dir = PIPELINE_ROOT / "input"
+    input_dir = STAGING_DIR
     if not input_dir.exists():
         return []
 
     files = [
         path
         for path in sorted(input_dir.iterdir())
-        if path.is_file() and path.suffix.lower() in SUPPORTED_INPUT_EXTENSIONS
+        if (
+            path.is_file()
+            and path.suffix.lower() in SUPPORTED_INPUT_EXTENSIONS
+            and path.stem.startswith(EXTRACT_FILE_PREFIX)
+        )
     ]
     return files
 
@@ -111,7 +122,7 @@ def _resolve_output_target(
 
     return build_default_output_path(
         input_path=resolved_input_path,
-        pipeline_output_dir=PIPELINE_ROOT / "output",
+        pipeline_output_dir=STAGING_DIR,
         pipeline_config=pipeline_config,
     )
 
@@ -193,7 +204,7 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Ruta al archivo de entrada (xlsx/csv). "
-            "Si no se indica, procesa automáticamente todos los archivos válidos en xpap/input/."
+            "Si no se indica, procesa automáticamente todos los archivos válidos de este flow en staging/."
         ),
     )
     parser.add_argument(
@@ -202,7 +213,7 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Ruta de salida del archivo procesado. "
-            "Si no se indica, usa el nombre del input + '_ready-to-load' en xpap/output/."
+            "Si no se indica, usa el nombre del input + '_transformed' en staging/."
         ),
     )
     parser.add_argument(
@@ -240,13 +251,13 @@ def execute(
 
     if not input_files:
         raise FileNotFoundError(
-            "No se encontraron archivos de entrada en xpap/input/. "
-            "Agrega al menos un .csv/.xlsx/.xls o usa --input."
+            "No se encontraron archivos de entrada para este flow en staging/. "
+            "Agrega un archivo 'extract_<flow>_...(.csv/.xlsx/.xls)' o usa --input."
         )
 
     if output_path and len(input_files) > 1:
         raise ValueError(
-            "No se puede usar --output con múltiples archivos detectados en xpap/input/. "
+            "No se puede usar --output con múltiples archivos detectados en staging/. "
             "Usa --input para procesar uno específico."
         )
 

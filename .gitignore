@@ -16,13 +16,10 @@ venv/
 
 # Logs
 *.log
-extract/logs/**/*.log
 
 # Generated outputs / processed data
-extract/output/**/*
-!extract/output/.gitkeep
-extract/procesados/**/*
-!extract/procesados/.gitkeep
+/staging/**
+/procesados/**
 
 # Datos
 *.csv

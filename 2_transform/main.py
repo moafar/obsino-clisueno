@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-
-from psg.main import execute as execute_psg
-from xpap.main import execute as execute_xpap
+from commons.logging import configure_flow_logging
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -19,8 +17,16 @@ def _extract_flow_from_input_path(raw_input: str, known_flows: set[str]) -> str 
     for index, segment in enumerate(path_parts):
         if segment not in known_flows:
             continue
-        if index + 1 < len(path_parts) and path_parts[index + 1] == "input":
+        if index + 1 < len(path_parts) and path_parts[index + 1] in {"input", "extract", "transform"}:
             return segment
+        if index > 0 and path_parts[index - 1] == "staging":
+            return segment
+
+    # Convención nueva en staging compartido: extract_<flow>_YYYY-MM-DD_HH-MM(.ext)
+    stem = Path(raw_input).stem.lower()
+    for flow in known_flows:
+        if stem.startswith(f"extract_{flow}_"):
+            return flow
     return None
 
 
@@ -93,11 +99,15 @@ def resolve_config_path(flow: str, override_config: str | None) -> str:
 
 def main() -> int:
     args = parse_args()
+    configure_flow_logging(args.flow)
+
     config_path = resolve_config_path(args.flow, args.config)
     resolved_input = args.input or args.input_positional
     validate_flow_input_consistency(args.flow, resolved_input)
 
     if args.flow == "psg":
+        from psg.main import execute as execute_psg
+
         return execute_psg(
             config_path=config_path,
             input_path=resolved_input,
@@ -106,6 +116,8 @@ def main() -> int:
         )
 
     if args.flow == "xpap":
+        from xpap.main import execute as execute_xpap
+
         return execute_xpap(
             config_path=config_path,
             input_path=resolved_input,

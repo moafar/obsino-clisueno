@@ -12,7 +12,19 @@ def _normalize_text_series(series: pd.Series) -> pd.Series:
 def _prepare_numeric_series(series: pd.Series) -> pd.Series:
     text = _normalize_text_series(series)
     text = text.str.replace(",", ".", regex=False)
-    text = text.replace({"": pd.NA, "N/A": pd.NA, "n/a": pd.NA, "NA": pd.NA, "nan": pd.NA})
+    text = text.replace(
+        {
+            "": pd.NA,
+            "N/A": pd.NA,
+            "n/a": pd.NA,
+            "NA": pd.NA,
+            "nan": pd.NA,
+            "null": pd.NA,
+            "none": pd.NA,
+        }
+    )
+    # Algunos extractores exportan "vacío" como signos de puntuación sueltos (por ejemplo, ".").
+    text = text.where(~text.str.fullmatch(r"[.\-]+", na=False), pd.NA)
     return text
 
 
@@ -76,8 +88,12 @@ def _validate_dtypes(dataframe, dtypes: Mapping[str, str]) -> None:
         if column not in dataframe.columns:
             continue
         if not _is_coercible(dataframe[column], dtype_name):
+            sample_value = dataframe[column].dropna().astype("string").head(1)
+            sample_suffix = ""
+            if not sample_value.empty:
+                sample_suffix = f" Valor de muestra: {sample_value.iloc[0]!r}."
             raise SchemaValidationError(
-                f"La columna '{column}' no puede convertirse a tipo '{dtype_name}'."
+                f"La columna '{column}' no puede convertirse a tipo '{dtype_name}'.{sample_suffix}"
             )
 
 

@@ -1,5 +1,5 @@
 entrada:
-  ruta: "../test_files"
+  ruta: "../../staging"
 
 procesamiento:
   tipos_validos: ["docx", "doc", "rtf"]
@@ -7,7 +7,7 @@ procesamiento:
   barra_progreso: true
 
 salida:
-  carpeta_csv: "../output"
+  carpeta_csv: "../../staging"
 
 subflujos:
   salida_unificada:
@@ -19,4 +19,4 @@ subflujos:
 
 logging:
   level: "INFO"
-  dir: "logs"
+  dir: "/home/rom/obsino/clisueno/logs"

@@ -6,6 +6,9 @@ from typing import Callable, Dict, Optional, List
 import hashlib
 from datetime import datetime
 
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 def marcar_version_extraccion() -> str:
     return f"Extraido: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
@@ -37,17 +40,23 @@ from src.autocpap.procesar_autocpap import procesar_autocpap_docx
 from src.poligrafia.procesar_poligrafia import procesar_poligrafia_docx
 
 # --- configuración general ---
-OUTPUT_DIR = Path("output")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+# Rutas absolutas para evitar dependencia del cwd de ejecución.
+OUTPUT_DIR = REPO_ROOT / "staging"
 
-# Limpieza preventiva (opcional): elimina unificado.csv si quedara de versiones previas
-GENERIC_PATH = OUTPUT_DIR / "unificado.csv"
-if GENERIC_PATH.exists():
+
+def _cleanup_legacy_unified_file(output_dir: Path) -> None:
+    legacy_path = output_dir / "unificado.csv"
+    if not legacy_path.exists():
+        return
     try:
-        GENERIC_PATH.unlink()
-        logging.info("Eliminado output/unificado.csv residual de ejecuciones anteriores.")
+        legacy_path.unlink()
+        logging.info("Eliminado unificado.csv residual en %s", output_dir)
     except Exception as e:
-        logging.warning(f"No se pudo eliminar output/unificado.csv: {e}")
+        logging.warning("No se pudo eliminar unificado.csv residual en %s: %s", output_dir, e)
+
+
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+_cleanup_legacy_unified_file(OUTPUT_DIR)
 
 EXCLUDE_PATTERNS = re.compile(r"(?:\bO2\b|OXIG|OXÍG|OXIGENO|OXÍGENO)", re.IGNORECASE)
 
@@ -177,7 +186,7 @@ DEFAULT_PREFIXES: Dict[str, str] = {
     "POLIGRAFIA": "pg"
 }
 
-PROCESSED_DIR = Path("procesados")
+PROCESSED_DIR = REPO_ROOT / "procesados"
 
 TIPOS_ACTIVOS = set(DEFAULT_UNIFIED_FILE_FOR.keys())
 UNIFIED_FILE_FOR: Dict[str, str] = dict(DEFAULT_UNIFIED_FILE_FOR)
@@ -187,8 +196,14 @@ PREFIXES: Dict[str, str] = dict(DEFAULT_PREFIXES)
 def configure_subflows(
     unified_file_for: Optional[Dict[str, str]] = None,
     prefixes: Optional[Dict[str, str]] = None,
+    output_dir: Optional[Path] = None,
 ) -> None:
-    global TIPOS_ACTIVOS, UNIFIED_FILE_FOR, PREFIXES
+    global TIPOS_ACTIVOS, UNIFIED_FILE_FOR, PREFIXES, OUTPUT_DIR
+
+    if output_dir:
+        OUTPUT_DIR = Path(output_dir).resolve()
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        _cleanup_legacy_unified_file(OUTPUT_DIR)
 
     if unified_file_for:
         UNIFIED_FILE_FOR = {
@@ -229,6 +244,7 @@ def _outfile_for_tipo(tipo: str) -> Optional[Path]:
     if nombre == "unificado.csv":
         logging.error("Nombre 'unificado.csv' no permitido. Ajusta UNIFIED_FILE_FOR.")
         return None
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     return OUTPUT_DIR / nombre
 
 def _parse_date_folder(date_str: str) -> str:

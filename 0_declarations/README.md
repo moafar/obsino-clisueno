@@ -8,10 +8,10 @@ Contexto: esta capa no tiene entrypoint propio; define contratos YAML consumidos
 source .venv/bin/activate
 
 # Validar uso con transform (ejemplo PSG)
-cd ../2_transform/psg && ../../.venv/bin/python main.py --input input/unificado_basal.csv --dry-run
+cd ../2_transform && ../.venv/bin/python main.py --flow psg --input ../staging/extract_psg_YYYY-MM-DD_HH-MM.csv --dry-run
 
 # Validar uso con load (ejemplo)
-cd ../../3_load && ../.venv/bin/python main.py --flow <subproceso_ejemplo> --input input/archivo_ready-to-load.xlsx
+cd ../3_load && ../.venv/bin/python main.py --flow <subproceso_ejemplo> --input ../staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
 ```
 
 Fuente única de verdad para contratos compartidos entre capas del ETL.
@@ -27,6 +27,7 @@ Fuente única de verdad para contratos compartidos entre capas del ETL.
 
 - Archivos YAML por subproceso, por ejemplo:
   - `0_declarations/psg.yaml`
+  - `0_declarations/xpap.yaml`
 - Cada YAML define, como mínimo:
   - `schema.transform.input.columns`
   - `schema.transform.output.columns`
@@ -67,6 +68,8 @@ Ejemplo típico:
 2. Ajustar transformaciones en `2_transform/<subproceso>/` si cambian columnas o tipos.
 3. Validar `2_transform` con `--dry-run`.
 4. Validar `3_load` con el `--flow` correspondiente antes de cargar.
+
+Flows activos en el repositorio: `psg`, `xpap`.
 
 ## Convenciones
 

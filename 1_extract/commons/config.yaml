@@ -1,5 +1,5 @@
 entrada:
-  ruta: "../test_files"
+  ruta: "../../staging"
 
 procesamiento:
   tipos_validos: ["docx", "doc", "rtf"]
@@ -7,8 +7,9 @@ procesamiento:
   barra_progreso: true         # opcional
 
 salida:
-  carpeta_csv: "../output"
+  carpeta_csv: "../../staging"
   # archivo_unificado: "unificado.csv" # <- Candidato a desaparecer porque en el nuevo main ya no se unificarán todos los CSVs
 
 logging:
   level: "INFO"                # DEBUG/INFO/WARNING/ERROR/CRITICAL
+  dir: "/home/rom/obsino/clisueno/logs"

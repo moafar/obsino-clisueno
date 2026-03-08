@@ -9,13 +9,13 @@ source .venv/bin/activate
 
 # Ejecución desde 3_load/
 cd 3_load
-../.venv/bin/python main.py --flow <subproceso_ejemplo> --input input/archivo_ready-to-load.xlsx
+../.venv/bin/python main.py --flow <subproceso_ejemplo> --input ../staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
 ```
 
 Ejemplo completo desde raíz:
 
 ```bash
-./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input 3_load/input/archivo_ready-to-load.xlsx
+./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
 ```
 
 Carga manual de datasets transformados a BigQuery, con controles operativos y validaciones previas.
@@ -36,6 +36,11 @@ Carga manual de datasets transformados a BigQuery, con controles operativos y va
     secrets/
     requirements.txt
 ```
+
+Carpetas de datos operativos:
+
+- Entrada de carga: `staging/` filtrando por `extract_<flow>_..._transformed`.
+- Archivado post-carga: `staging/` con sufijo `_loaded`.
 
 ## Configuración
 
@@ -58,11 +63,11 @@ Campos relevantes del YAML:
 - destino BQ (`project_id`, `dataset_id`, `table_id`)
 - modo de escritura (`write_disposition`)
 - rutas de insumo (`shared_schema_yaml_path` o `schema_yaml_path`)
-- selector opcional de schema dentro del YAML (`schema_path_in_yaml`), por ejemplo `schema.output.columns`
+- selector opcional de schema dentro del YAML (`schema_path_in_yaml`), por ejemplo `schema.load.input.columns`
 - descripción operativa de origen (`schema_description`)
 - campos operativos (`uuid_field`, `date_field`, `migrated_field`)
 
-La ruta del Excel se recibe por CLI con `--input`.
+La ruta del Excel puede recibirse por CLI con `--input` o autodetectarse en `staging/` para el flow seleccionado.
 
 ### Contrato de schema compartido con transform
 
@@ -93,30 +98,46 @@ El script configura `GOOGLE_APPLICATION_CREDENTIALS` en tiempo de ejecución.
 
 Si falla alguna validación, la carga se cancela.
 
+## Post-carga exitosa
+
+Cuando la carga finaliza exitosamente en BigQuery, el archivo de entrada se mueve automáticamente dentro de `staging/`.
+
+Y se renombra agregando el sufijo `_loaded` antes de la extensión.
+
+Ejemplo:
+
+- `staging/extract_psg_2026-03-08_20-01_transformed.xlsx`
+- `staging/extract_psg_2026-03-08_20-01_transformed_loaded.xlsx`
+
+Si ya existe un archivo con ese nombre, se agrega un timestamp para evitar sobrescritura.
+
 ## Ejecución
 
 Chuleta operativa (desde raíz del proyecto):
 
 | Comando | Efecto |
 |---|---|
-| `./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input 3_load/input/archivo_ready-to-load.xlsx` | Carga manual del flujo indicado usando el Excel indicado por CLI, con confirmación previa. |
-| `./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> 3_load/input/archivo_ready-to-load.xlsx` | Igual que el anterior, usando ruta de Excel como argumento posicional. |
+| `./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx` | Carga manual del flujo indicado usando el Excel indicado por CLI, con confirmación previa. |
+| `./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx` | Igual que el anterior, usando ruta de Excel como argumento posicional. |
+| `./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo>` | Autodiscovery: toma el archivo mas reciente para el flow desde `staging/`. |
 
 Desde la raíz del proyecto:
 
 ```bash
-./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input 3_load/input/archivo_ready-to-load.xlsx
+./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
 ```
 
 Alternativa con argumento posicional:
 
 ```bash
-./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> 3_load/input/archivo_ready-to-load.xlsx
+./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
 ```
 
-Modo de ejecución soportado:
+Modos de ejecución soportados:
 
 - Manual por flujo: `--flow <nombre>` + (`--input <ruta_excel>` o `<ruta_excel>` posicional), con confirmación interactiva previa a la carga.
+- Autodiscovery por flujo: `--flow <nombre>` sin `--input`, usa el archivo mas reciente de `staging/` que cumpla `extract_<flow>_..._transformed`.
+- Restricción de seguridad: si se pasa `--input`, la ruta debe pertenecer a `staging/` y cumplir la convención `extract_<flow>_..._transformed`; rutas externas o nombres no válidos son rechazados.
 
 El script muestra configuración activa y solicita confirmación por teclado antes de cargar.
 
@@ -125,6 +146,7 @@ El script muestra configuración activa y solicita confirmación por teclado ant
 - El flujo seleccionado debe existir como `3_load/config/<subproceso_ejemplo>.yaml`.
 - Si `write_disposition` es `WRITE_APPEND`, se validan duplicados en lote y contra BigQuery.
 - Si falla cualquier validación, la carga se cancela.
+- Logs de esta capa se escriben en `/home/rom/obsino/clisueno/logs` con nombre `load_<flow>_YYYY-MM-DD_HH-MM-SS.log`.
 
 ## Dependencias
 

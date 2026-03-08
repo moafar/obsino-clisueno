@@ -9,8 +9,11 @@ manual en consola, conservando validaciones clave:
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import re
+import shutil
+import sys
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -25,7 +28,50 @@ from google.cloud import bigquery
 # =======================
 # Utilidades base de consola y validación
 # =======================
+LOGGER: logging.Logger | None = None
+LOG_FILE_PATH: Path | None = None
+
+
+def setup_logging(flow_name: str) -> Path:
+    # Configura logging en consola y archivo para trazabilidad operativa.
+    logs_dir = BASE_DIR / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    normalized_flow = (flow_name or "load").strip().lower().replace(" ", "_")
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    log_file_path = logs_dir / f"load_{normalized_flow}_{timestamp}.log"
+
+    logger = logging.getLogger("3_load")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    logger.handlers.clear()
+
+    formatter = logging.Formatter("%(asctime)s $$ %(levelname)s $$ %(message)s")
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+
+    file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    global LOGGER, LOG_FILE_PATH
+    LOGGER = logger
+    LOG_FILE_PATH = log_file_path
+
+    LOGGER.info("Inicio del proceso 3_load")
+    LOGGER.info("Log file: %s", log_file_path)
+    return log_file_path
+
+
 def log(message: str) -> None:
+    if LOGGER:
+        LOGGER.info(message)
+        return
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
 
 
@@ -67,6 +113,43 @@ FLOW_CONFIG_PATHS: dict[str, Path] = {
     "psg": BASE_DIR / "3_load" / "config" / "psg.yaml",
     "xpap": BASE_DIR / "3_load" / "config" / "xpap.yaml",
 }
+SUPPORTED_INPUT_EXTENSIONS = {".xlsx", ".xls", ".csv"}
+STAGING_DIR = BASE_DIR / "staging"
+
+
+def _transformed_prefix(flow: str) -> str:
+    return f"extract_{flow}_"
+
+
+def _is_flow_transformed_file(path: Path, flow: str) -> bool:
+    if not path.is_file() or path.suffix.lower() not in SUPPORTED_INPUT_EXTENSIONS:
+        return False
+
+    stem = path.stem
+    return stem.startswith(_transformed_prefix(flow)) and stem.endswith("_transformed")
+
+
+def _discover_latest_input(flow: str) -> Path:
+    source_dir = STAGING_DIR
+    if not source_dir.exists():
+        die(
+            "No se especifico --input y no existe el directorio de staging esperado: "
+            f"{source_dir}"
+        )
+
+    candidates = [
+        path
+        for path in source_dir.iterdir()
+        if _is_flow_transformed_file(path, flow)
+    ]
+    if not candidates:
+        die(
+            "No se especifico --input y no hay archivos candidatos para el flow en: "
+            f"{source_dir}. Se esperaba un archivo con formato extract_<flow>_*_transformed"
+        )
+
+    # Se usa el archivo mas recientemente modificado para evitar ambiguedad operativa.
+    return max(candidates, key=lambda item: item.stat().st_mtime)
 
 
 def _resolve_input_path(raw_input_path: str) -> Path:
@@ -74,6 +157,34 @@ def _resolve_input_path(raw_input_path: str) -> Path:
     if not input_path.is_absolute():
         input_path = BASE_DIR / input_path
     return input_path.resolve()
+
+
+def _validate_input_in_staging(flow: str, input_path: Path) -> None:
+    expected_dir = STAGING_DIR.resolve()
+    try:
+        input_path.resolve().relative_to(expected_dir)
+    except ValueError:
+        die(
+            "La entrada de 3_load debe venir desde staging del flow. "
+            f"Directorio esperado: {expected_dir}. Archivo recibido: {input_path}"
+        )
+
+    if not input_path.exists():
+        die(
+            "El archivo de entrada no existe en staging. "
+            f"Archivo recibido: {input_path}"
+        )
+    if not input_path.is_file():
+        die(
+            "La ruta de entrada no es un archivo válido. "
+            f"Archivo recibido: {input_path}"
+        )
+
+    if not _is_flow_transformed_file(input_path, flow):
+        die(
+            "El archivo de entrada no cumple la convención esperada para este flow. "
+            f"Se esperaba 'extract_{flow}_..._transformed' y se recibió: {input_path.name}"
+        )
 
 
 def parse_cli_args() -> tuple[str, Path]:
@@ -93,14 +204,24 @@ def parse_cli_args() -> tuple[str, Path]:
     parser.add_argument(
         "--input",
         required=False,
-        help="Ruta del Excel a cargar (relativa a la raíz del proyecto o absoluta)",
+        help=(
+            "Ruta del Excel a cargar (relativa a la raiz del proyecto o absoluta). "
+            "Si se omite, usa autodiscovery en staging/ filtrando por extract_<flow>_*_transformed."
+        ),
     )
     args = parser.parse_args()
     raw_input = args.input or args.input_positional
-    if not raw_input:
-        parser.error("Debe indicar la ruta del Excel con --input o como argumento posicional")
 
-    return str(args.flow), _resolve_input_path(str(raw_input))
+    selected_flow = str(args.flow)
+
+    if raw_input:
+        resolved_input = _resolve_input_path(str(raw_input))
+    else:
+        resolved_input = _discover_latest_input(selected_flow)
+
+    _validate_input_in_staging(selected_flow, resolved_input)
+
+    return selected_flow, resolved_input
 
 
 def resolve_config_yaml_path(flow: str) -> Path:
@@ -194,7 +315,6 @@ def show_configuration(config: LoaderConfig) -> None:
     print("Proyecto           :", config.project_id)
     print("Dataset            :", config.dataset_id)
     print("Tabla              :", config.table_id)
-    print("Destino BQ         :", config.table_fqn)
     print("Archivo origen     :", str(config.source_excel_path))
     print("Hoja Excel         :", config.source_sheet_name)
     print("Schema YAML        :", str(config.schema_yaml_path))
@@ -204,8 +324,13 @@ def show_configuration(config: LoaderConfig) -> None:
     print("Campo UUID         :", config.uuid_field)
     print("Campo fecha        :", config.date_field or "(sin validación de fecha)")
     print("Campo migrado      :", config.migrated_field or "(sin marca de migración)")
-    print("WRITE_DISPOSITION  :", config.write_disposition)
     print("-" * 90)
+
+    print("\n>> DESTINO BQ")
+    print(f"   {config.table_fqn}")
+
+    print("\n>> WRITE_DISPOSITION")
+    print(f"   {config.write_disposition}")
 
     if config.write_disposition == "WRITE_TRUNCATE":
         print("\n⚠️  ATENCIÓN: WRITE_TRUNCATE BORRA COMPLETAMENTE la tabla antes de cargar.")
@@ -283,9 +408,19 @@ def build_bq_schema(schema_yaml: dict[str, str]) -> list[bigquery.SchemaField]:
     return bq_schema
 
 
-def read_source_excel(config: LoaderConfig, expected_columns: list[str]) -> pd.DataFrame:
-    # Carga Excel y fuerza estructura esperada (rechaza faltantes, ignora extras).
-    dataframe = pd.read_excel(config.source_excel_path, sheet_name=config.source_sheet_name)
+def read_source_dataset(config: LoaderConfig, expected_columns: list[str]) -> pd.DataFrame:
+    # Carga dataset de entrada y fuerza estructura esperada (rechaza faltantes, ignora extras).
+    source_suffix = config.source_excel_path.suffix.lower()
+    if source_suffix == ".csv":
+        dataframe = pd.read_csv(config.source_excel_path)
+    elif source_suffix in {".xlsx", ".xls"}:
+        dataframe = pd.read_excel(config.source_excel_path, sheet_name=config.source_sheet_name)
+    else:
+        die(
+            "Extensión de archivo no soportada para carga. "
+            f"Extensión recibida: {config.source_excel_path.suffix}"
+        )
+
     missing_columns = [column for column in expected_columns if column not in dataframe.columns]
     extra_columns = [column for column in dataframe.columns if column not in expected_columns]
 
@@ -335,7 +470,8 @@ def validate_date_field(dataframe: pd.DataFrame, date_field: str | None) -> pd.D
         invalid_value = dataframe.loc[invalid_index, date_field]
         die(f"'{date_field}' inválida en fila {invalid_index}: {invalid_value}")
 
-    dataframe[date_field] = parsed.dt.strftime("%Y-%m-%d %H:%M:%S").where(parsed.notna(), None)
+    # Mantener datetime64 evita degradar la columna a object y romper pyarrow.
+    dataframe[date_field] = parsed
     return dataframe
 
 
@@ -360,14 +496,27 @@ def validate_batch_duplicates(uuid_values: list[str], uuid_field: str) -> None:
         die(f"No se recibieron valores válidos en {uuid_field}")
 
     counts = Counter(uuid_values)
-    duplicated_values = [uuid for uuid, count in counts.items() if count > 1]
+    duplicated_values = sorted(uuid for uuid, count in counts.items() if count > 1)
     if duplicated_values:
+        log_detail_message = (
+            f"ver detalle de UUID repetidos en el log: "
+            f"{LOG_FILE_PATH if LOG_FILE_PATH else '(log no disponible)'}"
+        )
+        log(
+            f"Rechazo por duplicados en lote: {len(duplicated_values)} UUID repetidos "
+            f"en el campo {uuid_field}"
+        )
+        log("Detalle completo de UUID duplicados detectados en el lote:")
+        for duplicated_uuid in duplicated_values:
+            log(f"UUID_REPETIDO [LOTE]: {duplicated_uuid}")
+
         print("\nERROR: se encontraron duplicados dentro del lote:")
         for uuid in duplicated_values[:10]:
             print(" -", uuid)
+        print(log_detail_message)
         die(
             f"Se encontraron {len(duplicated_values)} valores duplicados en '{uuid_field}'. "
-            "La operación fue cancelada."
+            f"La operación fue cancelada; {log_detail_message}."
         )
 
 
@@ -404,12 +553,52 @@ def add_migration_mark(dataframe: pd.DataFrame, migrated_field: str | None) -> p
     return dataframe
 
 
-def normalize_empty_values(dataframe: pd.DataFrame) -> pd.DataFrame:
-    # Unifica vacíos para evitar enviar strings vacíos a columnas tipadas en BQ.
-    return dataframe.replace("", None).where(pd.notna(dataframe), None)
+def normalize_empty_values(dataframe: pd.DataFrame, schema_yaml: dict[str, str]) -> pd.DataFrame:
+    # Normaliza vacíos de forma tipada para preservar dtypes compatibles con pyarrow.
+    for column, field_type in schema_yaml.items():
+        if field_type == "STRING":
+            dataframe[column] = dataframe[column].replace(r"^\s*$", pd.NA, regex=True).astype("string")
+        elif field_type in ("FLOAT", "FLOAT64"):
+            dataframe[column] = pd.to_numeric(dataframe[column], errors="coerce")
+        elif field_type in ("INTEGER", "INT", "INT64"):
+            dataframe[column] = pd.to_numeric(dataframe[column], errors="coerce").astype("Int64")
+        elif field_type == "DATETIME":
+            dataframe[column] = pd.to_datetime(dataframe[column], errors="coerce")
+        elif field_type == "TIMESTAMP":
+            dataframe[column] = pd.to_datetime(dataframe[column], errors="coerce", utc=True)
+        elif field_type in ("BOOLEAN", "BOOL"):
+            dataframe[column] = dataframe[column].astype("boolean")
+    return dataframe
 
 
-def run(config: LoaderConfig) -> None:
+def move_loaded_input_file(source_path: Path, _flow: str) -> Path:
+    # Mueve el archivo cargado exitosamente en staging con sufijo _loaded.
+    destination_dir = STAGING_DIR
+    destination_dir.mkdir(parents=True, exist_ok=True)
+
+    base_name = source_path.stem
+    extension = source_path.suffix
+    destination_path = destination_dir / f"{base_name}_loaded{extension}"
+
+    # Evita sobrescribir archivos previos si ya existe un nombre igual.
+    if destination_path.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        destination_path = destination_dir / f"{base_name}_loaded_{timestamp}{extension}"
+
+    shutil.move(str(source_path), str(destination_path))
+
+    if not destination_path.exists():
+        die(f"No se pudo confirmar el archivo movido en destino: {destination_path}")
+
+    if source_path.exists():
+        # Salvaguarda: si el origen persiste tras el move, se elimina para evitar reprocesos.
+        source_path.unlink()
+        log(f"Se eliminó archivo remanente en input tras mover: {source_path}")
+
+    return destination_path
+
+
+def run(config: LoaderConfig, flow: str) -> None:
     log("Iniciando carga manual a BigQuery")
 
     # 1) Validaciones tempranas de nombres de identificadores.
@@ -440,7 +629,7 @@ def run(config: LoaderConfig) -> None:
 
     # 5) Ingestar Excel con control estricto de columnas.
     log("Leyendo archivo Excel")
-    dataframe = read_source_excel(config, expected_columns)
+    dataframe = read_source_dataset(config, expected_columns)
     log(f"Excel leído: {len(dataframe)} filas, {len(dataframe.columns)} columnas")
 
     # 6) Estandarizar y limpiar datos previo a validaciones de unicidad.
@@ -448,7 +637,7 @@ def run(config: LoaderConfig) -> None:
     dataframe = cast_dataframe(dataframe, schema_yaml)
     dataframe = validate_date_field(dataframe, config.date_field)
     dataframe = add_migration_mark(dataframe, config.migrated_field)
-    dataframe = normalize_empty_values(dataframe)
+    dataframe = normalize_empty_values(dataframe, schema_yaml)
 
     # 7) Evitar duplicados dentro del lote recibido.
     log("Validando duplicados en el lote")
@@ -460,12 +649,26 @@ def run(config: LoaderConfig) -> None:
         log("Validando duplicados entre lote y BigQuery")
         existing_uuids = find_existing_uuids(client, config.table_fqn, config.uuid_field, uuid_values)
         if existing_uuids:
+            sorted_existing_uuids = sorted(existing_uuids)
+            log_detail_message = (
+                f"ver detalle de UUID repetidos en el log: "
+                f"{LOG_FILE_PATH if LOG_FILE_PATH else '(log no disponible)'}"
+            )
+            log(
+                f"Rechazo por duplicados en BigQuery: {len(sorted_existing_uuids)} UUID ya existen "
+                f"en {config.table_fqn}"
+            )
+            log("Detalle completo de UUID duplicados detectados en BigQuery:")
+            for duplicated_uuid in sorted_existing_uuids:
+                log(f"UUID_REPETIDO [BQ]: {duplicated_uuid}")
+
             print("\nERROR: se encontraron UUID ya existentes en BigQuery:")
-            for uuid in sorted(existing_uuids)[:10]:
+            for uuid in sorted_existing_uuids[:10]:
                 print(" -", uuid)
+            print(log_detail_message)
             die(
-                f"Se encontraron {len(existing_uuids)} UUID ya existentes en la tabla destino. "
-                "La operación fue cancelada."
+                f"Se encontraron {len(sorted_existing_uuids)} UUID ya existentes en la tabla destino. "
+                f"La operación fue cancelada; {log_detail_message}."
             )
     else:
         log("WRITE_TRUNCATE: se omite validación contra existentes en BigQuery")
@@ -481,16 +684,23 @@ def run(config: LoaderConfig) -> None:
 
     log(f"Carga finalizada: {load_job.output_rows} filas en {config.table_fqn}")
 
+    moved_path = move_loaded_input_file(config.source_excel_path, flow)
+    log(f"Archivo de entrada movido a: {moved_path}")
+
 
 if __name__ == "__main__":
     try:
         selected_flow, selected_input_path = parse_cli_args()
+        setup_logging(selected_flow)
         selected_config_path = resolve_config_yaml_path(selected_flow)
         log(f"Flujo seleccionado: {selected_flow}")
         log(f"Excel de entrada: {selected_input_path}")
         log(f"YAML de configuración: {selected_config_path}")
         runtime_config = load_runtime_config(selected_config_path, selected_input_path)
-        run(runtime_config)
+        run(runtime_config, selected_flow)
     except Exception as error:
-        log(f"ERROR: {error}")
+        if LOGGER:
+            LOGGER.exception("ERROR: %s", error)
+        else:
+            log(f"ERROR: {error}")
         raise

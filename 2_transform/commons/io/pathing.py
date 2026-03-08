@@ -47,7 +47,7 @@ def build_default_output_path(
     input_path: Path,
     pipeline_output_dir: Path,
     pipeline_config: Mapping[str, object],
-    suffix: str = "_ready-to-load",
+    suffix: str = "_transformed",
 ) -> Path:
     extension = output_extension_from_config(pipeline_config)
     file_name = f"{input_path.stem}{suffix}{extension}"
