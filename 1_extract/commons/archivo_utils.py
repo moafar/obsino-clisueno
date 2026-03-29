@@ -44,19 +44,7 @@ from src.poligrafia.procesar_poligrafia import procesar_poligrafia_docx
 OUTPUT_DIR = REPO_ROOT / "staging"
 
 
-def _cleanup_legacy_unified_file(output_dir: Path) -> None:
-    legacy_path = output_dir / "unificado.csv"
-    if not legacy_path.exists():
-        return
-    try:
-        legacy_path.unlink()
-        logging.info("Eliminado unificado.csv residual en %s", output_dir)
-    except Exception as e:
-        logging.warning("No se pudo eliminar unificado.csv residual en %s: %s", output_dir, e)
-
-
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-_cleanup_legacy_unified_file(OUTPUT_DIR)
 
 EXCLUDE_PATTERNS = re.compile(r"(?:\bO2\b|OXIG|OXÍG|OXIGENO|OXÍGENO)", re.IGNORECASE)
 
@@ -96,10 +84,6 @@ def _rewrite_with_header(path: Path, header: List[str], rows: List[dict]) -> Non
             writer.writerow({k: r.get(k, "") for k in header})
 
 def _append_row_unified(row: Dict, outfile: Path) -> None:
-    # Guardia dura: nunca escribir a unificado.csv
-    if outfile.name == "unificado.csv":
-        logging.error("Intento de escribir en 'unificado.csv' bloqueado. Revisa el mapeo UNIFIED_FILE_FOR.")
-        return
 
     rows, header = _read_existing_rows_and_header(outfile)
     new_keys = list(row.keys())
@@ -203,7 +187,6 @@ def configure_subflows(
     if output_dir:
         OUTPUT_DIR = Path(output_dir).resolve()
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        _cleanup_legacy_unified_file(OUTPUT_DIR)
 
     if unified_file_for:
         UNIFIED_FILE_FOR = {
@@ -239,10 +222,6 @@ def _outfile_for_tipo(tipo: str) -> Optional[Path]:
     nombre = UNIFIED_FILE_FOR.get(tipo)
     if not nombre:
         logging.warning(f"Tipo {tipo} activo sin archivo unificado configurado. Se omite escritura.")
-        return None
-    # Guardia adicional: bloquear cualquier genérico
-    if nombre == "unificado.csv":
-        logging.error("Nombre 'unificado.csv' no permitido. Ajusta UNIFIED_FILE_FOR.")
         return None
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     return OUTPUT_DIR / nombre

@@ -6,7 +6,6 @@ import yaml
 
 from commons.logger import setup_logger
 from commons.directorio_utils import validar_directorio, procesar_directorio
-from commons.unificar_resultados import analizar_y_unificar
 from commons.archivo_utils import configure_subflows
 
 EXIT_OK, EXIT_CFG, EXIT_INPUT, EXIT_PROCESS, EXIT_UNIFY = 0, 1, 2, 3, 4
@@ -145,7 +144,6 @@ def maybe_unify(cfg: Config) -> None:
     if not cfg.carpeta_csv:
         logger.warning("No se configuró salida.carpeta_csv; se omite unificación.")
         return
-    analizar_y_unificar(str(cfg.carpeta_csv))
 
 
 def build_timestamped_output_map(

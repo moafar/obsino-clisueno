@@ -7,38 +7,13 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-EXCLUIR_PATRONES = [r"^unificado\.csv$"]   # excluye el genérico
-IGNORAR_COLUMNAS = {"uuid"}                # columnas sintéticas a ignorar
 
 
 # ---------------------- UTILIDADES ----------------------
 
-def _excluir(nombre: str) -> bool:
-    """Determina si un archivo debe excluirse según los patrones."""
-    return any(re.search(pat, nombre, flags=re.IGNORECASE) for pat in EXCLUIR_PATRONES)
 
-def _listar_csvs(carpeta: str) -> List[str]:
-    """Lista archivos CSV válidos dentro de una carpeta (sin los excluidos)."""
-    carpeta_abs = str(Path(carpeta).resolve())
-    encontrados = glob.glob(os.path.join(carpeta_abs, "*.csv"))
-    filtrados = [p for p in encontrados if not _excluir(os.path.basename(p))]
-    logger.debug("Carpeta=%s encontrados=%s usados=%s",
-                 carpeta_abs,
-                 [os.path.basename(x) for x in encontrados],
-                 [os.path.basename(x) for x in filtrados])
-    return filtrados
 
-def _cols_sin_ignoradas(df: pd.DataFrame) -> set:
-    """Devuelve las columnas del DataFrame ignorando las sintéticas."""
-    return set(c for c in df.columns if c not in IGNORAR_COLUMNAS)
 
-def _family_from_filename(nombre: str) -> str:
-    """
-    Extrae la familia (grupo) a partir de 'unificado_<familia>.csv'.
-    Si no coincide, devuelve 'otros'.
-    """
-    m = re.match(r"^unificado_([a-z0-9]+)\.csv$", nombre, flags=re.IGNORECASE)
-    return m.group(1).lower() if m else "otros"
 
 
 # ---------------------- FUNCIÓN PRINCIPAL ----------------------
