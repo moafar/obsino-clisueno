@@ -79,6 +79,10 @@ La ruta del Excel puede recibirse por CLI con `--input` o autodetectarse en `sta
 
 Con esto, el esquema de BigQuery se construye desde el mismo contrato de salida usado por `transform`.
 
+### [v4.1.1] Cambios recientes
+
+- Se documenta que la entrada estándar de `load` debe encontrarse en `staging/` y que la salida de `extract` es siempre determinística.
+
 ## Autenticación
 
 Service Account local por capa:

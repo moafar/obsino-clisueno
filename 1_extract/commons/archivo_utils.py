@@ -41,9 +41,7 @@ from src.poligrafia.procesar_poligrafia import procesar_poligrafia_docx
 
 # --- configuración general ---
 # Rutas absolutas para evitar dependencia del cwd de ejecución.
-OUTPUT_DIR = REPO_ROOT / "staging"
-
-
+OUTPUT_DIR = (REPO_ROOT / "staging").resolve()
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 EXCLUDE_PATTERNS = re.compile(r"(?:\bO2\b|OXIG|OXÍG|OXIGENO|OXÍGENO)", re.IGNORECASE)
@@ -153,9 +151,9 @@ EXAMS: Dict[str, ExamSpec] = {
 
 # SOLO los activos en el mapeo de salida
 DEFAULT_UNIFIED_FILE_FOR: Dict[str, str] = {
-    "BASAL": "unificado_basal.csv",
-    "CPAP":  "unificado_xpap.csv",
-    "BPAP":  "unificado_xpap.csv",
+    "BASAL": "extract_psg_{timestamp}.csv",
+    "CPAP":  "extract_xpap_{timestamp}.csv",
+    "BPAP":  "extract_xpap_{timestamp}.csv",
 }
 
 # Mapeo de prefijos para renombrado
@@ -184,19 +182,20 @@ def configure_subflows(
 ) -> None:
     global TIPOS_ACTIVOS, UNIFIED_FILE_FOR, PREFIXES, OUTPUT_DIR
 
-    if output_dir:
-        OUTPUT_DIR = Path(output_dir).resolve()
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Forzar siempre la ruta staging bajo el root del proyecto (sin duplicar 'clisueno')
+    global OUTPUT_DIR
+    OUTPUT_DIR = (REPO_ROOT / "staging").resolve()
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    if unified_file_for:
-        UNIFIED_FILE_FOR = {
-            str(tipo).upper().strip(): str(nombre).strip()
-            for tipo, nombre in unified_file_for.items()
-            if str(tipo).strip() and str(nombre).strip()
-        }
-    else:
-        UNIFIED_FILE_FOR = dict(DEFAULT_UNIFIED_FILE_FOR)
-
+    if unified_file_for is None:
+        raise RuntimeError(
+            "No se definió 'subflujos.salida_unificada' al configurar los subflujos. Esto es obligatorio."
+        )
+    UNIFIED_FILE_FOR = {
+        str(tipo).upper().strip(): str(nombre).strip()
+        for tipo, nombre in unified_file_for.items()
+        if str(tipo).strip() and str(nombre).strip()
+    }
     TIPOS_ACTIVOS = set(UNIFIED_FILE_FOR.keys())
 
     if prefixes:
@@ -223,6 +222,10 @@ def _outfile_for_tipo(tipo: str) -> Optional[Path]:
     if not nombre:
         logging.warning(f"Tipo {tipo} activo sin archivo unificado configurado. Se omite escritura.")
         return None
+    # Reemplazar {timestamp} si está presente
+    if "{timestamp}" in nombre:
+        ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        nombre = nombre.replace("{timestamp}", ts)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     return OUTPUT_DIR / nombre
 
@@ -291,8 +294,9 @@ def procesar_archivo(archivo: Path) -> None:
     logging.debug(f"Texto normalizado: {texto_norm}")
 
     tipos = determinar_tipos_examenes(texto_norm)
+    # print(f"[DEBUG] Tipos detectados en {archivo.name}: {tipos}")
     if not tipos:
-        logging.warning(f"No se encontraron tipos de examen en el archivo {archivo}.")
+        # print(f"[DEBUG] No se encontraron tipos de examen en el archivo {archivo}.")
         return
 
     ext = archivo.suffix.lower()
@@ -301,55 +305,54 @@ def procesar_archivo(archivo: Path) -> None:
     detected_date = None
     applied_prefixes = set()
 
+
     for tipo in tipos:
         if tipo not in TIPOS_ACTIVOS:
-            logging.info(f"Omitido tipo no implementado: {tipo}")
+            # print(f"[DEBUG] Omitido tipo no implementado: {tipo}")
             continue
 
         spec = EXAMS.get(tipo)
-        logging.info(f"Procesando examen de {tipo}")
+        # print(f"[DEBUG] Procesando examen de {tipo}")
         if not spec:
-            logging.warning(f"Tipo de examen no manejado: {tipo}")
+            # print(f"[DEBUG] Tipo de examen no manejado: {tipo}")
             continue
 
         texto_relevante = extraer_subcadenas(texto_norm, spec.start_pattern, spec.end_pattern)
         if not texto_relevante:
-            logging.error(f"No se encontraron subcadenas para {tipo} en el archivo {archivo}.")
+            # print(f"[DEBUG] No se encontraron subcadenas para {tipo} en el archivo {archivo}.")
             continue
 
         procesador = spec.processors.get(ext)
         if not procesador:
-            logging.warning(f"Extensión {ext} no soportada para tipo {tipo} en archivo {archivo}.")
+            # print(f"[DEBUG] Extensión {ext} no soportada para tipo {tipo} en archivo {archivo}.")
             continue
 
-        logging.info(f"** INICIO ** Procesando archivo {tipo} válido: {archivo}")
+        # print(f"[DEBUG] ** INICIO ** Procesando archivo {tipo} válido: {archivo}")
         try:
             try:
                 resultados = procesador(texto_relevante, archivo)  # (texto, archivo)
             except TypeError:
                 resultados = procesador(texto_relevante)           # (texto)
-            
+            # print(f"[DEBUG] Resultados para {tipo}: {resultados}")
             # Capturar fecha si aun no tenemos una
             if not detected_date and "fecha_estudio" in resultados:
                 detected_date = resultados["fecha_estudio"]
-                
-             # Marcar éxito para este tipo
+            # Marcar éxito para este tipo
             processing_results.append((tipo, True))
-            
             # Agregar prefijo correspondiente
             if prefix := PREFIXES.get(tipo):
                 applied_prefixes.add(prefix)
-
         except Exception as e:
-            logging.error(f"Error procesando {tipo} en {archivo}: {e}")
+            # print(f"[DEBUG] Error procesando {tipo} en {archivo}: {e}")
             processing_results.append((tipo, False))
             continue
 
         outfile = _outfile_for_tipo(tipo)
+        # print(f"[DEBUG] Archivo de salida para {tipo}: {outfile}")
         if not outfile:
             continue  # sin archivo mapeado → no escribir
         _append_row_unified(resultados, outfile)
-        logging.info(f"** FIN ** Procesamiento {tipo} → {outfile.name} para {archivo}")
+        # print(f"[DEBUG] ** FIN ** Procesamiento {tipo} → {outfile.name} para {archivo}")
 
     # Finalizar: Mover y renombrar si hubo al menos un éxito
     if any(success for _, success in processing_results):

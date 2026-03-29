@@ -1,0 +1,28 @@
+# v4.1.1 -- Corrección definitiva de rutas de salida y limpieza de depuración
+
+**Fecha:** 2026-03-29
+
+## Resumen ejecutivo
+
+Esta versión soluciona de forma definitiva la generación de archivos de salida en la ruta canónica del proyecto (`/home/rom/obsino/clisueno/staging`), eliminando ambigüedades y errores previos por rutas relativas, absolutas o duplicadas. Además, se eliminan los mensajes de depuración en pantalla, dejando solo logging a archivo.
+
+## Cambios incluidos
+
+### 1) Corrección de rutas de salida
+- Se fuerza la generación de archivos CSV de salida (`extract_<flow>_<timestamp>.csv`) exclusivamente en la carpeta `staging/` bajo la raíz del proyecto, sin importar la configuración YAML ni el contexto de ejecución.
+- Se elimina la posibilidad de rutas duplicadas como `clisueno/clisueno/staging`.
+- Se garantiza que la ruta de salida es siempre determinística y portable.
+
+### 2) Limpieza de depuración en pantalla
+- Se eliminan todos los `print` de depuración en pantalla del flujo de extracción (`1_extract/commons/archivo_utils.py`).
+- El logging de depuración y errores queda centralizado en los archivos de log por flow.
+
+### 3) Validación operativa
+- Se valida que los archivos de salida aparecen correctamente en `staging/` tras la ejecución de `extract`.
+- Se documenta la convención de rutas y la eliminación de prints en el `CHANGELOG.md` y en los `README.md` global y locales.
+
+### 4) Actualización de versionado
+- Se actualiza el archivo marcador de versión a `v4.1.1` en la raíz del proyecto.
+- Se deja todo listo para crear el tag git `v4.1.1` y realizar el commit y push correspondientes.
+
+---

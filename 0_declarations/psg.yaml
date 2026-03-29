@@ -1,9 +1,47 @@
 metadata:
-  # Contrato compartido entre capas para el flujo PSG.
-  # Objetivo: mantener una única fuente de verdad para schemas reutilizados.
   name: psg_shared_contract
   version: 1.0.0
   domain: psg
+
+extract:
+  entrada:
+    ruta: "../../staging"
+  procesamiento:
+    tipos_validos: ["docx", "doc", "rtf"]
+    glob_patron: "**/*"
+    barra_progreso: true
+  salida:
+    carpeta_csv: "../../staging"
+  subflujos:
+    salida_unificada:
+      BASAL: "extract_psg_{timestamp}.csv"
+    prefijos:
+      BASAL: "bs"
+  logging:
+    level: "INFO"
+    dir: "/home/rom/obsino/clisueno/logs"
+
+transform:
+  input:
+    format: csv
+    header: 0
+  steps:
+    - op: psg_basal_transform
+      params: {}
+  output:
+    format: xlsx
+    sheet_name: procesado
+
+load:
+  project_id: observatorio-ino-1
+  dataset_id: clisueno
+  table_id: tbl_psg_prd
+  write_disposition: WRITE_APPEND
+  service_account_json: 3_load/secrets/obsino_clisueno_key.json
+  source_sheet_name: procesado
+  uuid_field: basal_uuid
+  date_field: basal_fecha_estudio
+  migrated_field: basal_migrado
 
 schema:
   # Sección explícita por capa consumidora.
@@ -12,7 +50,6 @@ schema:
   # - load.input: esquema esperado por load; debe ser equivalente a transform.output.
   transform:
     input:
-      # Input canónico de la capa transform.
       columns:
         nombre: string
         edad_anos: float
@@ -59,8 +96,6 @@ schema:
         uuid: string
         version_control: string
     output:
-      # Output canónico de la capa transform.
-      # Se define con ancla para reutilizar exactamente el mismo bloque en load.input.
       columns: &transform_output_columns
         pte_nombre: string
         pte_id: string
@@ -106,6 +141,4 @@ schema:
         basal_version_control: string
   load:
     input:
-      # Input canónico de la capa load.
-      # Alias del output de transform para garantizar equivalencia 1:1 sin duplicación.
       columns: *transform_output_columns

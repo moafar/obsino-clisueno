@@ -180,3 +180,7 @@ Logs de esta capa:
 
 - Carpeta: `/home/rom/obsino/clisueno/logs`
 - Convencion: `transform_<flow>_YYYY-MM-DD_HH-MM-SS.log`
+
+### [v4.1.1] Cambios recientes
+
+- Se documenta que la entrada estándar de `transform` debe encontrarse en `staging/` y que la salida de `extract` es siempre determinística.

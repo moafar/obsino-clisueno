@@ -110,8 +110,8 @@ class LoaderConfig:
 # Estructura aplanada: este script vive en 3_load/, y usa configuración por flujo.
 BASE_DIR = Path(__file__).resolve().parents[1]
 FLOW_CONFIG_PATHS: dict[str, Path] = {
-    "psg": BASE_DIR / "3_load" / "config" / "psg.yaml",
-    "xpap": BASE_DIR / "3_load" / "config" / "xpap.yaml",
+    "psg": BASE_DIR.parent / "0_declarations" / "psg.yaml",
+    "xpap": BASE_DIR.parent / "0_declarations" / "xpap.yaml",
 }
 SUPPORTED_INPUT_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 STAGING_DIR = BASE_DIR / "staging"

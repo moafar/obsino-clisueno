@@ -157,3 +157,10 @@ Ejemplos de nombre de subproceso para documentar/estandarizar comandos:
 - Dependencias por capa (`1_extract/requirements.txt`, `2_transform/requirements.txt`, `3_load/requirements.txt`).
 - Credenciales GCP para `load` en:
     - `3_load/secrets/obsino-clisueno.json`
+
+### [v4.1.1] Corrección definitiva de rutas de salida y limpieza de depuración
+
+- Los archivos de salida de `extract` (`extract_<flow>_<timestamp>.csv`) se generan siempre en la carpeta `staging/` bajo la raíz del proyecto, sin importar la configuración YAML ni el contexto de ejecución.
+- Se elimina la posibilidad de rutas duplicadas o ambiguas.
+- Se eliminan todos los mensajes de depuración en pantalla; el logging queda centralizado en archivos de log.
+- Ver detalles en el CHANGELOG y en los README de cada capa.

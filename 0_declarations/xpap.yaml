@@ -3,6 +3,48 @@ metadata:
   version: 1.0.0
   domain: xpap
 
+extract:
+  entrada:
+    ruta: "../../staging"
+  procesamiento:
+    tipos_validos: ["docx", "doc", "rtf"]
+    glob_patron: "**/*"
+    barra_progreso: true
+  salida:
+    carpeta_csv: "../../staging"
+  subflujos:
+    salida_unificada:
+      CPAP: "extract_xpap_{timestamp}.csv"
+      BPAP: "extract_xpap_{timestamp}.csv"
+    prefijos:
+      CPAP: "xp"
+      BPAP: "xp"
+  logging:
+    level: "INFO"
+    dir: "/home/rom/obsino/clisueno/logs"
+
+transform:
+  input:
+    format: csv
+    header: 0
+  steps:
+    - op: xpap_transform
+      params: {}
+  output:
+    format: xlsx
+    sheet_name: procesado
+
+load:
+  project_id: observatorio-ino-1
+  dataset_id: clisueno
+  table_id: tbl_xpap_prd
+  write_disposition: WRITE_APPEND
+  service_account_json: 3_load/secrets/obsino_clisueno_key.json
+  source_sheet_name: procesado
+  uuid_field: xpap_uuid
+  date_field: xpap_fecha_estudio
+  migrated_field: xpap_migrado
+
 schema:
   transform:
     input:

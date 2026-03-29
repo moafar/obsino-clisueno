@@ -7,8 +7,8 @@ from commons.logging import configure_flow_logging
 
 BASE_DIR = Path(__file__).resolve().parent
 FLOW_DEFAULT_CONFIGS: dict[str, Path] = {
-    "psg": BASE_DIR / "psg" / "config.yaml",
-    "xpap": BASE_DIR / "xpap" / "config.yaml",
+    "psg": BASE_DIR.parent / "0_declarations" / "psg.yaml",
+    "xpap": BASE_DIR.parent / "0_declarations" / "xpap.yaml",
 }
 
 

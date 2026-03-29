@@ -1,3 +1,29 @@
+
+# v4.1.1 -- Centralización de configuración y limpieza de trazas legacy
+
+**Fecha:** 2026-03-29
+
+## Resumen ejecutivo
+
+Esta versión centraliza toda la configuración de los flujos ETL en archivos YAML únicos bajo `0_declarations/`, eliminando la dispersión de configuraciones previas en distintas carpetas del código. Además, se corrigen trazas y referencias legadas asociadas a la antigua generación de archivos unificados de output en la capa de extracción (`extract`).
+
+## Cambios incluidos
+
+### 1) Centralización de configuración
+- Toda la configuración de los flujos (`psg`, `xpap`, etc.) se encuentra ahora exclusivamente en `0_declarations/{flow}.yaml`.
+- Se eliminan los archivos de configuración YAML dispersos en subcarpetas de `1_extract`, `2_transform` y `3_load`.
+- El código de cada capa consume la configuración centralizada, simplificando el mantenimiento y reduciendo errores por desincronización.
+
+### 2) Limpieza de trazas legacy de output unificado
+- Se eliminan referencias y fragmentos de código asociados a la antigua creación de archivos unificados de salida en `extract`.
+- Se garantiza que la generación de archivos de salida sigue la convención actual por flow y timestamp, sin archivos "unificado.csv" ni rutas ambiguas.
+
+### 3) Documentación y versionado
+- Se actualizan los `README.md` global y locales para reflejar la centralización de configuración y la eliminación de artefactos legacy.
+- Se actualiza el archivo marcador de versión a `v4.1.1` en la raíz del proyecto.
+- Todo listo para crear el tag git `v4.1.1` y realizar el commit y push correspondientes.
+
+
 # v4.1.0 -- Staging lineal, logging unificado y hardening de carga
 
 **Fecha:** 2026-03-08

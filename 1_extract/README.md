@@ -28,7 +28,7 @@ Extracción estructurada desde reportes clínicos de laboratorio de sueño.
 ## Entradas y salidas
 
 - Entrada: directorio configurado en `1_extract/config/<flow>.yaml` (`entrada.ruta`) o por CLI.
-- Salida de procesamiento: archivo CSV en `staging/` (por defecto) con nombre `extract_<flow>_YYYY-MM-DD_HH-MM.csv`.
+- Salida de procesamiento: archivo CSV en `staging/` (por defecto) con nombre `extract_<flow>_{timestamp}.csv` (ejemplo: `extract_psg_2026-03-29_14-19.csv`).
 - Salida de trazabilidad: logs en `/home/rom/obsino/clisueno/logs`.
     - Convencion: `extract_<flow>_YYYY-MM-DD_HH-MM-SS.log`.
 
@@ -158,3 +158,8 @@ sudo apt install catdoc
 - Se soporta ejecución parcial (`--no-process`, `--no-unify`) según necesidad operativa.
 - La opción `-v`/`--verbose` aumenta el detalle de logging (nivel DEBUG).
 - Los archivos procesados se archivan en `procesados/` en la raiz del repositorio (no depende del `cwd`).
+
+### [v4.1.1] Cambios recientes
+
+- La salida de procesamiento (`extract_<flow>_<timestamp>.csv`) se genera siempre en `staging/` bajo la raíz del proyecto, sin importar la configuración YAML.
+- Se eliminan todos los prints de depuración en pantalla; solo queda logging a archivo.

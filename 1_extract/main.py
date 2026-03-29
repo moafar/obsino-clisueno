@@ -26,8 +26,8 @@ class Config:
 
 BASE_DIR = Path(__file__).resolve().parent
 FLOW_CONFIG_PATHS: dict[str, Path] = {
-    "psg": BASE_DIR / "config" / "psg.yaml",
-    "xpap": BASE_DIR / "config" / "xpap.yaml",
+    "psg": BASE_DIR.parent / "0_declarations" / "psg.yaml",
+    "xpap": BASE_DIR.parent / "0_declarations" / "xpap.yaml",
 }
 
 def parse_args():
@@ -76,15 +76,21 @@ def load_config(path_cfg: str) -> Config:
     except Exception as e:
         raise RuntimeError(f"No se pudo leer {path_cfg}: {e}") from e
 
-    log = (raw.get("logging") or {})
-    ent = (raw.get("entrada") or {})
-    proc = (raw.get("procesamiento") or {})
-    sal = (raw.get("salida") or {})
-    sub = (raw.get("subflujos") or {})
+    extract = raw.get("extract") or {}
+    log = extract.get("logging") or {}
+    ent = extract.get("entrada") or {}
+    proc = extract.get("procesamiento") or {}
+    sal = extract.get("salida") or {}
+    sub = extract.get("subflujos") or {}
 
     project_logs_dir = (BASE_DIR.parent / "logs").resolve()
     configured_logs_dir = _resolve_from_config(log.get("dir"))
 
+    salida_unificada = sub.get("salida_unificada")
+    if not salida_unificada:
+        raise RuntimeError(
+            f"El archivo de configuración {cfg_path} debe definir 'subflujos.salida_unificada' con los subflujos activos."
+        )
     cfg = Config(
         logging_dir = configured_logs_dir or project_logs_dir,
         logging_level = str(log.get("level", "INFO")).upper(),
@@ -93,10 +99,9 @@ def load_config(path_cfg: str) -> Config:
         glob_patron = proc.get("glob_patron", "**/*"),
         barra_progreso = bool(proc.get("barra_progreso", True)),
         carpeta_csv = _resolve_from_config(sal.get("carpeta_csv")),
-        subflujos_salida_unificada = sub.get("salida_unificada"),
+        subflujos_salida_unificada = salida_unificada,
         subflujos_prefijos = sub.get("prefijos"),
     )
- 
     return cfg
 
 def setup_logging_from_config(cfg: Config, force_debug: bool, flow: str):
@@ -154,8 +159,14 @@ def build_timestamped_output_map(
         return None
 
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    file_name = f"extract_{flow}_{ts}.csv"
-    return {tipo: file_name for tipo in configured_outputs}
+    output_map = {}
+    for tipo, template in configured_outputs.items():
+        if "{timestamp}" in template:
+            file_name = template.replace("{timestamp}", ts)
+        else:
+            file_name = template
+        output_map[tipo] = file_name
+    return output_map
 
 def orchestrate():
     args = parse_args()
