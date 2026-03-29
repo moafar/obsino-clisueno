@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 import datetime
 
-def setup_logger(log_directory: str, flow_name: str = "extract"):
+def setup_logger(log_directory: str, flow_name: str = "extract", level_name: str = "INFO"):
     """
     Configura el logger para el proyecto.
     
@@ -17,8 +17,10 @@ def setup_logger(log_directory: str, flow_name: str = "extract"):
     safe_flow_name = (flow_name or "extract").strip().lower().replace(" ", "_")
     log_file = log_path / f'extract_{safe_flow_name}_{timestamp}.log'
     
+    resolved_level = getattr(logging, (level_name or "INFO").upper(), logging.INFO)
+
     logging.basicConfig(
-        level=logging.INFO,
+        level=resolved_level,
         format='%(asctime)s $$ %(levelname)s $$ %(message)s',
         handlers=[
             logging.FileHandler(log_file, encoding='utf-8')

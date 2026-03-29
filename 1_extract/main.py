@@ -84,9 +84,10 @@ def load_config(path_cfg: str) -> Config:
     sub = (raw.get("subflujos") or {})
 
     project_logs_dir = (BASE_DIR.parent / "logs").resolve()
+    configured_logs_dir = _resolve_from_config(log.get("dir"))
 
     cfg = Config(
-        logging_dir = project_logs_dir,
+        logging_dir = configured_logs_dir or project_logs_dir,
         logging_level = str(log.get("level", "INFO")).upper(),
         entrada_ruta = _resolve_from_config(ent.get("ruta")),
         tipos_validos = proc.get("tipos_validos"),
@@ -100,9 +101,8 @@ def load_config(path_cfg: str) -> Config:
     return cfg
 
 def setup_logging_from_config(cfg: Config, force_debug: bool, flow: str):
-    setup_logger(str(cfg.logging_dir), flow_name=flow)
     level_name = "DEBUG" if force_debug else cfg.logging_level
-    logging.getLogger().setLevel(getattr(logging, level_name, logging.INFO))
+    setup_logger(str(cfg.logging_dir), flow_name=flow, level_name=level_name)
 
 def resolve_input_dir(cli_dir: str | None, cfg: Config) -> Path:
     path = Path(cli_dir).resolve() if cli_dir else cfg.entrada_ruta
