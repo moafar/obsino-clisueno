@@ -1,4 +1,37 @@
 
+# v4.1.2 -- Documentacion operativa y diagnostico tecnico
+
+**Fecha:** 2026-11-23
+
+## Resumen ejecutivo
+
+Esta version incorpora documentacion adicional para hacer mas explicitas las convenciones de trabajo del proyecto y el contrato documental de los datos PSG. Tambien registra un diagnostico priorizado de deuda tecnica y una propuesta de refactorizacion incremental sobre la linea base v4.1.1.
+
+## Cambios incluidos
+
+### 1) Guia de trabajo para agentes
+
+- Se agrega `Agents.md` con las convenciones generales del proyecto.
+- Se documentan la estructura ETL, los flujos disponibles y las pautas basicas de ejecucion y validacion.
+- Se refuerza el uso del entorno virtual y la alineacion entre declaraciones, transformacion y carga.
+
+### 2) Diccionario de datos PSG
+
+- Se agrega `docs/diccionario_datos_psg.md`.
+- El documento describe el dominio, el flujo, el esquema y las reglas de calidad aplicables al dataset PSG.
+- Se consolida la documentacion del contrato funcional y de datos para facilitar transformaciones, validaciones y cargas consistentes.
+
+### 3) Diagnostico y propuesta de refactorizacion
+
+- Se agrega `docs/refactoring-proposal.md` como base de revision tecnica posterior a v4.1.1.
+- El documento prioriza hallazgos de rutas, configuracion, transformacion, integridad de identificadores, carga, estado operativo y mantenibilidad.
+- Incluye propuestas y niveles de esfuerzo, riesgo e impacto sin presentar los cambios como implementados.
+
+### 4) Versionado
+
+- Se evoluciona el marcador de version de `v4.1.1` a `v4.1.2`.
+
+
 # v4.1.1 -- Centralización de configuración y limpieza de trazas legacy
 
 **Fecha:** 2026-03-29
