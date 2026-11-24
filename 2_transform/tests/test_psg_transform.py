@@ -134,11 +134,50 @@ class PSGTransformTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicado"):
             self.transform([source_row(), source_row(pte_id="000124")])
 
+    def test_t90_percentage_fallback_preserves_reported_value_and_nulls(self):
+        rows = [
+            source_row(arq_tiempo_sueno_min="200", oxi_t90_tst_min="11"),
+            source_row(pte_id="000124", meta_uuid="synthetic-uuid-2",
+                       arq_tiempo_sueno_min="200", oxi_t90_tst_min="11", oxi_t90_pct="6,7"),
+            source_row(pte_id="000125", meta_uuid="synthetic-uuid-3",
+                       arq_tiempo_sueno_min="200", oxi_t90_tst_min="0"),
+            source_row(pte_id="000126", meta_uuid="synthetic-uuid-4",
+                       arq_tiempo_sueno_min="200"),
+        ]
+        result = self.transform(rows)
+        self.assertEqual([5.5, 6.7, 0], result["oxi_t90_pct"].iloc[:3].tolist())
+        self.assertTrue(pd.isna(result.loc[3, "oxi_t90_pct"]))
+
+    def test_t90_reported_zero_and_missing_denominator(self):
+        rows = [
+            source_row(
+                oxi_t90_pct="0",
+                oxi_t90_tst_min="11",
+                arq_tiempo_sueno_min="200",
+            ),
+            source_row(
+                pte_id="000124",
+                meta_uuid="synthetic-uuid-2",
+                oxi_t90_tst_min="11",
+                arq_tiempo_sueno_min="",
+            ),
+        ]
+        result = self.transform(rows)
+        self.assertEqual(0.0, result.loc[0, "oxi_t90_pct"])
+        self.assertTrue(pd.isna(result.loc[1, "oxi_t90_pct"]))
+
+    def test_t90_percentage_rejects_invalid_derivation(self):
+        for minutes, total in (("1", "0"), ("11", "10"), ("-1", "200")):
+            with self.subTest(minutes=minutes, total=total), self.assertRaisesRegex(ValueError, "oxi_t90_pct"):
+                self.transform([source_row(oxi_t90_tst_min=minutes,
+                                           arq_tiempo_sueno_min=total)])
+
     def test_csv_to_xlsx_runs_psg_step_and_preserves_id(self):
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "extract_psg_2026-11-23_12-00.csv"
             target = Path(folder) / "output.xlsx"
-            pd.DataFrame([source_row()], columns=PSG_COLUMNS).to_csv(source, index=False)
+            pd.DataFrame([source_row(arq_tiempo_sueno_min="200", oxi_t90_tst_min="11")],
+                         columns=PSG_COLUMNS).to_csv(source, index=False)
             read_back = read_dataset(str(source), config=self.config["input"])
             self.assertEqual("000123", read_back.loc[0, "pte_id"])
             self.assertEqual("", read_back.loc[0, "pte_edad_meses"])
@@ -149,6 +188,7 @@ class PSGTransformTest(unittest.TestCase):
                 self.assertEqual(156, sheet.max_column)
                 self.assertEqual("000123", sheet.cell(2, FINAL_COLS.index("pte_id") + 1).value)
                 self.assertEqual(70, sheet.cell(2, FINAL_COLS.index("pte_peso_kg") + 1).value)
+                self.assertEqual(5.5, sheet.cell(2, FINAL_COLS.index("oxi_t90_pct") + 1).value)
                 self.assertEqual("De 12 a 18", sheet.cell(2, FINAL_COLS.index("pte_grupo_edad") + 1).value)
                 self.assertEqual("Texto íntegro con acentos.\nSegunda línea.",
                                  sheet.cell(2, FINAL_COLS.index("clin_interpretacion") + 1).value)

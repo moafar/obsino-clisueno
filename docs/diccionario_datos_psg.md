@@ -181,7 +181,7 @@ Las referencias de disponibilidad se basan en la matriz de seis documentos, con 
 | 123 | `oxi_t50_rem_min` | Minutos con SpO₂ estrictamente inferior a 50 % durante fase REM. | decimal | min | 0/3 | 3/3 |
 | 124 | `oxi_t50_nrem_min` | Minutos con SpO₂ estrictamente inferior a 50 % durante fase NREM. | decimal | min | 0/3 | 3/3 |
 | 125 | `oxi_t50_tst_min` | Minutos con SpO₂ estrictamente inferior a 50 % durante tiempo total de sueño. | decimal | min | 0/3 | 3/3 |
-| 126 | `oxi_t90_pct` | Porcentaje de tiempo total de sueño con saturación SpO₂ inferior al 90 %, informado como T90. | decimal | % | 3/3 | 3/3 |
+| 126 | `oxi_t90_pct` | Porcentaje del TST con SpO₂ inferior al 90 %: valor T90 informado o, si falta, calculado en transformación. | decimal | % | 3/3 | 3/3 |
 | 127 | `oxi_spo2_eventos_promedio_pct`* | Saturación media de oxígeno durante los eventos respiratorios. | decimal | % | 3/3 | 0/3 |
 | 128 | `oxi_spo2_eventos_min_pct`* | Saturación mínima de oxígeno durante los eventos respiratorios. | decimal | % | 0/3 | 3/3 |
 | 129 | `oxi_spo2_sueno_min_pct`* | Saturación mínima de oxígeno alcanzada durante el sueño. | decimal | % | 3/3 | 3/3 |
@@ -319,7 +319,7 @@ Las referencias de disponibilidad se basan en la matriz de seis documentos, con 
 | `evresp_ah_duracion_max_s` | En algunos RTF la fila existe pero la celda contiene «--» o está vacía. Existe la fila en RTF, pero sin valor numérico verificable en las muestras. |
 | `evresp_ah_indice_evhora` | Índice de la fila correspondiente a apneas más hipopneas en «Resumen de eventos respiratorios»; conservar el valor original para contrastarlo con el IAH TST. |
 | `evresp_iah_tst_evhora` | IAH de la tabla «Resumen del índice de eventos respiratorios», columna TST; conservar de forma independiente para verificar concordancia con `evresp_ah_indice_evhora`. |
-| `oxi_t90_pct` | No confundir con oxi_t90_tst_min; requiere comprobar el denominador al derivarlo. |
+| `oxi_t90_pct` | Conservar el T90 % informado si existe. Si falta, calcular en `2_transform` como `100 × oxi_t90_tst_min / arq_tiempo_sueno_min` (escala 0–100), usando los minutos de la columna TST de oximetría y el TST de arquitectura. No sustituir minutos REM/NREM ausentes por cero. Conservar el cero explícito; si falta el numerador o el denominador, dejar nulo. Rechazar el cálculo si el denominador no es positivo, los minutos son negativos, superan el TST o alguno de los valores no es finito. |
 | `pos_supino_duracion_min` | Se conserva el dato original: en algunos DOC la suma por posiciones no coincide con TST. |
 | `pos_derecho_duracion_min` | Se conserva el dato original: en algunos DOC la suma por posiciones no coincide con TST. |
 | `pos_izquierdo_duracion_min` | Se conserva el dato original: en algunos DOC la suma por posiciones no coincide con TST. |

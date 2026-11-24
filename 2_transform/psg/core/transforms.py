@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import pandas as pd
@@ -231,6 +232,20 @@ def _op_psg_basal_transform(dataframe: pd.DataFrame, **_: Any) -> pd.DataFrame:
             df[column] = _date(df[column], column)
         else:
             df[column] = df[column].astype("string").replace("", pd.NA)
+
+    missing_t90 = df["oxi_t90_pct"].isna()
+    t90_minutes = df["oxi_t90_tst_min"]
+    sleep_minutes = df["arq_tiempo_sueno_min"]
+    calculable = missing_t90 & t90_minutes.notna() & sleep_minutes.notna()
+    if calculable.any():
+        numerator = t90_minutes.loc[calculable]
+        denominator = sleep_minutes.loc[calculable]
+        if (any(not math.isfinite(value) for value in numerator) or
+                any(not math.isfinite(value) for value in denominator) or
+                (numerator < 0).any() or (denominator <= 0).any() or
+                (numerator > denominator).any()):
+            raise ValueError("No se puede derivar oxi_t90_pct con los minutos TST disponibles")
+        df.loc[calculable, "oxi_t90_pct"] = (100 * numerator / denominator).astype("Float64")
 
     identifiers = df["pte_id"].str.strip()
     uuids = df["meta_uuid"].str.strip()
