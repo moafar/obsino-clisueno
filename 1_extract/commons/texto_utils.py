@@ -70,7 +70,7 @@ def extraer_texto_docx(archivo):
         return "\n".join(textos)
 
     except Exception as e:
-        logging.error(f"Error al procesar el archivo {archivo}: {e}")
+        logging.error("Error al procesar DOCX: %s", type(e).__name__)
     
     return None
 
@@ -81,7 +81,7 @@ def extraer_texto_rtf(archivo):
             rtf_content = f.read()
         return rtf_to_text(rtf_content).strip()
     except Exception as e:
-        logging.error(f"Error al procesar el archivo {archivo}: {e}")
+        logging.error("Error al procesar RTF: %s", type(e).__name__)
     return None
 
 # ########################################################################### DOC
@@ -102,7 +102,7 @@ def extraer_texto_doc(archivo):
             raise RuntimeError(f"catdoc no pudo procesar {archivo}: {resultado.stderr}")
     
     except Exception as e:
-        logging.error(f"Error al procesar .doc {archivo} $$ {e}")
+        logging.error("Error al procesar DOC: %s", type(e).__name__)
         return None
 
 # ########################################################################### SUBCADENAS
@@ -110,7 +110,6 @@ import re
 import logging
 
 def extraer_subcadenas(texto, inicio, fin):
-    logging.debug(f"Texto original: {texto}")
     logging.debug(f"Inicio: {inicio}, Fin: {fin}")
     try:
         # Buscar la primera aparición de la cadena de inicio
@@ -131,7 +130,7 @@ def extraer_subcadenas(texto, inicio, fin):
         return subcadena
 
     except Exception as e:
-        logging.error(f"Error al extraer subcadena: {e}")
+        logging.error("Error al extraer subcadena: %s", type(e).__name__)
     
     return None
 
@@ -142,7 +141,7 @@ def determinar_tipos_examenes(texto: str) -> list:
     try:
         # Cadenas a buscar para determinar tipo de examen
         tipos_examen = {
-            "BASAL": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL"],
+            "BASAL": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\b(?!\s+CON\s+DISPOSITIVO\b)"],
             "CPAP": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+CPAP"],
             "DAM": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\s+CON\s+DISPOSITIVO(\s+DE\s+AVANCE)?\s+MANDIBULAR"],
             "BPAP": [r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+EN\s+TITULACION\s+DE\s+(?:B[Ii][\s-]*PAP)"],
@@ -155,7 +154,7 @@ def determinar_tipos_examenes(texto: str) -> list:
         for tipo, patrones in tipos_examen.items():
             for patron in patrones:
                 if re.search(patron, texto, re.IGNORECASE):
-                    logging.debug(f"Tipo de examen {tipo} detectado en el texto {texto}")
+                    logging.debug("Tipo de examen %s detectado", tipo)
                     tipos_detectados.append(tipo)
                     break
         if not tipos_detectados:
@@ -163,6 +162,6 @@ def determinar_tipos_examenes(texto: str) -> list:
         return tipos_detectados
 
     except Exception as e:
-        logging.error(f"Error al determinar los tipos de examen en el texto: {e}")
+        logging.error("Error al determinar el tipo de examen: %s", type(e).__name__)
     
     return ["ERROR"]

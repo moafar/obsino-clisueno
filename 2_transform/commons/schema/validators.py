@@ -88,12 +88,8 @@ def _validate_dtypes(dataframe, dtypes: Mapping[str, str]) -> None:
         if column not in dataframe.columns:
             continue
         if not _is_coercible(dataframe[column], dtype_name):
-            sample_value = dataframe[column].dropna().astype("string").head(1)
-            sample_suffix = ""
-            if not sample_value.empty:
-                sample_suffix = f" Valor de muestra: {sample_value.iloc[0]!r}."
             raise SchemaValidationError(
-                f"La columna '{column}' no puede convertirse a tipo '{dtype_name}'.{sample_suffix}"
+                f"La columna '{column}' no puede convertirse a tipo '{dtype_name}'."
             )
 
 

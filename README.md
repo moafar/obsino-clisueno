@@ -156,7 +156,7 @@ Ejemplos de nombre de subproceso para documentar/estandarizar comandos:
 - Entorno virtual Python (`.venv`).
 - Dependencias por capa (`1_extract/requirements.txt`, `2_transform/requirements.txt`, `3_load/requirements.txt`).
 - Credenciales GCP para `load` en:
-    - `3_load/secrets/obsino-clisueno.json`
+    - `3_load/secrets/obsino_clisueno_key.json`
 
 ### [v4.1.1] Corrección definitiva de rutas de salida y limpieza de depuración
 
@@ -164,3 +164,26 @@ Ejemplos de nombre de subproceso para documentar/estandarizar comandos:
 - Se elimina la posibilidad de rutas duplicadas o ambiguas.
 - Se eliminan todos los mensajes de depuración en pantalla; el logging queda centralizado en archivos de log.
 - Ver detalles en el CHANGELOG y en los README de cada capa.
+
+## Ejecución de pruebas PSG
+
+Las etapas `1_extract` y `2_transform` utilizan paquetes independientes
+denominados `commons`. Por esta razón, las pruebas deben ejecutarse en
+procesos Python separados para evitar conflictos de importación.
+
+Desde la raíz del repositorio, con el entorno virtual configurado:
+
+```bash
+PYTHONPATH="$PWD/1_extract" .venv/bin/python -m pytest 1_extract/tests/test_psg_extractor.py -q &&
+PYTHONPATH="$PWD/2_transform" .venv/bin/python -m pytest 2_transform/tests/test_psg_transform.py -q &&
+.venv/bin/python -m pytest 3_load/tests/test_psg_load.py -q
+```
+
+**Resultado de referencia (24/11/2026):**
+29 pruebas y 283 subpruebas superadas.
+
+No ejecutar las tres suites en un mismo proceso pytest: puede producir
+`ModuleNotFoundError` debido a la colisión entre paquetes `commons`.
+
+Estas pruebas utilizan datos sintéticos y clientes simulados; no realizan
+cargas reales en BigQuery.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
-import re, csv, logging, os
+import re, csv, logging, os, io, fcntl
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional, List
 import hashlib
@@ -21,7 +21,7 @@ def generar_hash_archivo(ruta_archivo: str) -> str:
                 hash_md5.update(chunk)
         return hash_md5.hexdigest()
     except Exception as e:
-        logging.error(f"Error generando hash para {ruta_archivo}: {e}")
+        logging.error("Error generando hash: %s", type(e).__name__)
         return "N/A"
 
 # --- utils de texto ---
@@ -31,7 +31,7 @@ from commons.texto_utils import (
 )
 
 # --- tus imports (src.*) ---
-from src.basal.procesar_basal import procesar_basal_doc, procesar_basal_rtf
+from src.basal.procesar_basal import PSG_COLUMNS, PSGExtractionError, procesar_basal_doc, procesar_basal_rtf
 from src.xpap.procesar_xpap import procesar_xpap_doc, procesar_xpap_rtf, procesar_xpap_docx
 from src.dam.procesar_dam import procesar_dam_doc, procesar_dam_rtf
 from src.actigrafia.procesar_actigrafia import procesar_actigrafia_doc
@@ -61,7 +61,7 @@ def _extract_text(archivo: Path) -> Optional[str]:
     try:
         return extractor(archivo)
     except Exception as e:
-        logging.error(f"Error inesperado al leer {archivo} $$ {e}")
+        logging.error("Error inesperado al leer documento: %s", type(e).__name__)
         return None
 
 # ---- utilidades CSV con unión de cabeceras ----
@@ -102,6 +102,67 @@ def _append_row_unified(row: Dict, outfile: Path) -> None:
     with outfile.open("a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=header)
         writer.writerow(row)
+
+
+_PSG_SEEN: dict[Path, tuple[int, set[str]]] = {}
+
+
+def _append_psg_row(row: Dict, outfile: Path) -> bool:
+    """Añade una fila completa, con cabecera fija y UUID idempotente por CSV."""
+    header = list(PSG_COLUMNS)
+    if set(row) != set(header):
+        raise PSGExtractionError("La fila PSG no cumple el esquema de extracción")
+    if not row.get("meta_uuid"):
+        raise PSGExtractionError("La fila PSG no tiene UUID de origen")
+    buffer = io.StringIO(newline="")
+    writer = csv.DictWriter(buffer, fieldnames=header)
+    writer.writerow(row)
+    encoded_row = buffer.getvalue().encode("utf-8")
+    with outfile.open("a+b") as target:
+        fcntl.flock(target, fcntl.LOCK_EX)
+        try:
+            target.seek(0, os.SEEK_END)
+            original_size = target.tell()
+            if original_size:
+                target.seek(0)
+                first_line = target.readline()
+                if not first_line.endswith(b"\n") or next(csv.reader([first_line.decode("utf-8")]), []) != header:
+                    raise PSGExtractionError("CSV PSG existente con cabecera incompatible")
+                target.seek(-1, os.SEEK_END)
+                if target.read(1) != b"\n":
+                    raise PSGExtractionError("CSV PSG existente con última fila incompleta")
+            cached = _PSG_SEEN.get(outfile)
+            if cached is None or cached[0] != original_size:
+                seen = set()
+                if original_size:
+                    with outfile.open("r", newline="", encoding="utf-8") as source:
+                        seen = {record["meta_uuid"] for record in csv.DictReader(source)
+                                if record.get("meta_uuid")}
+            else:
+                seen = cached[1]
+            if row["meta_uuid"] in seen:
+                _PSG_SEEN[outfile] = (original_size, seen)
+                return False
+            payload = encoded_row
+            if not original_size:
+                buffer = io.StringIO(newline="")
+                csv.writer(buffer).writerow(header)
+                payload = buffer.getvalue().encode("utf-8") + payload
+            try:
+                target.seek(0, os.SEEK_END)
+                if target.write(payload) != len(payload):
+                    raise OSError("Escritura CSV PSG incompleta")
+                target.flush()
+                os.fsync(target.fileno())
+            except Exception:
+                target.truncate(original_size)
+                target.flush()
+                raise
+            seen.add(row["meta_uuid"])
+            _PSG_SEEN[outfile] = (original_size + len(payload), seen)
+            return True
+        finally:
+            fcntl.flock(target, fcntl.LOCK_UN)
 
 # -----------------------------------------------
 
@@ -276,28 +337,27 @@ def _move_processed_file(archivo: Path, prefixes: set, date_str: str) -> None:
     
     try:
         shutil.move(str(archivo), str(dest_path))
-        logging.info(f"Archivo movido y renombrado: {archivo.name} -> {dest_path}")
+        logging.info("Archivo procesado movido y renombrado")
     except Exception as e:
-        logging.error(f"Error moviendo archivo {archivo} a {dest_path}: {e}")
+        logging.error("Error moviendo archivo procesado: %s", type(e).__name__)
 
-def procesar_archivo(archivo: Path) -> None:
+def procesar_archivo(archivo: Path) -> bool:
     """Procesa un archivo y escribe en un CSV unificado por tipo de examen (solo activos)."""
     if EXCLUDE_PATTERNS.search(archivo.name):
-        logging.info(f"Archivo excluido por patrón OXIGENO en filename: {archivo.name}")
-        return
+        logging.info("Archivo excluido por patrón OXIGENO")
+        return False
 
     texto = _extract_text(archivo)
     if not texto:
-        return
+        return False
 
     texto_norm = normalizar_texto(texto)
-    logging.debug(f"Texto normalizado: {texto_norm}")
 
     tipos = determinar_tipos_examenes(texto_norm)
     # print(f"[DEBUG] Tipos detectados en {archivo.name}: {tipos}")
     if not tipos:
         # print(f"[DEBUG] No se encontraron tipos de examen en el archivo {archivo}.")
-        return
+        return False
 
     ext = archivo.suffix.lower()
     
@@ -317,7 +377,10 @@ def procesar_archivo(archivo: Path) -> None:
             # print(f"[DEBUG] Tipo de examen no manejado: {tipo}")
             continue
 
-        texto_relevante = extraer_subcadenas(texto_norm, spec.start_pattern, spec.end_pattern)
+        texto_relevante = (
+            texto if tipo == "BASAL"
+            else extraer_subcadenas(texto_norm, spec.start_pattern, spec.end_pattern)
+        )
         if not texto_relevante:
             # print(f"[DEBUG] No se encontraron subcadenas para {tipo} en el archivo {archivo}.")
             continue
@@ -329,10 +392,23 @@ def procesar_archivo(archivo: Path) -> None:
 
         # print(f"[DEBUG] ** INICIO ** Procesando archivo {tipo} válido: {archivo}")
         try:
-            try:
-                resultados = procesador(texto_relevante, archivo)  # (texto, archivo)
-            except TypeError:
-                resultados = procesador(texto_relevante)           # (texto)
+            if tipo == "BASAL":
+                resultados = procesador(texto_relevante, archivo)
+            else:
+                try:
+                    resultados = procesador(texto_relevante, archivo)  # (texto, archivo)
+                except TypeError:
+                    resultados = procesador(texto_relevante)           # (texto)
+            if tipo == "BASAL":
+                outfile = _outfile_for_tipo(tipo)
+                if outfile is None:
+                    raise PSGExtractionError("No hay CSV configurado para PSG")
+                _append_psg_row(resultados, outfile)
+                detected_date = resultados.get("meta_fecha_estudio")
+                processing_results.append((tipo, True))
+                if prefix := PREFIXES.get(tipo):
+                    applied_prefixes.add(prefix)
+                continue
             # print(f"[DEBUG] Resultados para {tipo}: {resultados}")
             # Capturar fecha si aun no tenemos una
             if not detected_date and "fecha_estudio" in resultados:
@@ -343,6 +419,9 @@ def procesar_archivo(archivo: Path) -> None:
             if prefix := PREFIXES.get(tipo):
                 applied_prefixes.add(prefix)
         except Exception as e:
+            if tipo == "BASAL":
+                detail = str(e) if isinstance(e, PSGExtractionError) else type(e).__name__
+                logging.warning("Extracción PSG omitida: %s", detail)
             # print(f"[DEBUG] Error procesando {tipo} en {archivo}: {e}")
             processing_results.append((tipo, False))
             continue
@@ -355,5 +434,7 @@ def procesar_archivo(archivo: Path) -> None:
         # print(f"[DEBUG] ** FIN ** Procesamiento {tipo} → {outfile.name} para {archivo}")
 
     # Finalizar: Mover y renombrar si hubo al menos un éxito
-    if any(success for _, success in processing_results):
+    success = any(result for _, result in processing_results)
+    if success:
         _move_processed_file(archivo, applied_prefixes, detected_date)
+    return success

@@ -24,6 +24,8 @@ def procesar_directorio(
     num_files = 0
     num_dirs = 0
     archivos_validos = 0
+    archivos_extraidos = 0
+    archivos_rechazados = 0
 
     ruta = Path(ruta).resolve()
     archivos_iter = ruta.glob(glob_patron)
@@ -36,14 +38,23 @@ def procesar_directorio(
             extension = archivo.suffix[1:].lower()
             if extension in tipos_validos:
                 archivos_validos += 1
-                logging.info(f"Procesando archivo válido: {archivo}")
+                logging.info("Procesando archivo válido")
                 try:
-                    procesar_archivo(archivo)
+                    if procesar_archivo(archivo):
+                        archivos_extraidos += 1
+                    else:
+                        archivos_rechazados += 1
                 except Exception as e:
-                    logging.critical(f"Error al procesar el archivo {archivo} $$ {e}")
+                    archivos_rechazados += 1
+                    logging.critical("Error al procesar documento: %s", type(e).__name__)
             else:
-                logging.warning(f"Archivo descartado por tipo no válido ({extension}) $$ {archivo}")
+                logging.warning("Archivo descartado por tipo no válido (%s)", extension)
         elif archivo.is_dir():
             num_dirs += 1
 
-    return {"num_files": num_files, "num_dirs": num_dirs, "archivos_validos": archivos_validos}
+    return {
+        "num_files": num_files, "num_dirs": num_dirs,
+        "archivos_validos": archivos_validos,
+        "archivos_extraidos": archivos_extraidos,
+        "archivos_rechazados": archivos_rechazados,
+    }

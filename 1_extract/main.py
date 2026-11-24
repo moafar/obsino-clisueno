@@ -133,9 +133,15 @@ def report(res: dict, ruta: Path, dt: float, verbose: bool):
         "num_dirs": res["num_dirs"],
         "validos": res["archivos_validos"],
         "descartados": res["num_files"] - res["archivos_validos"],
+        "extraidos": res.get("archivos_extraidos", 0),
+        "rechazados": res.get("archivos_rechazados", 0),
         "tiempo_s": f"{dt:.2f}",
     }
-    logger.info(f"Resumen: {base}")
+    logger.info(
+        "Resumen: archivos=%s, válidos=%s, descartados=%s, extraídos=%s, rechazados=%s, tiempo_s=%s",
+        base["num_files"], base["validos"], base["descartados"],
+        base["extraidos"], base["rechazados"], base["tiempo_s"],
+    )
     if verbose:
         print(f"\n{' Resumen de procesamiento ':-^60}")
         for k,v in base.items(): print(f"{k:>12}: {v}")
@@ -143,6 +149,7 @@ def report(res: dict, ruta: Path, dt: float, verbose: bool):
     else:
         print(f"\nArchivos: {base['num_files']} | Subdirs: {base['num_dirs']} | "
               f"Válidos: {base['validos']} | Descartados: {base['descartados']} | "
+              f"Extraídos: {base['extraidos']} | Rechazados: {base['rechazados']} | "
               f"Tiempo(s): {base['tiempo_s']}\n")
 
 def maybe_unify(cfg: Config) -> None:
@@ -193,7 +200,7 @@ def orchestrate():
         if not args.no_process:
             resolved_input = args.input or args.input_posicional
             ruta = resolve_input_dir(resolved_input, cfg)
-            logger.info(f"Procesando directorio: {ruta}")
+            logger.info("Procesando directorio de entrada")
             res, dt = run_processing(ruta, cfg)
             report(res, ruta, dt, args.verbose)
 
@@ -204,15 +211,15 @@ def orchestrate():
         return EXIT_OK
 
     except RuntimeError as e:
-        logger.error(e)
+        logger.error("Error de configuración: %s", type(e).__name__)
         print(f"Error de configuración: {e}", file=sys.stderr)
         return EXIT_CFG
     except ValueError as e:
-        logger.error(e)
+        logger.error("Entrada inválida: %s", type(e).__name__)
         print(f"Entrada inválida: {e}", file=sys.stderr)
         return EXIT_INPUT
     except Exception as e:
-        logger.exception("Fallo inesperado")
+        logger.error("Fallo inesperado: %s", type(e).__name__)
         print(f"Error: {e}", file=sys.stderr)
         return EXIT_PROCESS
 

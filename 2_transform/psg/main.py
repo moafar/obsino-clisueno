@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import csv
 from pathlib import Path
+import re
 import sys
 from typing import Any
 import yaml
@@ -31,7 +33,7 @@ from commons.ops import register_builtin_operations
 from commons.schema import validate_input_schema, validate_output_schema
 from psg.core.transforms import register_psg_operations
 
-SUPPORTED_INPUT_EXTENSIONS = {".csv", ".xlsx", ".xls"}
+SUPPORTED_INPUT_EXTENSIONS = {".csv"}
 
 
 def _search_bases() -> list[Path]:
@@ -50,16 +52,65 @@ def _discover_input_files() -> list[Path]:
             path.is_file()
             and path.suffix.lower() in SUPPORTED_INPUT_EXTENSIONS
             and path.stem.startswith(EXTRACT_FILE_PREFIX)
+            and "_transformed" not in path.stem
         )
     ]
     return files
 
 
+def _safe_file_label(path: Path, index: int) -> str:
+    if re.fullmatch(r"extract_psg_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.csv", path.name):
+        return path.name
+    return f"archivo #{index}"
+
+
+def _check_selected_uuids(input_files: list[Path], input_config: dict) -> None:
+    """Rechaza UUID repetidos en el lote completo antes de escribir salidas."""
+    seen: dict[str, int] = {}
+    implicated: set[int] = set()
+    separator = input_config.get("sep", ",")
+    encoding = input_config.get("encoding", "utf-8")
+    for index, path in enumerate(input_files, start=1):
+        label = _safe_file_label(path, index)
+        try:
+            with path.open("r", newline="", encoding=encoding) as source:
+                reader = csv.DictReader(source, delimiter=separator, strict=True)
+                if not reader.fieldnames or "meta_uuid" not in reader.fieldnames:
+                    raise ValueError(f"Falta meta_uuid en {label}")
+                for record in reader:
+                    uuid = record.get("meta_uuid")
+                    if uuid is None or not uuid.strip():
+                        raise ValueError(f"UUID PSG vacío en {label}")
+                    uuid = uuid.strip()
+                    if uuid in seen:
+                        implicated.update((seen[uuid], index))
+                    else:
+                        seen[uuid] = index
+        except (OSError, UnicodeError, csv.Error):
+            raise ValueError(f"No se pudo leer meta_uuid en {label}") from None
+    if implicated:
+        labels = [
+            _safe_file_label(path, index)
+            for index, path in enumerate(input_files, start=1) if index in implicated
+        ]
+        raise ValueError("UUID PSG duplicado; archivos implicados: " + ", ".join(labels))
+
+
 def _load_pipeline_config(config_path: str, search_bases: list[Path]) -> dict:
     config_file = resolve_existing_path(config_path, search_bases)
     with config_file.open("r", encoding="utf-8") as file:
-        pipeline_config = yaml.safe_load(file) or {}
-    return _apply_declared_schemas(pipeline_config, search_bases)
+        document = yaml.safe_load(file) or {}
+    if "transform" in document:
+        pipeline_config = dict(document["transform"])
+        pipeline_config["schema"] = document.get("schema", {}).get("transform", {})
+        return pipeline_config
+    return _apply_declared_schemas(document, search_bases)
+
+
+def _require_exact_columns(dataframe, schema_config: dict, section: str) -> None:
+    expected = list(schema_config.get("columns", {}))
+    if not expected or list(dataframe.columns) != expected:
+        raise ValueError(f"Columnas u orden incorrectos en {section} PSG")
 
 
 def _resolve_nested_path(payload: Any, dotted_path: str) -> Any:
@@ -156,7 +207,10 @@ def run(
     register_psg_operations(registry)
 
     resolved_input_path = resolve_existing_path(input_path, search_bases)
+    if resolved_input_path.suffix.lower() not in SUPPORTED_INPUT_EXTENSIONS:
+        raise ValueError("La entrada PSG debe ser un CSV de extracción")
     dataframe = read_dataset(str(resolved_input_path), config=pipeline_config.get("input", {}))
+    _require_exact_columns(dataframe, pipeline_config.get("schema", {}).get("input", {}), "entrada")
 
     validate_input_schema(
         dataframe=dataframe,
@@ -168,6 +222,9 @@ def run(
         registry=registry,
         dataframe=dataframe,
     )
+    if len(transformed) != len(dataframe):
+        raise ValueError("La transformación PSG cambió el número de registros")
+    _require_exact_columns(transformed, pipeline_config.get("schema", {}).get("output", {}), "salida")
 
     validate_output_schema(
         dataframe=transformed,
@@ -195,7 +252,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         required=False,
-        default="psg/config.yaml",
+        default=str(PROJECT_ROOT / "0_declarations" / "psg.yaml"),
         help="Ruta al archivo config.yaml del pipeline PSG.",
     )
     parser.add_argument(
@@ -203,7 +260,7 @@ def _parse_args() -> argparse.Namespace:
         required=False,
         default=None,
         help=(
-            "Ruta al archivo de entrada (xlsx/csv). "
+            "Ruta al CSV de extracción PSG. "
             "Si no se indica, procesa automáticamente todos los archivos válidos de este flow en staging/."
         ),
     )
@@ -260,6 +317,8 @@ def execute(
             "No se puede usar --output con múltiples archivos detectados en staging/. "
             "Usa --input para procesar uno específico."
         )
+
+    _check_selected_uuids(input_files, pipeline_config.get("input", {}))
 
     plans: list[tuple[Path, Path]] = []
     for input_file in input_files:

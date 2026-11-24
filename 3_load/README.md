@@ -69,6 +69,9 @@ Campos relevantes del YAML:
 
 La ruta del Excel puede recibirse por CLI con `--input` o autodetectarse en `staging/` para el flow seleccionado.
 
+Para PSG, el destino definitivo es `observatorio-ino-1.clisueno.tbl_psg_prd`, configurado en `0_declarations/psg.yaml`.
+El cargador protege `tbl_psg_legacy_prd`, que conserva los datos históricos, y exige que el destino cumpla el contrato canónico de 156 columnas.
+
 ### Contrato de schema compartido con transform
 
 `load` puede reutilizar directamente el schema de salida de `transform` para evitar duplicación.
@@ -87,7 +90,7 @@ Con esto, el esquema de BigQuery se construye desde el mismo contrato de salida 
 
 Service Account local por capa:
 
-- `3_load/secrets/obsino-clisueno.json`
+- `3_load/secrets/obsino_clisueno_key.json`
 
 El script configura `GOOGLE_APPLICATION_CREDENTIALS` en tiempo de ejecución.
 

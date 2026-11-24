@@ -20,6 +20,8 @@ def read_dataset(input_path: str, **kwargs: Any):
                 encoding=config.get("encoding", "utf-8"),
                 sep=config.get("sep", ","),
                 header=config.get("header", 0),
+                dtype=config.get("dtype"),
+                keep_default_na=config.get("keep_default_na", True),
             )
 
         if path.suffix.lower() in {".xlsx", ".xls"} or config.get("format") == "xlsx":

@@ -10,19 +10,21 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 import os
 import re
 import shutil
 import sys
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import yaml
 from google.cloud import bigquery
+from openpyxl import load_workbook
 
 
 # =======================
@@ -110,8 +112,8 @@ class LoaderConfig:
 # Estructura aplanada: este script vive en 3_load/, y usa configuración por flujo.
 BASE_DIR = Path(__file__).resolve().parents[1]
 FLOW_CONFIG_PATHS: dict[str, Path] = {
-    "psg": BASE_DIR.parent / "0_declarations" / "psg.yaml",
-    "xpap": BASE_DIR.parent / "0_declarations" / "xpap.yaml",
+    "psg": BASE_DIR / "0_declarations" / "psg.yaml",
+    "xpap": BASE_DIR / "0_declarations" / "xpap.yaml",
 }
 SUPPORTED_INPUT_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 STAGING_DIR = BASE_DIR / "staging"
@@ -187,7 +189,7 @@ def _validate_input_in_staging(flow: str, input_path: Path) -> None:
         )
 
 
-def parse_cli_args() -> tuple[str, Path]:
+def parse_cli_args() -> tuple[str, Path, str | None]:
     # Selecciona flujo y ruta de entrada desde CLI.
     parser = argparse.ArgumentParser(description="Carga manual a BigQuery")
     parser.add_argument(
@@ -209,6 +211,7 @@ def parse_cli_args() -> tuple[str, Path]:
             "Si se omite, usa autodiscovery en staging/ filtrando por extract_<flow>_*_transformed."
         ),
     )
+    parser.add_argument("--table-id", help="Tabla canónica PSG previamente creada")
     args = parser.parse_args()
     raw_input = args.input or args.input_positional
 
@@ -221,7 +224,9 @@ def parse_cli_args() -> tuple[str, Path]:
 
     _validate_input_in_staging(selected_flow, resolved_input)
 
-    return selected_flow, resolved_input
+    if args.table_id and selected_flow != "psg":
+        die("--table-id solo está disponible para PSG")
+    return selected_flow, resolved_input, args.table_id
 
 
 def resolve_config_yaml_path(flow: str) -> Path:
@@ -232,7 +237,9 @@ def resolve_config_yaml_path(flow: str) -> Path:
     return config_yaml_path
 
 
-def load_runtime_config(config_yaml_path: Path, source_excel_path: Path) -> LoaderConfig:
+def load_runtime_config(
+    config_yaml_path: Path, source_excel_path: Path, table_id_override: str | None = None
+) -> LoaderConfig:
     # Carga configuración declarativa equivalente a la "sección 1" del script manual.
     if not config_yaml_path.exists():
         die(f"No existe el archivo de configuración: {config_yaml_path}")
@@ -243,6 +250,16 @@ def load_runtime_config(config_yaml_path: Path, source_excel_path: Path) -> Load
     if not isinstance(raw_config, dict) or not raw_config:
         die("El YAML de configuración debe ser un diccionario con claves de configuración")
 
+    shared_contract = isinstance(raw_config.get("load"), dict)
+    is_psg = raw_config.get("metadata", {}).get("domain") == "psg" if shared_contract else False
+    if shared_contract:
+        raw_config = raw_config["load"]
+    if table_id_override is not None and not is_psg:
+        die("La selección de tabla por CLI solo está disponible para PSG")
+    table_id = table_id_override or raw_config.get("table_id")
+    if is_psg and (not table_id or str(table_id).strip().lower() == "tbl_psg_legacy_prd"):
+        die("PSG requiere una tabla canónica distinta de tbl_psg_legacy_prd (--table-id o load.table_id)")
+
     required_keys = [
         "project_id",
         "dataset_id",
@@ -251,28 +268,34 @@ def load_runtime_config(config_yaml_path: Path, source_excel_path: Path) -> Load
         "service_account_json",
         "source_sheet_name",
     ]
-    if "schema_yaml_path" not in raw_config and "shared_schema_yaml_path" not in raw_config:
+    if not shared_contract and "schema_yaml_path" not in raw_config and "shared_schema_yaml_path" not in raw_config:
         die("Debe definir 'schema_yaml_path' o 'shared_schema_yaml_path' en el YAML de configuración")
-    missing = [key for key in required_keys if key not in raw_config]
+    missing = [key for key in required_keys if key not in raw_config and not (key == "table_id" and is_psg)]
     if missing:
         die(f"Faltan claves requeridas en YAML de configuración: {', '.join(missing)}")
 
     write_disposition = str(raw_config["write_disposition"]).strip().upper()
     if write_disposition not in {"WRITE_APPEND", "WRITE_TRUNCATE"}:
         die("'write_disposition' debe ser WRITE_APPEND o WRITE_TRUNCATE")
+    if is_psg and write_disposition != "WRITE_APPEND":
+        die("PSG solo permite WRITE_APPEND")
 
     raw_schema_path = raw_config.get("shared_schema_yaml_path", raw_config.get("schema_yaml_path", ""))
+    schema_yaml_path = config_yaml_path if shared_contract else BASE_DIR / str(raw_schema_path).strip()
+    schema_path_in_yaml = (
+        "schema.load.input.columns" if shared_contract else str(raw_config.get("schema_path_in_yaml", "")).strip()
+    )
 
     return LoaderConfig(
         project_id=str(raw_config["project_id"]).strip(),
         dataset_id=str(raw_config["dataset_id"]).strip(),
-        table_id=str(raw_config["table_id"]).strip(),
+        table_id=str(table_id).strip(),
         write_disposition=write_disposition,
         service_account_json=BASE_DIR / str(raw_config["service_account_json"]).strip(),
         source_excel_path=source_excel_path,
         source_sheet_name=str(raw_config["source_sheet_name"]).strip(),
-        schema_yaml_path=BASE_DIR / str(raw_schema_path).strip(),
-        schema_path_in_yaml=str(raw_config.get("schema_path_in_yaml", "")).strip(),
+        schema_yaml_path=schema_yaml_path,
+        schema_path_in_yaml=schema_path_in_yaml,
         schema_description=(
             str(raw_config["schema_description"]).strip()
             if raw_config.get("schema_description") not in (None, "")
@@ -296,6 +319,7 @@ TYPE_MAP = {
     "STRING": "STRING",
     "FLOAT": "FLOAT64",
     "FLOAT64": "FLOAT64",
+    "DATE": "DATE",
     "INTEGER": "INT64",
     "INT": "INT64",
     "INT64": "INT64",
@@ -408,13 +432,42 @@ def build_bq_schema(schema_yaml: dict[str, str]) -> list[bigquery.SchemaField]:
     return bq_schema
 
 
-def read_source_dataset(config: LoaderConfig, expected_columns: list[str]) -> pd.DataFrame:
+def read_source_dataset(
+    config: LoaderConfig, expected_columns: list[str], strict_psg: bool = False,
+    schema_yaml: dict[str, str] | None = None,
+) -> pd.DataFrame:
     # Carga dataset de entrada y fuerza estructura esperada (rechaza faltantes, ignora extras).
     source_suffix = config.source_excel_path.suffix.lower()
+    if strict_psg and source_suffix == ".xls":
+        die("PSG requiere XLSX o CSV para verificar identificadores sin pérdida")
+    if strict_psg and source_suffix == ".xlsx":
+        workbook = load_workbook(config.source_excel_path, read_only=True, data_only=True)
+        try:
+            sheet = workbook[config.source_sheet_name]
+            headings = [cell.value for cell in next(sheet.iter_rows(max_row=1))]
+            if headings != expected_columns:
+                die("Las columnas PSG del XLSX no coinciden exactamente con el contrato")
+            id_column = headings.index("pte_id") + 1
+            for row_number, (cell,) in enumerate(
+                sheet.iter_rows(min_row=2, min_col=id_column, max_col=id_column), start=2
+            ):
+                if cell.value is not None and cell.data_type != "s":
+                    die(f"pte_id debe ser texto físico en XLSX (fila {row_number})")
+        finally:
+            workbook.close()
+    text_types = {name: "string" for name, kind in (schema_yaml or {}).items() if kind == "STRING"}
     if source_suffix == ".csv":
-        dataframe = pd.read_csv(config.source_excel_path)
+        dataframe = pd.read_csv(
+            config.source_excel_path,
+            dtype=text_types if strict_psg else None,
+            keep_default_na=not strict_psg,
+        )
     elif source_suffix in {".xlsx", ".xls"}:
-        dataframe = pd.read_excel(config.source_excel_path, sheet_name=config.source_sheet_name)
+        dataframe = pd.read_excel(
+            config.source_excel_path, sheet_name=config.source_sheet_name,
+            dtype=text_types if strict_psg else None,
+            keep_default_na=not strict_psg,
+        )
     else:
         die(
             "Extensión de archivo no soportada para carga. "
@@ -423,6 +476,9 @@ def read_source_dataset(config: LoaderConfig, expected_columns: list[str]) -> pd
 
     missing_columns = [column for column in expected_columns if column not in dataframe.columns]
     extra_columns = [column for column in dataframe.columns if column not in expected_columns]
+
+    if strict_psg and list(dataframe.columns) != expected_columns:
+        die("Las columnas PSG deben coincidir en nombre, número y orden con el contrato")
 
     if missing_columns:
         print("\nERROR: faltan columnas requeridas:")
@@ -436,6 +492,80 @@ def read_source_dataset(config: LoaderConfig, expected_columns: list[str]) -> pd
             print(" -", column)
 
     return dataframe[expected_columns].copy()
+
+
+def cast_psg_dataframe(dataframe: pd.DataFrame, schema_yaml: dict[str, str]) -> pd.DataFrame:
+    """Valida los tipos canónicos sin convertir valores inválidos en nulos."""
+    for column, field_type in schema_yaml.items():
+        source = dataframe[column]
+        if field_type == "STRING":
+            dataframe[column] = source.astype("string").replace(r"^\s*$", pd.NA, regex=True)
+            continue
+        if field_type == "DATE":
+            def as_date(value: Any) -> date | None:
+                if pd.isna(value) or value == "":
+                    return None
+                if isinstance(value, datetime):
+                    if value.time() != datetime.min.time():
+                        die(f"Fecha PSG con hora en {column}")
+                    return value.date()
+                if isinstance(value, date):
+                    return value
+                if isinstance(value, str):
+                    try:
+                        return date.fromisoformat(value.strip())
+                    except ValueError:
+                        pass
+                die(f"Fecha PSG inválida en {column}")
+            dataframe[column] = source.map(as_date)
+            continue
+        if field_type in {"FLOAT", "FLOAT64", "INTEGER", "INT", "INT64"}:
+            values = source.replace(r"^\s*$", pd.NA, regex=True)
+            if values.map(lambda value: isinstance(value, bool)).any():
+                die(f"Valor booleano incompatible en {column}")
+            try:
+                numeric = pd.to_numeric(values, errors="raise")
+            except (ValueError, TypeError):
+                die(f"Valor numérico incompatible en {column}")
+            if numeric.dropna().map(lambda value: not math.isfinite(float(value))).any():
+                die(f"Valor no finito en {column}")
+            if field_type in {"INTEGER", "INT", "INT64"}:
+                if numeric.dropna().map(
+                    lambda value: float(value) % 1 != 0 or abs(float(value)) > 2**53
+                ).any():
+                    die(f"Entero incompatible o impreciso en {column}")
+                dataframe[column] = numeric.astype("Int64")
+            else:
+                dataframe[column] = numeric.astype("float64")
+            continue
+        die(f"Tipo PSG no admitido en {column}: {field_type}")
+    if dataframe["pte_id"].isna().any():
+        die("pte_id vacío en lote PSG")
+    return dataframe
+
+
+def validate_psg_uuids(dataframe: pd.DataFrame) -> list[str]:
+    values = dataframe["meta_uuid"]
+    if values.isna().any() or dataframe.empty:
+        die("meta_uuid vacío en lote PSG")
+    uuids = values.tolist()
+    if len(uuids) != len(set(uuids)):
+        die("meta_uuid duplicado dentro del lote PSG")
+    return uuids
+
+
+def validate_target_schema(
+    client: bigquery.Client, table_fqn: str, expected: list[bigquery.SchemaField]
+) -> None:
+    """Exige una tabla ya creada con el mismo esquema físico y orden."""
+    actual = client.get_table(table_fqn).schema
+    def signature(fields: list[bigquery.SchemaField]) -> list[tuple[str, str, str]]:
+        return [
+            (field.name, TYPE_MAP.get(field.field_type.upper(), field.field_type.upper()), field.mode.upper())
+            for field in fields
+        ]
+    if signature(actual) != signature(expected):
+        die("El esquema físico de la tabla destino no coincide con los 156 campos PSG")
 
 
 def cast_dataframe(dataframe: pd.DataFrame, schema_yaml: dict[str, str]) -> pd.DataFrame:
@@ -601,6 +731,16 @@ def move_loaded_input_file(source_path: Path, _flow: str) -> Path:
 def run(config: LoaderConfig, flow: str) -> None:
     log("Iniciando carga manual a BigQuery")
 
+    if flow == "psg":
+        if not config.table_id or config.table_id.lower() == "tbl_psg_legacy_prd":
+            die("PSG requiere una tabla canónica distinta de tbl_psg_legacy_prd")
+        if config.write_disposition != "WRITE_APPEND":
+            die("PSG solo permite WRITE_APPEND")
+        if config.uuid_field != "meta_uuid" or config.date_field != "meta_fecha_estudio":
+            die("Los campos de control PSG deben ser meta_uuid y meta_fecha_estudio")
+        if config.migrated_field:
+            die("PSG no admite columnas de migración fuera del contrato")
+
     # 1) Validaciones tempranas de nombres de identificadores.
     validate_identifier(config.dataset_id, "Dataset")
     validate_identifier(config.table_id, "Tabla")
@@ -625,30 +765,45 @@ def run(config: LoaderConfig, flow: str) -> None:
     schema_yaml = load_schema(config.schema_yaml_path, config.schema_path_in_yaml)
     expected_columns = list(schema_yaml.keys())
     bq_schema = build_bq_schema(schema_yaml)
+    if flow == "psg":
+        if config.schema_path_in_yaml != "schema.load.input.columns":
+            die("PSG debe usar schema.load.input.columns")
+        output_schema = load_schema(config.schema_yaml_path, "schema.transform.output.columns")
+        if schema_yaml != output_schema or len(schema_yaml) != 156:
+            die("El contrato de carga PSG no coincide con la salida canónica de transform")
+        validate_target_schema(client, config.table_fqn, bq_schema)
     log(f"Esquema leído con {len(expected_columns)} campos")
 
     # 5) Ingestar Excel con control estricto de columnas.
     log("Leyendo archivo Excel")
-    dataframe = read_source_dataset(config, expected_columns)
+    dataframe = read_source_dataset(config, expected_columns, flow == "psg", schema_yaml)
     log(f"Excel leído: {len(dataframe)} filas, {len(dataframe.columns)} columnas")
 
     # 6) Estandarizar y limpiar datos previo a validaciones de unicidad.
     log("Aplicando casting y validaciones de formato")
-    dataframe = cast_dataframe(dataframe, schema_yaml)
-    dataframe = validate_date_field(dataframe, config.date_field)
-    dataframe = add_migration_mark(dataframe, config.migrated_field)
-    dataframe = normalize_empty_values(dataframe, schema_yaml)
+    if flow == "psg":
+        dataframe = cast_psg_dataframe(dataframe, schema_yaml)
+    else:
+        dataframe = cast_dataframe(dataframe, schema_yaml)
+        dataframe = validate_date_field(dataframe, config.date_field)
+        dataframe = add_migration_mark(dataframe, config.migrated_field)
+        dataframe = normalize_empty_values(dataframe, schema_yaml)
 
     # 7) Evitar duplicados dentro del lote recibido.
     log("Validando duplicados en el lote")
-    uuid_values = extract_uuid_values(dataframe, config.uuid_field)
-    validate_batch_duplicates(uuid_values, config.uuid_field)
+    if flow == "psg":
+        uuid_values = validate_psg_uuids(dataframe)
+    else:
+        uuid_values = extract_uuid_values(dataframe, config.uuid_field)
+        validate_batch_duplicates(uuid_values, config.uuid_field)
 
     # 8) Evitar duplicados contra la tabla destino (solo en modo APPEND).
     if config.write_disposition == "WRITE_APPEND":
         log("Validando duplicados entre lote y BigQuery")
         existing_uuids = find_existing_uuids(client, config.table_fqn, config.uuid_field, uuid_values)
         if existing_uuids:
+            if flow == "psg":
+                die(f"{len(existing_uuids)} UUID PSG ya existen en la tabla destino")
             sorted_existing_uuids = sorted(existing_uuids)
             log_detail_message = (
                 f"ver detalle de UUID repetidos en el log: "
@@ -690,13 +845,13 @@ def run(config: LoaderConfig, flow: str) -> None:
 
 if __name__ == "__main__":
     try:
-        selected_flow, selected_input_path = parse_cli_args()
+        selected_flow, selected_input_path, selected_table_id = parse_cli_args()
         setup_logging(selected_flow)
         selected_config_path = resolve_config_yaml_path(selected_flow)
         log(f"Flujo seleccionado: {selected_flow}")
         log(f"Excel de entrada: {selected_input_path}")
         log(f"YAML de configuración: {selected_config_path}")
-        runtime_config = load_runtime_config(selected_config_path, selected_input_path)
+        runtime_config = load_runtime_config(selected_config_path, selected_input_path, selected_table_id)
         run(runtime_config, selected_flow)
     except Exception as error:
         if LOGGER:
