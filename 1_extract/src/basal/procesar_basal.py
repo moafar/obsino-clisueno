@@ -290,11 +290,11 @@ def _narrative(out: dict, sections: dict) -> None:
     if match:
         out["clin_epworth_puntos"] = match.group(1)
     interpretation = out["clin_interpretacion"] or ""
-    paragraphs = re.split(r"\n\s*\n", interpretation)
-    snoring = [paragraph.strip() for paragraph in paragraphs
-               if re.search(r"\bronquid\w*", paragraph, re.I)]
+    sentences = re.split(r"(?<=[.!?;])\s+", interpretation)
+    snoring = [sentence.strip() for sentence in sentences
+               if re.search(r"\bronquid\w*", sentence, re.I)]
     if snoring:
-        out["clin_ronquido"] = "\n\n".join(snoring)
+        out["clin_ronquido"] = " ".join(snoring)
     match = re.search(r"\bT\s*90\s*:\s*([+-]?\d+(?:[.,]\d+)?)\s*%", prose, re.I)
     if match:
         out["oxi_t90_pct"] = match.group(1)

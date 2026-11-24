@@ -174,7 +174,7 @@ class PSGExtractorTest(unittest.TestCase):
                 self.assertIn("íntegra", row["clin_interpretacion"])
                 self.assertIn("íntegro", row["clin_indicacion"])
                 self.assertIn("íntegra", row["clin_conclusiones"])
-                self.assertIn("ronquido fue frecuente", row["clin_ronquido"])
+                self.assertEqual("El ronquido fue frecuente durante el sueño.", row["clin_ronquido"])
                 self.assertNotIn("999", str(row))
                 self.assertEqual(hashlib.md5(source.read_bytes()).hexdigest(), row["meta_uuid"])
                 for event, index in (("ac", 0), ("ao", 1), ("am", 2), ("hip", 4 if kind == "doc" else 3), ("ah", 5 if kind == "doc" else 4)):
@@ -408,7 +408,7 @@ class PSGExtractorTest(unittest.TestCase):
             self.assertIn("BASAL", both)
             self.assertIn("DAM", both)
 
-    def test_ronquido_preserves_full_original_paragraph(self):
+    def test_ronquido_keeps_only_relevant_sentences(self):
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "synthetic"
             source.write_bytes(b"synthetic")
@@ -420,7 +420,31 @@ class PSGExtractorTest(unittest.TestCase):
                 "Primera frase clínica íntegra. El ronquido fue frecuente durante el sueño.",
                 paragraph,
             )
-            self.assertEqual(paragraph, procesar_basal_rtf(report, source)["clin_ronquido"])
+            result = procesar_basal_rtf(report, source)
+            self.assertEqual(
+                "El ronquido fue frecuente durante el sueño. "
+                "En REM, el ronquido continuó con intensidad variable.",
+                result["clin_ronquido"],
+            )
+            self.assertEqual(paragraph, result["clin_interpretacion"])
+
+    def test_ronquido_single_phrase_in_long_interpretation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "synthetic"
+            source.write_bytes(b"synthetic")
+            for kind, processor in (("doc", procesar_basal_doc), ("rtf", procesar_basal_rtf)):
+                with self.subTest(kind=kind):
+                    report = synthetic_report(kind).replace(
+                        "Primera frase clínica íntegra. El ronquido fue frecuente durante el sueño.",
+                        "Primera frase clínica íntegra. Presentó ronquido frecuente. "
+                        "La interpretación continúa con otra observación clínica.",
+                    )
+                    result = processor(report, source)
+                    self.assertEqual("Presentó ronquido frecuente.", result["clin_ronquido"])
+                    self.assertIn("La interpretación continúa", result["clin_interpretacion"])
+                    without_snoring = report.replace("Presentó ronquido frecuente.",
+                                                     "Se observó sueño fragmentado.")
+                    self.assertIsNone(processor(without_snoring, source)["clin_ronquido"])
 
     def test_directory_counts_extracted_and_rejected_separately(self):
         with tempfile.TemporaryDirectory() as folder:
