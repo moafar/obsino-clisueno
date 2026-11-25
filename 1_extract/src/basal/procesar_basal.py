@@ -476,10 +476,10 @@ def _oximetry(out: dict, lines: list[str], delimiter: str) -> None:
 
 def _heart(out: dict, sections: dict, delimiter: str) -> None:
     heart = sections.get("frecuencia", [])
-    values, index = _required_row(heart, r"^FRECUENCIA CARDIACA\\s+PROMEDIO", delimiter,
+    values, index = _required_row(heart, r"^FRECUENCIA CARDIACA\s+PROMEDIO", delimiter,
                                   3, "frecuencia cardíaca")
     columns = _column_map(heart, index, delimiter, {
-        "despierto": r"^DESPIERTO\\b", "rem": r"^REM\\b", "nrem": r"^NO-REM\\b|^N-REM\\b|^NREM\\b",
+        "despierto": r"^DESPIERTO\b", "rem": r"^REM\b", "nrem": r"^NO-REM\b|^N-REM\b|^NREM\b",
     }, "frecuencia cardíaca")
     for phase, column in columns.items():
         out[f"fc_promedio_{phase}_lpm"] = _number(values[column])
@@ -505,12 +505,12 @@ def _position(out: dict, sections: dict, delimiter: str) -> None:
     if first_position is None:
         raise PSGExtractionError("Tabla de posición ilegible")
     columns = _column_map(position, first_position, delimiter, {
-        "supino": r"^SUPINO\\b", "derecho": r"^DERECHO\\b", "izquierdo": r"^IZQUIERDO\\b",
+        "supino": r"^SUPINO\b", "derecho": r"^DERECHO\b", "izquierdo": r"^IZQUIERDO\b",
     }, "posición")
     for measure, pattern in (
         ("iah_evhora", r"^INDICE A/H"),
-        ("duracion_min", r"^DUR\\.\\s*SUENO"),
-        ("pct", r"^SUENO\\s*\\(%\\)"),
+        ("duracion_min", r"^DUR\.\s*SUENO"),
+        ("pct", r"^SUENO\s*\(%\)"),
     ):
         values, _ = _required_row(position, pattern, delimiter, 3, "posición")
         for name, column in columns.items():
