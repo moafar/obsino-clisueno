@@ -146,7 +146,11 @@ class PSGExtractorTest(unittest.TestCase):
                 source.write_bytes(b"contenido sintetico")
                 row = processor(synthetic_report(kind), source)
                 self.assertEqual(list(PSG_COLUMNS), list(row))
-                self.assertEqual(130, sum(value is not None for value in row.values()))
+                self.assertEqual(130, sum(
+                    value is not None for field, value in row.items()
+                    if field != "meta_completitud_pct"
+                ))
+                self.assertIsNotNone(row["meta_completitud_pct"])
                 self.assertEqual("000123", row["pte_id"])
                 self.assertEqual("Paciente Sintético", row["pte_nombre"])
                 self.assertIsNone(row["pte_edad_meses"])
