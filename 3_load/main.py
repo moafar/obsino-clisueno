@@ -568,7 +568,7 @@ def validate_target_schema(
             for field in fields
         ]
     if signature(actual) != signature(expected):
-        die("El esquema físico de la tabla destino no coincide con los 156 campos PSG")
+        die("El esquema físico de la tabla destino no coincide con los 157 campos PSG")
 
 
 def cast_dataframe(dataframe: pd.DataFrame, schema_yaml: dict[str, str]) -> pd.DataFrame:
