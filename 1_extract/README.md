@@ -195,3 +195,11 @@ y la ejecución termina con código no nulo; los documentos afectados permanecen
 
 - PSG usa la salida CSV configurada para el modo; los demás flujos respetan `salida.carpeta_csv` del YAML.
 - Se eliminan todos los prints de depuración en pantalla; solo queda logging a archivo.
+
+## PSG — inclusión por título y completitud
+
+El documento se incluye si su texto convertido contiene el título PSG basal (excluyendo DAM). La ausencia de una tabla no provoca por sí sola el rechazo: cada sección se valida por separado, y una tabla desalineada deja sus campos vacíos sin asignar datos dudosos. Los errores imprevistos de código y los errores de escritura/archivado siguen notificándose.
+
+El CSV tiene **159 columnas**. `meta_completitud_pct` se calcula como el porcentaje de los **152 campos no meta** con valor extraído; el valor `0` cuenta como presente y los valores ausentes no cuentan. Esta métrica no acredita exactitud clínica. `2_transform` produce **157 columnas**, sin modificar este porcentaje.
+
+La reextracción limpia requiere tratar expresamente los CSV y documentos ya archivados; no ejecutar una nueva extracción sobre el histórico sin un plan de conciliación y respaldo.

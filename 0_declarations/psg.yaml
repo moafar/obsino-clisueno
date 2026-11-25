@@ -212,6 +212,7 @@ schema:
         meta_fuente: string
         meta_uuid: string
         meta_version_control: string
+        meta_completitud_pct: float
     output:
       columns: &transform_output_columns
         pte_nombre: string
@@ -370,6 +371,7 @@ schema:
         meta_fuente: string
         meta_uuid: string
         meta_version_control: string
+        meta_completitud_pct: float
   load:
     input:
       columns: *transform_output_columns

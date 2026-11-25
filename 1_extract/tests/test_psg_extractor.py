@@ -126,14 +126,14 @@ class PSGExtractorTest(unittest.TestCase):
             "pte_edad_decimal_anos", "pte_grupo_edad", "pte_peso_kg",
             "pte_talla_cm", "pte_cuello_cm", "pte_perimetro_abdominal_cm",
         }
-        self.assertEqual(156, len(fields))
+        self.assertEqual(157, len(fields))
         self.assertEqual(set(fields) - derived, set(PSG_COLUMNS) - {
             f"pte_{part}_{kind}"
             for part in ("peso", "talla", "cuello", "perimetro_abdominal")
             for kind in ("valor", "unidad")
         })
-        self.assertEqual(158, len(PSG_COLUMNS))
-        self.assertEqual(158, len(set(PSG_COLUMNS)))
+        self.assertEqual(159, len(PSG_COLUMNS))
+        self.assertEqual(159, len(set(PSG_COLUMNS)))
         self.assertEqual(
             [field for field in fields if field not in derived],
             [field for field in PSG_COLUMNS if field in fields],
@@ -270,19 +270,21 @@ class PSGExtractorTest(unittest.TestCase):
             with self.assertRaises(PSGExtractionError):
                 _append_psg_row(row, csv_path)
 
-    def test_unreadable_tables_rejected_without_affecting_shared_normalization(self):
+    def test_unreadable_tables_preserve_other_sections_without_guessing(self):
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "synthetic"
             source.write_bytes(b"synthetic")
             broken = synthetic_report("doc").replace("\tEpisodios\tDuración\tTST", "")
-            with self.assertRaises(PSGExtractionError):
-                procesar_basal_doc(broken, source)
+            row = procesar_basal_doc(broken, source)
+            self.assertIsNone(row["fase_rem_duracion_min"])
+            self.assertEqual("400", row["arq_tiempo_sueno_min"])
             misaligned = synthetic_report("doc").replace(
                 "Número\t10\t11\t12\t13\t14\t15",
                 "Número\t10\t11\t12\t13\t14\t15\t16",
             )
-            with self.assertRaises(PSGExtractionError):
-                procesar_basal_doc(misaligned, source)
+            row = procesar_basal_doc(misaligned, source)
+            self.assertIsNone(row["evresp_ah_numero_n"])
+            self.assertEqual("103", row["evresp_iah_tst_evhora"])
         self.assertEqual("a b c", normalizar_texto("á\tb\nc"))
 
     def test_unit_before_value_is_preserved_for_later_transform(self):
@@ -345,42 +347,55 @@ class PSGExtractorTest(unittest.TestCase):
                     self.assertEqual("22", row["pos_supino_duracion_min"])
                     self.assertEqual("21", row["pos_derecho_duracion_min"])
 
-    def test_missing_required_rows_and_sections_are_rejected(self):
+    def test_missing_sections_and_ambiguous_headers_lower_completeness(self):
         with tempfile.TemporaryDirectory() as folder:
-            source = Path(folder) / "synthetic"
+            source = Path(folder) / "synthetic.doc"
             source.write_bytes(b"synthetic")
-            for kind, processor, sep in (
-                ("doc", procesar_basal_doc, "\t"),
-                ("rtf", procesar_basal_rtf, "|"),
-            ):
-                base = synthetic_report(kind)
-                for broken in (
-                    base.replace(f"S3{sep}{'24' + sep if kind == 'doc' else ''}34{sep}44{'|' if kind == 'rtf' else ''}\n", ""),
-                    base.replace("FRECUENCIA CARDIACA:\n", ""),
-                    base.replace(f"<90 (min){sep}0{sep}91{sep}92{sep}93{'|' if kind == 'rtf' else ''}\n", ""),
-                    base.replace(f"Número{sep}" + sep.join(str(10 + i) for i in range(6 if kind == "doc" else 5)),
-                                 f"Nro{sep}" + sep.join(str(10 + i) for i in range(6 if kind == "doc" else 5))),
-                    base.replace("MOVIMIENTOS DE MIEMBROS INFERIORES:\n", ""),
-                ):
-                    with self.subTest(kind=kind, removed=len(base) - len(broken)):
-                        self.assertNotEqual(base, broken)
-                        with self.assertRaises(PSGExtractionError):
-                            processor(broken, source)
+            base = synthetic_report("doc")
+            full = procesar_basal_doc(base, source)
+            without_position = base.split("POSICION CORPORAL:")[0]
+            row = procesar_basal_doc(without_position, source)
+            self.assertEqual(full["evresp_iah_tst_evhora"], row["evresp_iah_tst_evhora"])
+            self.assertIsNone(row["pos_supino_iah_evhora"])
+            self.assertLess(float(row["meta_completitud_pct"]), float(full["meta_completitud_pct"]))
 
-    def test_ambiguous_table_header_is_rejected(self):
+            broken_header = base.replace("Nº Total\tNº Eventos Respiratorios",
+                                         "Nº Total\tNº Total")
+            row = procesar_basal_doc(broken_header, source)
+            self.assertIsNone(row["arq_microalertamientos_total_n"])
+            self.assertEqual("400", row["arq_tiempo_sueno_min"])
+
+    def test_title_only_inclusion_zero_values_and_fixed_denominator(self):
         with tempfile.TemporaryDirectory() as folder:
-            source = Path(folder) / "synthetic"
+            source = Path(folder) / "title-only.doc"
             source.write_bytes(b"synthetic")
-            for kind, processor, sep in (
-                ("doc", procesar_basal_doc, "\t"),
-                ("rtf", procesar_basal_rtf, "|"),
-            ):
-                report = synthetic_report(kind).replace(
-                    f"Nº Total{sep}Nº Eventos Respiratorios",
-                    f"Nº Total{sep}Nº Total",
-                )
-                with self.subTest(kind=kind), self.assertRaises(PSGExtractionError):
-                    processor(report, source)
+            row = procesar_basal_doc("INFORME DE POLISOMNOGRAFÍA BASAL", source)
+            self.assertEqual("0.00", row["meta_completitud_pct"])
+            self.assertIsNone(row["pte_id"])
+            self.assertIsNotNone(row["meta_uuid"])
+            self.assertEqual(159, len(row))
+
+            base = synthetic_report("doc")
+            full = procesar_basal_doc(base, source)
+            self.assertEqual("0", full["oxi_t90_despierto_min"])
+            self.assertGreater(float(full["meta_completitud_pct"]), 0)
+            # El cero se cuenta como presente; la fórmula usa 152 campos fijos.
+            count = sum(value is not None and str(value).strip() not in ("", "N/A")
+                        for field, value in full.items() if not field.startswith("meta_"))
+            self.assertEqual(f"{100 * count / 152:.2f}", full["meta_completitud_pct"])
+
+    def test_doc_configuration_row_with_blank_sum_and_total_cells(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "synthetic.doc"
+            source.write_bytes(b"synthetic")
+            report = synthetic_report("doc").replace(
+                "Configuración (s)\t91\t92\t93\n\n94",
+                "Configuración (s)\t91\t92\t93\t\t94\t",
+            )
+            row = procesar_basal_doc(report, source)
+            self.assertEqual(("91", "92", "93", "94"),
+                tuple(row[f"evresp_{kind}_configuracion_s"]
+                      for kind in ("ac", "ao", "am", "hip")))
 
     def test_dam_is_not_psg_basal(self):
         with tempfile.TemporaryDirectory() as folder:

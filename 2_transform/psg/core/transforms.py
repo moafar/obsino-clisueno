@@ -165,6 +165,7 @@ DATA_TYPES: dict[str, str] = {
     "meta_fuente": "string",
     "meta_uuid": "string",
     "meta_version_control": "string",
+    "meta_completitud_pct": "float",
 }
 FINAL_COLS = list(DATA_TYPES)
 DERIVED = {
@@ -217,8 +218,8 @@ def _op_psg_basal_transform(dataframe: pd.DataFrame, **_: Any) -> pd.DataFrame:
         f"pte_{part}_{kind}"
         for part in UNIT_FACTORS for kind in ("valor", "unidad")
     }
-    if set(dataframe.columns) != required or len(dataframe.columns) != 158:
-        raise ValueError("El esquema de entrada PSG debe tener exactamente 158 columnas")
+    if set(dataframe.columns) != required or len(dataframe.columns) != 159:
+        raise ValueError("El esquema de entrada PSG debe tener exactamente 159 columnas")
 
     df = dataframe.copy()
     for column, dtype in DATA_TYPES.items():
@@ -247,10 +248,10 @@ def _op_psg_basal_transform(dataframe: pd.DataFrame, **_: Any) -> pd.DataFrame:
             raise ValueError("No se puede derivar oxi_t90_pct con los minutos TST disponibles")
         df.loc[calculable, "oxi_t90_pct"] = (100 * numerator / denominator).astype("Float64")
 
-    identifiers = df["pte_id"].str.strip()
+    completeness = df["meta_completitud_pct"]
+    if ((completeness < 0) | (completeness > 100)).fillna(False).any():
+        raise ValueError("meta_completitud_pct fuera del rango 0-100")
     uuids = df["meta_uuid"].str.strip()
-    if identifiers.isna().any() or identifiers.eq("").any():
-        raise ValueError("Identificador PSG ausente")
     if uuids.isna().any() or uuids.eq("").any():
         raise ValueError("UUID PSG ausente")
     if uuids.duplicated().any():
