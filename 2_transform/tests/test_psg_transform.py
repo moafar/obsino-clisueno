@@ -129,12 +129,37 @@ class PSGTransformTest(unittest.TestCase):
             {"meta_completitud_pct": "101"},
             {"arq_tiempo_sueno_min": "valor ilegible"},
             {"meta_fecha_estudio": "fecha imposible"},
-            {"pte_peso_unidad": "unidad desconocida"},
         ):
             with self.subTest(changes=changes), self.assertRaises((ValueError, SchemaValidationError)):
                 self.transform([source_row(**changes)])
         with self.assertRaisesRegex(ValueError, "duplicado"):
             self.transform([source_row(), source_row(pte_id="000124")])
+
+    def test_invalid_anthropometric_units_become_null(self):
+        cases = [
+            ("cuello", "41", "c"),
+            ("cuello", "43", "anos"),
+            ("talla", "178", "imc"),
+            ("cuello", "38", ""),
+            ("cuello", "35", ""),
+            ("peso", "70", "unidad desconocida"),
+        ]
+        rows = [
+            source_row(meta_uuid=f"invalid-unit-{index}", pte_id=str(1000 + index),
+                       **{f"pte_{part}_valor": value, f"pte_{part}_unidad": unit})
+            for index, (part, value, unit) in enumerate(cases)
+        ]
+        result = self.transform(rows)
+        self.assertEqual(len(cases), len(result))
+        for index, (part, _, _) in enumerate(cases):
+            target = {"peso": "pte_peso_kg", "talla": "pte_talla_cm",
+                      "cuello": "pte_cuello_cm"}[part]
+            with self.subTest(index=index, target=target):
+                self.assertTrue(pd.isna(result.loc[index, target]))
+        # Las medidas con unidades válidas del mismo registro siguen convirtiéndose.
+        self.assertEqual(170.0, result.loc[0, "pte_talla_cm"])
+        self.assertEqual(38.0, result.loc[2, "pte_cuello_cm"])
+        self.assertEqual(70.0, result.loc[0, "pte_peso_kg"])
 
     def test_t90_percentage_fallback_preserves_reported_value_and_nulls(self):
         rows = [
