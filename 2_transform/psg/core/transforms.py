@@ -204,8 +204,7 @@ def _converted_unit(dataframe: pd.DataFrame, part: str) -> pd.Series:
     values = _numeric(dataframe[f"pte_{part}_valor"], f"pte_{part}_valor")
     units = dataframe[f"pte_{part}_unidad"].astype("string").str.strip().str.lower()
     factors = UNIT_FACTORS[part]
-    if (values.notna() & ~units.isin(factors)).fillna(False).any():
-        raise ValueError(f"Unidad antropométrica inválida en pte_{part}_unidad")
+    # Unidad ausente/no reconocida: el dato derivado queda nulo, sin inferir la unidad.
     result = pd.Series(pd.NA, index=dataframe.index, dtype="Float64")
     for unit, factor in factors.items():
         mask = values.notna() & units.eq(unit).fillna(False)
