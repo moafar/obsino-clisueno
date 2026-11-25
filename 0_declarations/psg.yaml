@@ -24,7 +24,7 @@ extract:
       BASAL: "bs"
   logging:
     level: "INFO"
-    dir: "/home/rom/obsino/clisueno/logs"
+    dir: "../logs"
 
 transform:
   input:

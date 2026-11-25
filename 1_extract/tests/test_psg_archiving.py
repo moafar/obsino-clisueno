@@ -106,8 +106,10 @@ class PSGArchivingTest(unittest.TestCase):
     def test_rename_success_does_not_use_link_fallback(self):
         source = self.source / "synthetic.doc"
         source.write_bytes(b"synthetic")
-        with patch.object(archivo_utils.os, "link", side_effect=AssertionError("unexpected link")):
-            archivo_utils._move_psg_file(source, "bs", "01/02/2026", self.destination)
+        with patch.object(archivo_utils, "_rename_noreplace",
+                          side_effect=lambda src, dst, **kwargs: os.rename(src, dst)):
+            with patch.object(archivo_utils.os, "link", side_effect=AssertionError("unexpected link")):
+                archivo_utils._move_psg_file(source, "bs", "01/02/2026", self.destination)
         self.assertFalse(source.exists())
 
     def test_drvfs_fallback_links_then_unlinks_without_copy(self):
