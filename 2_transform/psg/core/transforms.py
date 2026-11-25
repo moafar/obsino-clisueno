@@ -238,6 +238,10 @@ def _op_psg_basal_transform(dataframe: pd.DataFrame, **_: Any) -> pd.DataFrame:
     t90_minutes = df["oxi_t90_tst_min"]
     sleep_minutes = df["arq_tiempo_sueno_min"]
     calculable = missing_t90 & t90_minutes.notna() & sleep_minutes.notna()
+    # Sin sueño registrado, 0/0 es indefinido: conservar T90% nulo.
+    # El resto de combinaciones con denominador cero sigue siendo inválido.
+    zero_over_zero = (t90_minutes.eq(0) & sleep_minutes.eq(0)).fillna(False)
+    calculable = calculable & ~zero_over_zero
     if calculable.any():
         numerator = t90_minutes.loc[calculable]
         denominator = sleep_minutes.loc[calculable]
