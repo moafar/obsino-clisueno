@@ -168,6 +168,24 @@ class PSGTransformTest(unittest.TestCase):
         self.assertEqual(0.0, result.loc[0, "oxi_t90_pct"])
         self.assertTrue(pd.isna(result.loc[1, "oxi_t90_pct"]))
 
+    def test_t90_zero_sleep_is_indeterminate_not_zero(self):
+        rows = [
+            source_row(meta_uuid="zero-sleep-1", arq_tiempo_sueno_min="0",
+                       arq_eficiencia_pct="0", fase_rem_duracion_min="0",
+                       oxi_t90_tst_min="0,0"),
+            source_row(meta_uuid="zero-sleep-2", pte_id="000124",
+                       arq_tiempo_sueno_min="0", oxi_t90_tst_min="0"),
+            source_row(meta_uuid="sleep-positive", pte_id="000125",
+                       arq_tiempo_sueno_min="200", oxi_t90_tst_min="11"),
+        ]
+        result = self.transform(rows)
+        self.assertEqual(3, len(result))
+        self.assertTrue(pd.isna(result.loc[0, "oxi_t90_pct"]))
+        self.assertTrue(pd.isna(result.loc[1, "oxi_t90_pct"]))
+        self.assertEqual(5.5, result.loc[2, "oxi_t90_pct"])
+        self.assertEqual(0.0, result.loc[0, "arq_tiempo_sueno_min"])
+        self.assertEqual(0.0, result.loc[0, "oxi_t90_tst_min"])
+
     def test_t90_percentage_rejects_invalid_derivation(self):
         for minutes, total in (("1", "0"), ("11", "10"), ("-1", "200")):
             with self.subTest(minutes=minutes, total=total), self.assertRaisesRegex(ValueError, "oxi_t90_pct"):
