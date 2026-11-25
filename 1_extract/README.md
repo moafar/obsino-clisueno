@@ -203,3 +203,33 @@ El documento se incluye si su texto convertido contiene el título PSG basal (ex
 El CSV tiene **159 columnas**. `meta_completitud_pct` se calcula como el porcentaje de los **152 campos no meta** con valor extraído; el valor `0` cuenta como presente y los valores ausentes no cuentan. Esta métrica no acredita exactitud clínica. `2_transform` produce **157 columnas**, sin modificar este porcentaje.
 
 La reextracción limpia requiere tratar expresamente los CSV y documentos ya archivados; no ejecutar una nueva extracción sobre el histórico sin un plan de conciliación y respaldo.
+
+
+### Compatibilidad de CSV PSG v5.0.0 con v5.0.1
+
+Para añadir exclusivamente la calificación de completitud a un CSV PSG ya extraído
+(158 columnas), sin procesar los informes originales:
+
+```bash
+# Desde la raíz del repositorio, con el entorno virtual activo:
+./.venv/bin/python scripts/psg_csv_v501.py \
+  --input staging/extract_psg_2026-11-25_04-36.csv --dry-run
+
+./.venv/bin/python scripts/psg_csv_v501.py \
+  --input staging/extract_psg_2026-11-25_04-36.csv \
+  --output staging/psg_v501_2026-11-25_04-36.csv
+```
+
+El CLI comprueba estrictamente el esquema anterior y los UUID, utiliza la
+misma función de completitud del extractor v5.0.1, conserva los valores y
+metadatos existentes y agrega `meta_completitud_pct` al final (159 columnas).
+No sobrescribe el origen ni un archivo de salida existente; la escritura de
+la nueva versión es atómica. El nombre de salida de ejemplo evita el patrón
+`extract_psg_*.csv` para no interferir con la detección automática de CSV.
+
+**Limitación:** la métrica representa la cobertura de los campos recuperados en
+la extracción anterior; no corrige errores de extracción ni incorpora informes
+que fueron rechazados. Los CSV de 158 columnas que permanezcan en `staging/`
+siguen siendo incompatibles con la lectura de CSV previos del extractor v5.0.1.
+Se requiere una conciliación y promoción controladas antes de volver a ejecutar
+la extracción sobre los directorios clínicos.
