@@ -1,6 +1,9 @@
 from __future__ import annotations
 from pathlib import Path
 import re, csv, logging, os, io, fcntl
+import ctypes
+import errno
+import stat
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional, List
 import hashlib
@@ -42,7 +45,6 @@ from src.poligrafia.procesar_poligrafia import procesar_poligrafia_docx
 # --- configuración general ---
 # Rutas absolutas para evitar dependencia del cwd de ejecución.
 OUTPUT_DIR = (REPO_ROOT / "staging").resolve()
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 EXCLUDE_PATTERNS = re.compile(r"(?:\bO2\b|OXIG|OXÍG|OXIGENO|OXÍGENO)", re.IGNORECASE)
 
@@ -164,6 +166,29 @@ def _append_psg_row(row: Dict, outfile: Path) -> bool:
         finally:
             fcntl.flock(target, fcntl.LOCK_UN)
 
+
+def load_known_psg_uuids(output_dir: Path) -> dict[str, str]:
+    """Consulta una vez los CSV PSG canónicos previos para reintentos idempotentes."""
+    known: dict[str, str] = {}
+    for path in output_dir.glob("extract_psg_*.csv"):
+        if path.stem.endswith("_transformed"):
+            continue
+        with path.open("r", newline="", encoding="utf-8") as source:
+            reader = csv.DictReader(source)
+            if reader.fieldnames != list(PSG_COLUMNS):
+                if reader.fieldnames and "meta_uuid" in reader.fieldnames:
+                    raise PSGExtractionError(f"CSV PSG incompatible en {path}")
+                continue  # CSV anterior al contrato canónico
+            for row in reader:
+                uuid = row.get("meta_uuid")
+                origin = row.get("meta_fuente")
+                if not uuid or not origin:
+                    raise PSGExtractionError(f"CSV PSG incompleto en {path}")
+                previous = known.setdefault(uuid, origin)
+                if previous != origin:
+                    raise PSGExtractionError("UUID PSG repetido con orígenes distintos en CSV previos")
+    return known
+
 # -----------------------------------------------
 
 @dataclass(frozen=True)
@@ -243,10 +268,8 @@ def configure_subflows(
 ) -> None:
     global TIPOS_ACTIVOS, UNIFIED_FILE_FOR, PREFIXES, OUTPUT_DIR
 
-    # Forzar siempre la ruta staging bajo el root del proyecto (sin duplicar 'clisueno')
-    global OUTPUT_DIR
-    OUTPUT_DIR = (REPO_ROOT / "staging").resolve()
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # El destino se valida en main antes de configurar y escribir.
+    OUTPUT_DIR = Path(output_dir).resolve() if output_dir else (REPO_ROOT / "staging").resolve()
 
     if unified_file_for is None:
         raise RuntimeError(
@@ -289,6 +312,108 @@ def _outfile_for_tipo(tipo: str) -> Optional[Path]:
         nombre = nombre.replace("{timestamp}", ts)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     return OUTPUT_DIR / nombre
+
+
+def _psg_date_path(date_str: str | None) -> Path:
+    if date_str:
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%Y/%m/%d", "%d-%m-%Y"):
+            try:
+                value = datetime.strptime(str(date_str).strip(), fmt).date()
+                return Path(str(value.year)) / f"{value.year:04d}-{value.month:02d}"
+            except ValueError:
+                continue
+    return Path("sin_fecha")
+
+
+def _rename_noreplace(source: Path, destination: Path, *, destination_dir_fd: int | None = None) -> None:
+    """Movimiento atómico sin reemplazo cuando el volumen lo admite."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise OSError(errno.ENOSYS, "renameat2 no disponible")
+    renameat2.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int,
+                          ctypes.c_char_p, ctypes.c_uint)
+    renameat2.restype = ctypes.c_int
+    target_fd = -100 if destination_dir_fd is None else destination_dir_fd
+    target_name = destination if destination_dir_fd is None else destination.name
+    if renameat2(-100, os.fsencode(source), target_fd, os.fsencode(target_name), 1) != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code), str(destination))
+
+
+def _open_psg_destination_dir(root: Path, relative: Path) -> int:
+    """Abre cada carpeta sin seguir enlaces antes de crear la siguiente."""
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    descriptor = os.open(root, flags)
+    try:
+        for part in relative.parts:
+            try:
+                os.mkdir(part, dir_fd=descriptor)
+            except FileExistsError:
+                pass
+            child = os.open(part, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _same_psg_file(source: Path, destination_name: str, destination_dir_fd: int) -> bool:
+    try:
+        origin = source.stat(follow_symlinks=False)
+        target = os.stat(destination_name, dir_fd=destination_dir_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return False
+    return (stat.S_ISREG(origin.st_mode) and stat.S_ISREG(target.st_mode) and
+            (origin.st_dev, origin.st_ino) == (target.st_dev, target.st_ino))
+
+
+def _move_psg_file(archivo: Path, prefix: str, date_str: str | None,
+                   archive_root: Path, *, allow_complete_link: bool = False) -> Path:
+    relative_dir = _psg_date_path(date_str)
+    destination = Path(archive_root) / relative_dir / f"{prefix}_{archivo.name}"
+    try:
+        if not re.fullmatch(r"[A-Za-z0-9_]+", prefix):
+            raise RuntimeError("Prefijo PSG no válido para archivar")
+        source_stat = archivo.lstat()
+        if not stat.S_ISREG(source_stat.st_mode):
+            raise RuntimeError("El origen PSG no es un archivo regular")
+        archive_root = archive_root.resolve(strict=True)
+        if archivo.resolve().is_relative_to(archive_root):
+            raise RuntimeError("El documento PSG ya está dentro del destino de archivado")
+        if source_stat.st_dev != archive_root.stat().st_dev:
+            raise RuntimeError("Origen y destino PSG no están en el mismo dispositivo")
+        destination_fd = _open_psg_destination_dir(archive_root, relative_dir)
+        try:
+            try:
+                _rename_noreplace(archivo, destination, destination_dir_fd=destination_fd)
+            except OSError as error:
+                if error.errno in (errno.EINVAL, errno.ENOSYS, errno.EOPNOTSUPP):
+                    try:
+                        os.link(archivo, destination.name, dst_dir_fd=destination_fd,
+                                follow_symlinks=False)
+                    except FileExistsError:
+                        if not allow_complete_link or not _same_psg_file(
+                                archivo, destination.name, destination_fd):
+                            raise
+                    if not _same_psg_file(archivo, destination.name, destination_fd):
+                        raise RuntimeError("El enlace de archivado no coincide con el origen")
+                    os.unlink(archivo)
+                elif (error.errno == errno.EEXIST and allow_complete_link and
+                      _same_psg_file(archivo, destination.name, destination_fd)):
+                    os.unlink(archivo)
+                else:
+                    raise
+        finally:
+            os.close(destination_fd)
+    except Exception as error:
+        logging.error("Traslado PSG fallido (%s): origen=%s destino=%s",
+                      type(error).__name__, archivo, destination)
+        raise
+    logging.info("Traslado PSG correcto: origen=%s destino=%s", archivo, destination)
+    return destination
 
 def _parse_date_folder(date_str: str) -> str:
     """Extrae YYYY-MM de una fecha string para organizar carpetas."""
@@ -341,7 +466,8 @@ def _move_processed_file(archivo: Path, prefixes: set, date_str: str) -> None:
     except Exception as e:
         logging.error("Error moviendo archivo procesado: %s", type(e).__name__)
 
-def procesar_archivo(archivo: Path) -> bool:
+def procesar_archivo(archivo: Path, *, psg_archive_dir: Path | None = None,
+                    known_psg: dict[str, str] | None = None) -> bool | str:
     """Procesa un archivo y escribe en un CSV unificado por tipo de examen (solo activos)."""
     if EXCLUDE_PATTERNS.search(archivo.name):
         logging.info("Archivo excluido por patrón OXIGENO")
@@ -400,15 +526,38 @@ def procesar_archivo(archivo: Path) -> bool:
                 except TypeError:
                     resultados = procesador(texto_relevante)           # (texto)
             if tipo == "BASAL":
+                if psg_archive_dir is None:
+                    raise PSGExtractionError("No se configuró destino de archivado PSG")
+                uuid = resultados["meta_uuid"]
+                source_path = str(archivo.resolve())
+                previous = known_psg.get(uuid) if known_psg is not None else None
+                if previous is not None:
+                    if str(Path(previous).resolve()) != source_path:
+                        logging.warning("UUID PSG duplicado en otro origen; no se archiva: %s", archivo)
+                        return "duplicate"
+                    try:
+                        _move_psg_file(archivo, PREFIXES.get(tipo, ""),
+                                       resultados.get("meta_fecha_estudio"), psg_archive_dir,
+                                       allow_complete_link=True)
+                        return "retried"
+                    except Exception as error:
+                        logging.error("Reintento de archivado PSG fallido (%s): %s", type(error).__name__, archivo)
+                        return "retry_archive_failed"
                 outfile = _outfile_for_tipo(tipo)
                 if outfile is None:
                     raise PSGExtractionError("No hay CSV configurado para PSG")
-                _append_psg_row(resultados, outfile)
-                detected_date = resultados.get("meta_fecha_estudio")
-                processing_results.append((tipo, True))
-                if prefix := PREFIXES.get(tipo):
-                    applied_prefixes.add(prefix)
-                continue
+                if not _append_psg_row(resultados, outfile):
+                    logging.warning("UUID PSG ya presente en CSV; no se archiva: %s", archivo)
+                    return "duplicate"
+                if known_psg is not None:
+                    known_psg[uuid] = source_path
+                try:
+                    _move_psg_file(archivo, PREFIXES.get(tipo, ""),
+                                   resultados.get("meta_fecha_estudio"), psg_archive_dir)
+                    return "new"
+                except Exception as error:
+                    logging.error("Extracción PSG registrada; archivado fallido (%s): %s", type(error).__name__, archivo)
+                    return "new_archive_failed"
             # print(f"[DEBUG] Resultados para {tipo}: {resultados}")
             # Capturar fecha si aun no tenemos una
             if not detected_date and "fecha_estudio" in resultados:
@@ -422,6 +571,7 @@ def procesar_archivo(archivo: Path) -> bool:
             if tipo == "BASAL":
                 detail = str(e) if isinstance(e, PSGExtractionError) else type(e).__name__
                 logging.warning("Extracción PSG omitida: %s", detail)
+                return "rejected"
             # print(f"[DEBUG] Error procesando {tipo} en {archivo}: {e}")
             processing_results.append((tipo, False))
             continue

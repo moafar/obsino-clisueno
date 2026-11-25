@@ -1,4 +1,4 @@
-import argparse, sys, time, logging
+import argparse, sys, time, logging, os, fcntl, re
 from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,7 +6,7 @@ import yaml
 
 from commons.logger import setup_logger
 from commons.directorio_utils import validar_directorio, procesar_directorio
-from commons.archivo_utils import configure_subflows
+from commons.archivo_utils import configure_subflows, load_known_psg_uuids
 
 EXIT_OK, EXIT_CFG, EXIT_INPUT, EXIT_PROCESS, EXIT_UNIFY = 0, 1, 2, 3, 4
 logger = logging.getLogger(__name__)
@@ -22,6 +22,8 @@ class Config:
     carpeta_csv: Path | None
     subflujos_salida_unificada: dict[str, str] | None
     subflujos_prefijos: dict[str, str] | None
+    archivo_destino: Path | None = None
+    rutas_clinicas_protegidas: list[Path] | None = None
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -48,6 +50,10 @@ def parse_args():
     p.add_argument("--no-process", action="store_true", help="No procesa; solo unifica CSVs")
     p.add_argument("--no-unify", action="store_true", help="No unifica; solo procesa")
     p.add_argument("--dry-run", action="store_true", help="Valida y muestra parámetros; no ejecuta")
+    p.add_argument("--mode", choices=("test", "normal"), default="normal")
+    p.add_argument("--archive-dest", help="Destino de archivado PSG (sobrescribe el YAML)")
+    p.add_argument("--output-dir", help="Directorio CSV PSG (sobrescribe el YAML)")
+    p.add_argument("--test-root", help="Raíz aislada obligatoria en modo test PSG")
     return p.parse_args()
 
 
@@ -82,6 +88,7 @@ def load_config(path_cfg: str) -> Config:
     proc = extract.get("procesamiento") or {}
     sal = extract.get("salida") or {}
     sub = extract.get("subflujos") or {}
+    archive = extract.get("archivado") or {}
 
     project_logs_dir = (BASE_DIR.parent / "logs").resolve()
     configured_logs_dir = _resolve_from_config(log.get("dir"))
@@ -101,6 +108,9 @@ def load_config(path_cfg: str) -> Config:
         carpeta_csv = _resolve_from_config(sal.get("carpeta_csv")),
         subflujos_salida_unificada = salida_unificada,
         subflujos_prefijos = sub.get("prefijos"),
+        archivo_destino = _resolve_from_config(archive.get("destino")),
+        rutas_clinicas_protegidas = [path for item in archive.get("rutas_clinicas_protegidas", [])
+                                    if (path := _resolve_from_config(item)) is not None],
     )
     return cfg
 
@@ -115,13 +125,16 @@ def resolve_input_dir(cli_dir: str | None, cfg: Config) -> Path:
     v = validar_directorio(str(path))
     return v if isinstance(v, Path) else path
 
-def run_processing(ruta: Path, cfg: Config) -> tuple[dict, float]:
+def run_processing(ruta: Path, cfg: Config, *, archive_dir: Path | None = None,
+                   known_psg: dict[str, str] | None = None) -> tuple[dict, float]:
     t0 = time.perf_counter()
     res = procesar_directorio(
         ruta,
         tipos_validos=cfg.tipos_validos,
         glob_patron=cfg.glob_patron,
         barra_progreso=cfg.barra_progreso,
+        psg_archive_dir=archive_dir,
+        known_psg=known_psg,
     )
     dt = time.perf_counter() - t0
     return res, dt
@@ -134,23 +147,128 @@ def report(res: dict, ruta: Path, dt: float, verbose: bool):
         "validos": res["archivos_validos"],
         "descartados": res["num_files"] - res["archivos_validos"],
         "extraidos": res.get("archivos_extraidos", 0),
+        "registrados": res.get("archivos_registrados", 0),
         "rechazados": res.get("archivos_rechazados", 0),
         "tiempo_s": f"{dt:.2f}",
     }
     logger.info(
-        "Resumen: archivos=%s, válidos=%s, descartados=%s, extraídos=%s, rechazados=%s, tiempo_s=%s",
+        "Resumen: archivos=%s, válidos=%s, descartados=%s, filas_nuevas=%s, nuevos_archivados=%s, duplicados=%s, fallos_archivado=%s, reintentos=%s, rechazados=%s, errores_recorrido=%s, tiempo_s=%s",
         base["num_files"], base["validos"], base["descartados"],
-        base["extraidos"], base["rechazados"], base["tiempo_s"],
+        base["registrados"], base["extraidos"], res.get("archivos_duplicados", 0),
+        res.get("archivos_fallo_archivado", 0), res.get("archivos_reintentados", 0),
+        base["rechazados"], res.get("errores_recorrido", 0), base["tiempo_s"],
     )
     if verbose:
         print(f"\n{' Resumen de procesamiento ':-^60}")
         for k,v in base.items(): print(f"{k:>12}: {v}")
+        for key in ("archivos_duplicados", "archivos_fallo_archivado", "archivos_reintentados", "errores_recorrido"):
+            print(f"{key:>23}: {res.get(key, 0)}")
         print("-"*60)
     else:
         print(f"\nArchivos: {base['num_files']} | Subdirs: {base['num_dirs']} | "
               f"Válidos: {base['validos']} | Descartados: {base['descartados']} | "
-              f"Extraídos: {base['extraidos']} | Rechazados: {base['rechazados']} | "
+              f"Filas nuevas: {base['registrados']} | Nuevos archivados: {base['extraidos']} | "
+              f"Duplicados: {res.get('archivos_duplicados', 0)} | "
+              f"Fallos de archivado: {res.get('archivos_fallo_archivado', 0)} | "
+              f"Reintentos: {res.get('archivos_reintentados', 0)} | "
+              f"Errores de recorrido: {res.get('errores_recorrido', 0)} | "
+              f"Rechazados: {base['rechazados']} | "
               f"Tiempo(s): {base['tiempo_s']}\n")
+
+
+def _psg_runtime(args, cfg: Config) -> tuple[Path, Path, Path, Config]:
+    if args.no_process:
+        raise ValueError("PSG requiere procesamiento; --no-process no aplica")
+    if args.mode == "test" and not all((args.test_root, args.input or args.input_posicional,
+                                        args.archive_dest, args.output_dir)):
+        raise ValueError("Modo test PSG requiere --test-root, --input, --archive-dest y --output-dir")
+    source = resolve_input_dir(args.input or args.input_posicional, cfg)
+    raw_destination = args.archive_dest or cfg.archivo_destino
+    raw_output = args.output_dir or cfg.carpeta_csv
+    if not raw_destination or not raw_output:
+        raise ValueError("PSG requiere destino de archivo y salida CSV explícitos")
+    destination = Path(raw_destination).resolve(strict=True)
+    output = Path(raw_output).resolve(strict=True)
+    for label, path, access in (("origen", source, os.R_OK | os.X_OK),
+                                ("destino", destination, os.W_OK | os.X_OK),
+                                ("salida CSV", output, os.W_OK | os.X_OK)):
+        if not path.is_dir() or not os.access(path, access):
+            raise ValueError(f"Directorio PSG no accesible: {label}: {path}")
+    if (source == destination or source.is_relative_to(destination) or
+            source.stat().st_dev != destination.stat().st_dev):
+        raise ValueError("Origen y destino PSG deben ser directorios distintos del mismo dispositivo")
+    if output.is_relative_to(source) or output.is_relative_to(destination):
+        raise ValueError("La salida CSV PSG debe estar fuera del origen y del archivo")
+    if args.mode == "test":
+        test_root = Path(args.test_root).resolve(strict=True)
+        if not (test_root / ".psg-test-root").is_file():
+            raise ValueError("La raíz de pruebas PSG requiere el marcador .psg-test-root")
+        official = load_config(str(resolve_config_yaml_path("psg")))
+        protected = (official.rutas_clinicas_protegidas or []) + [
+            official.entrada_ruta, official.archivo_destino,
+            (BASE_DIR.parent / "staging").resolve(), (BASE_DIR.parent / "procesados").resolve(),
+        ]
+        if any(test_root.is_relative_to(path) or path.is_relative_to(test_root)
+               for path in protected if path is not None):
+            raise ValueError("La raíz de pruebas PSG se solapa con rutas clínicas u ordinarias")
+        if any(not path.is_relative_to(test_root) for path in (source, destination, output)):
+            raise ValueError("Todas las rutas de modo test PSG deben estar dentro de --test-root")
+        cfg.logging_dir = test_root / "logs"
+    elif args.test_root:
+        raise ValueError("--test-root solo se admite en modo test")
+    if not cfg.subflujos_prefijos or not cfg.subflujos_prefijos.get("BASAL"):
+        raise ValueError("Falta el prefijo BASAL en la configuración PSG")
+    if set(cfg.subflujos_salida_unificada or {}) != {"BASAL"}:
+        raise ValueError("El flujo PSG solo puede activar el subflujo BASAL")
+    if not re.fullmatch(r"[A-Za-z0-9_]+", cfg.subflujos_prefijos["BASAL"]):
+        raise ValueError("Prefijo BASAL no válido para un nombre de archivo")
+    template = (cfg.subflujos_salida_unificada or {}).get("BASAL", "")
+    if (Path(template).name != template or not template.startswith("extract_psg_") or
+            not template.endswith(".csv") or template.endswith("_transformed.csv")):
+        raise ValueError("El CSV PSG debe tener nombre extract_psg_*.csv dentro de la salida")
+    return source, destination, output, cfg
+
+
+def _show_psg_configuration(mode: str, source: Path, destination: Path,
+                            output: Path, dry_run: bool = False) -> None:
+    print("\nOBSINO-CLISUENO | EXTRACTOR PSG")
+    print(f"Modo: {mode.upper()} | Flujo: PSG | Recursivo: Sí | Tipos: DOC, RTF")
+    print(f"Origen: {source}\nDestino: {destination}\nSalida CSV: {output}")
+    print("Organización: AAAA/AAAA-MM o sin_fecha | Prefijos acumulativos: Sí")
+    print("Destino dentro del origen: excluido por ruta real")
+    print("Origen y destino accesibles: Sí | Mismo dispositivo: Sí")
+    print("Movimiento: renameat2 sin reemplazo o enlace y retirada del origen")
+    print("DRY-RUN: no se extraerá ni moverá nada" if dry_run else
+          "ATENCIÓN: SE MOVERÁN DOCUMENTOS ORIGINALES")
+
+
+def _orchestrate_psg(args, cfg: Config) -> int:
+    source, destination, output, cfg = _psg_runtime(args, cfg)
+    _show_psg_configuration(args.mode, source, destination, output, args.dry_run)
+    if args.dry_run:
+        return EXIT_OK
+    try:
+        answer = input("¿Confirmas el inicio de la operación? [s/N]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return EXIT_OK
+    if answer not in ("s", "si", "sí"):
+        return EXIT_OK
+    setup_logging_from_config(cfg, force_debug=args.verbose, flow="psg")
+    output_map = build_timestamped_output_map("psg", cfg.subflujos_salida_unificada)
+    configure_subflows(unified_file_for=output_map, prefixes=cfg.subflujos_prefijos,
+                       output_dir=output)
+    logger.info("PSG: modo=%s origen=%s destino=%s salida=%s", args.mode, source, destination, output)
+    with (output / ".psg-archive.lock").open("a+b") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            known = load_known_psg_uuids(output)
+            result, elapsed = run_processing(source, cfg, archive_dir=destination, known_psg=known)
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+    report(result, source, elapsed, args.verbose)
+    if result.get("archivos_fallo_archivado", 0) or result.get("errores_recorrido", 0):
+        return EXIT_PROCESS
+    return EXIT_OK
 
 def maybe_unify(cfg: Config) -> None:
     if not cfg.carpeta_csv:
@@ -180,6 +298,10 @@ def orchestrate():
     try:
         config_path = args.config or str(resolve_config_yaml_path(args.flow))
         cfg = load_config(config_path)
+        if args.flow == "psg":
+            return _orchestrate_psg(args, cfg)
+        if args.mode != "normal" or args.archive_dest or args.output_dir or args.test_root:
+            raise ValueError("Las opciones de archivado PSG no aplican a otros flujos")
         setup_logging_from_config(cfg, force_debug=args.verbose, flow=args.flow)
         runtime_output_map = build_timestamped_output_map(
             flow=args.flow,

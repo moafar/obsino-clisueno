@@ -2,19 +2,21 @@
 
 ## Guía rápida de ejecución
 
-Contexto: ejecutar desde la raíz del repo o desde `1_extract/` con `.venv` activo.
+Contexto: ejecutar desde la raíz del repositorio con `.venv` activo.
 
 ```bash
 source .venv/bin/activate
-cd 1_extract
-../.venv/bin/python main.py --flow psg --input /ruta/de/la/carpeta
+./.venv/bin/python 1_extract/main.py --flow psg --dry-run
 ```
 
-Prueba rápida con carpeta del repo:
+Prueba PSG con directorios aislados y documentos sintéticos:
 
 ```bash
-cd /home/rom/obsino/clisueno/1_extract
-../.venv/bin/python main.py --flow psg --input ./test_files
+mkdir -p /tmp/psg-test-01/{entrada,archivo,csv}
+touch /tmp/psg-test-01/.psg-test-root
+./.venv/bin/python 1_extract/main.py --flow psg --mode test \
+  --test-root /tmp/psg-test-01 --input /tmp/psg-test-01/entrada \
+  --archive-dest /tmp/psg-test-01/archivo --output-dir /tmp/psg-test-01/csv
 ```
 
 Extracción estructurada desde reportes clínicos de laboratorio de sueño.
@@ -70,11 +72,11 @@ Chuleta operativa (desde `1_extract/`):
 
 | Comando | Efecto |
 |---|---|
-| `python3 main.py --flow psg --input /ruta/de/la/carpeta` | Modo completo: procesa y luego unifica. |
+| `python3 main.py --flow psg --input /ruta/de/la/carpeta` | Modo normal: confirma, procesa y archiva en el destino configurado. |
 | `python3 main.py --flow psg /ruta/de/la/carpeta` | Igual que el anterior usando argumento posicional (compatibilidad). |
 | `python3 main.py --flow psg --input /ruta/de/la/carpeta --no-unify` | Solo procesamiento (sin unificación). |
-| `python3 main.py --flow psg --no-process` | Solo unificación usando `salida.carpeta_csv` del YAML del flujo. |
-| `python3 main.py --flow psg --input /ruta/de/la/carpeta --dry-run` | Simulación: valida parámetros/configuración sin ejecutar acciones. |
+| `python3 main.py --flow xpap --no-process` | Opción parcial conservada para XPAP. |
+| `python3 main.py --flow psg --input /ruta/de/la/carpeta --dry-run` | Valida y muestra configuración sin extraer, escribir ni mover. |
 | `python3 main.py --flow psg --input /ruta/de/la/carpeta -v` | Modo verbose (logging en DEBUG). |
 
 Forma recomendada (desde `1_extract/`):
@@ -155,11 +157,41 @@ sudo apt install catdoc
 ## Notas operativas
 
 - El proceso registra errores por archivo sin detener toda la corrida.
-- Se soporta ejecución parcial (`--no-process`, `--no-unify`) según necesidad operativa.
+- Se soporta ejecución parcial (`--no-process`, `--no-unify`) para los flujos que la admiten; PSG requiere procesamiento.
 - La opción `-v`/`--verbose` aumenta el detalle de logging (nivel DEBUG).
-- Los archivos procesados se archivan en `procesados/` en la raiz del repositorio (no depende del `cwd`).
+- PSG archiva en el destino Windows configurado en `0_declarations/psg.yaml`; no usa `procesados/` como alternativa. Los demás flujos conservan su destino anterior.
+
+### Archivado PSG
+
+En modo normal, el YAML define el origen `/mnt/e/RESULTADOS`, el destino
+`/mnt/e/RESULTADOS/RESULTADOS_OBSERVATORIO` y la salida CSV `staging/`.
+`--input` permite otro origen del mismo dispositivo, incluido el reproceso histórico:
+
+```bash
+./.venv/bin/python 1_extract/main.py --flow psg --mode normal --dry-run
+./.venv/bin/python 1_extract/main.py --flow psg --mode normal \
+  --input /mnt/e/RESULTADOS_OBSERVATORIO_REPROCESO
+```
+
+La ejecución normal y la de prueba solicitan una confirmación antes de escribir o mover.
+`--dry-run` valida y muestra la configuración sin solicitarla. El modo `test` exige
+una raíz con `.psg-test-root` y rutas de entrada, archivo y CSV dentro de ella;
+rechaza el solapamiento con las rutas clínicas configuradas. La salida de prueba
+queda fuera del CSV ordinario.
+
+El movimiento PSG usa `renameat2(RENAME_NOREPLACE)` cuando el volumen lo admite.
+Si devuelve `EINVAL`, `ENOSYS` o `EOPNOTSUPP`, usa `os.link()` y después
+`os.unlink()`, sin copiar contenido ni sobrescribir destinos. Si falla la
+eliminación, ambos nombres permanecen enlazados; un reintento con UUID ya
+registrado puede completar el traslado. La variante con descriptor de directorio
+y la comprobación de identidad del enlace siguen pendientes de prueba en DrvFS.
+Los UUID previos se leen una vez al inicio de cada ejecución. Un documento con
+CSV registrado y traslado fallido solo se reintenta si conserva el mismo origen;
+no se duplica su fila.
+Si hubo fallos de archivado o errores al recorrer el origen, se muestra el resumen
+y la ejecución termina con código no nulo; los documentos afectados permanecen en origen.
 
 ### [v4.1.1] Cambios recientes
 
-- La salida de procesamiento (`extract_<flow>_<timestamp>.csv`) se genera siempre en `staging/` bajo la raíz del proyecto, sin importar la configuración YAML.
+- PSG usa la salida CSV configurada para el modo; los demás flujos respetan `salida.carpeta_csv` del YAML.
 - Se eliminan todos los prints de depuración en pantalla; solo queda logging a archivo.
