@@ -1,3 +1,38 @@
+# v5.0.1 -- Extracción PSG tolerante a secciones incompletas y evaluación de completitud
+
+**Fecha de registro:** 2026-11-25
+**Estado:** versión actual del código; etiqueta Git y publicación formal pendientes.
+
+## Cambios incluidos
+
+- El criterio de inclusión de estudios PSG basales se basa en el título del informe, excluyendo los informes DAM.
+- Las secciones se procesan de forma independiente. Una tabla ausente, ambigua o ilegible deja vacíos los campos de esa sección, sin descartar los datos válidos de las demás.
+- Se incorpora `meta_completitud_pct`, calculado como el porcentaje de los 152 campos de extracción no meta con valor presente. Los ceros explícitos cuentan como datos presentes. La métrica describe cobertura de campos, no exactitud clínica.
+- El esquema de extracción pasa de 158 a **159 columnas** y el de transformación de 156 a **157 columnas**.
+- Se sincronizan declaración, extracción, transformación, carga, pruebas y diccionario de datos PSG.
+
+## Validación y compatibilidad
+
+- 63 pruebas automatizadas superadas (44 de extracción, 10 de transformación y 9 de carga).
+- Pruebas reales de extracción con un DOC, un RTF y un DOC anteriormente rechazado por una tabla de posición ilegible. En el último caso, la transformación preservó los nueve campos de posición nulos, el UUID y los indicadores recuperados.
+- Los CSV PSG de 158 columnas de la versión anterior **no son directamente intercambiables** con los de 159 columnas de esta versión; no mezclarlos en un mismo procesamiento.
+- La reextracción histórica completa y la adecuación del esquema de destino en BigQuery quedan pendientes. Esta entrada no implica su ejecución.
+
+---
+
+# v5.0.0 -- Rediseño del modelo de datos y del pipeline PSG
+
+**Registro retrospectivo:** hito de desarrollo anterior a la incorporación de la completitud en v5.0.1.
+**Estado:** no se acredita una publicación ni una etiqueta Git independiente de v5.0.0.
+
+## Cambios incluidos
+
+- Rediseño de la extracción de polisomnografías basales y estandarización de la nomenclatura canónica de los campos.
+- Organización temática por secciones clínicas y prefijos de variables; eliminación de la nomenclatura legada `basal_`.
+- Alineación de los contratos entre las capas `1_extract`, `2_transform` y `3_load`.
+- Esquema de referencia de esta etapa: **158 columnas** en extracción y **156 columnas** en transformación, antes de añadir `meta_completitud_pct`.
+
+---
 
 # v4.1.2 -- Documentacion operativa y diagnostico tecnico
 
