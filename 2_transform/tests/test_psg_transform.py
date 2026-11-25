@@ -32,7 +32,7 @@ CONTRACT = ROOT / "0_declarations" / "psg.yaml"
 
 def source_row(**overrides):
     row = dict.fromkeys(PSG_COLUMNS, "")
-    row.update(pte_id="000123", meta_uuid="synthetic-uuid", pte_edad_anos="12",
+    row.update(pte_id="000123", meta_uuid="synthetic-uuid", meta_completitud_pct="0", pte_edad_anos="12",
                pte_peso_valor="70", pte_peso_unidad="kg",
                pte_talla_valor="170", pte_talla_unidad="cm",
                pte_cuello_valor="38", pte_cuello_unidad="cm",
@@ -66,7 +66,7 @@ class PSGTransformTest(unittest.TestCase):
         )
         types = {"texto": "string", "categoría": "string", "entero": "int",
                  "decimal": "float", "fecha": "date"}
-        self.assertEqual(156, len(rows))
+        self.assertEqual(157, len(rows))
         self.assertEqual({name: types[kind] for name, kind in rows}, DATA_TYPES)
         self.assertEqual([name for name, _ in rows], FINAL_COLS)
         self.assertEqual(list(PSG_COLUMNS), list(self.config["schema"]["input"]["columns"]))
@@ -101,7 +101,7 @@ class PSGTransformTest(unittest.TestCase):
         ]
         result = self.transform(rows)
         self.assertEqual(3, len(result))
-        self.assertEqual(156, len(result.columns))
+        self.assertEqual(157, len(result.columns))
         self.assertEqual(["000123", "000124", "000125"], result["pte_id"].tolist())
         self.assertEqual(11.9167, result.loc[0, "pte_edad_decimal_anos"])
         self.assertEqual("Menor de 12", result.loc[0, "pte_grupo_edad"])
@@ -117,6 +117,7 @@ class PSGTransformTest(unittest.TestCase):
         self.assertEqual(10.1, result.loc[0, "evresp_ah_indice_evhora"])
         self.assertEqual(11.2, result.loc[0, "evresp_iah_tst_evhora"])
         self.assertTrue(pd.isna(result.loc[1, "oxi_t90_despierto_min"]))
+        self.assertEqual(0, result.loc[0, "meta_completitud_pct"])
         self.assertEqual(rows[0]["clin_interpretacion"], result.loc[0, "clin_interpretacion"])
         self.assertEqual("Int64", str(result["pte_edad_anos"].dtype))
         self.assertEqual("Float64", str(result["pte_peso_kg"].dtype))
@@ -125,6 +126,7 @@ class PSGTransformTest(unittest.TestCase):
     def test_invalid_values_and_duplicate_uuid_raise_without_dropping(self):
         for changes in (
             {"pte_edad_anos": "12,5"},
+            {"meta_completitud_pct": "101"},
             {"arq_tiempo_sueno_min": "valor ilegible"},
             {"meta_fecha_estudio": "fecha imposible"},
             {"pte_peso_unidad": "unidad desconocida"},
@@ -185,7 +187,7 @@ class PSGTransformTest(unittest.TestCase):
             workbook = load_workbook(target, read_only=True, data_only=True)
             try:
                 sheet = workbook.active
-                self.assertEqual(156, sheet.max_column)
+                self.assertEqual(157, sheet.max_column)
                 self.assertEqual("000123", sheet.cell(2, FINAL_COLS.index("pte_id") + 1).value)
                 self.assertEqual(70, sheet.cell(2, FINAL_COLS.index("pte_peso_kg") + 1).value)
                 self.assertEqual(5.5, sheet.cell(2, FINAL_COLS.index("oxi_t90_pct") + 1).value)

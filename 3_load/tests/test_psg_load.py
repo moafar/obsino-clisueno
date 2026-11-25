@@ -54,7 +54,7 @@ class PsgLoadTest(unittest.TestCase):
     def row(self, **changes):
         row = {name: None for name in NAMES}
         row.update(pte_id="000123", meta_uuid="synthetic-uuid-1", meta_fecha_estudio=datetime(2025, 1, 2),
-                   pte_edad_anos=0, arq_tiempo_sueno_min=12.5, clin_ronquido="Ronquido persistente. Acentos: niño.")
+                   pte_edad_anos=0, arq_tiempo_sueno_min=12.5, meta_completitud_pct=20.0, clin_ronquido="Ronquido persistente. Acentos: niño.")
         row.update(changes)
         return row
 
@@ -79,12 +79,12 @@ class PsgLoadTest(unittest.TestCase):
             return client.load_table_from_dataframe.call_args.args[0]
 
     def test_contract_configuration_and_date_type(self):
-        self.assertEqual(len(SCHEMA), 156)
+        self.assertEqual(len(SCHEMA), 157)
         self.assertEqual(SCHEMA, load.load_schema(CONTRACT, "schema.transform.output.columns"))
         self.assertEqual((sum(kind == "INT" for kind in SCHEMA.values()),
                           sum(kind == "FLOAT" for kind in SCHEMA.values()),
                           sum(kind == "STRING" for kind in SCHEMA.values()),
-                          sum(kind == "DATE" for kind in SCHEMA.values())), (31, 112, 12, 1))
+                          sum(kind == "DATE" for kind in SCHEMA.values())), (31, 113, 12, 1))
         self.assertEqual(self.config.schema_yaml_path, CONTRACT)
         self.assertEqual(load.resolve_config_yaml_path("psg"), CONTRACT)
         self.assertEqual(self.config.schema_path_in_yaml, "schema.load.input.columns")
@@ -133,9 +133,9 @@ class PsgLoadTest(unittest.TestCase):
     def test_reject_invalid_values(self):
         for changes in (
             {"arq_tiempo_sueno_min": "invalid"},
+            {"meta_completitud_pct": 101},
             {"pte_edad_anos": 1.5},
             {"meta_fecha_estudio": "invalid"},
-            {"pte_id": None},
             {"meta_uuid": None},
             {"meta_uuid": "  "},
         ):

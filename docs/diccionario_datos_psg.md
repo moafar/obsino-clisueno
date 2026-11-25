@@ -6,7 +6,7 @@
 
 Se consolidan los nombres acordados para PSG y se contrasta su disponibilidad con **seis informes de ejemplo**: **3 RTF** y **3 DOC**. La comparación distingue presencia de un valor verificable de mera existencia de una etiqueta o una columna. Se ha revisado la matriz de extracción experimental y las tablas originales de ambas plantillas. **No equivale a validar todo el universo de informes ni el pipeline de producción**.
 
-**Total de campos canónicos propuestos: 156**, distribuidos en 10 grupos.
+**Total de campos canónicos propuestos: 157**, distribuidos en 10 grupos.
 
 ### Interpretación de la disponibilidad
 
@@ -241,6 +241,7 @@ Las referencias de disponibilidad se basan en la matriz de seis documentos, con 
 | 154 | `meta_fuente` | Identificador o ruta del archivo origen utilizado para la extracción. | texto | — | Generado | Generado |
 | 155 | `meta_uuid` | Hash identificador determinista del contenido binario del archivo de origen. | texto | — | Generado | Generado |
 | 156 | `meta_version_control` | Marca de fecha y hora de la ejecución de extracción, en el formato histórico. | texto | — | Generado | Generado |
+| 157 | `meta_completitud_pct` | Porcentaje de campos clínicos y técnicos del CSV de extracción con valor recuperado, sobre un denominador fijo de 152 campos no `meta_*`; 0 explícito cuenta como presente. No es una medida de exactitud clínica. | decimal | % | Generado | Generado |
 
 ## 3. Diferencias de disponibilidad entre DOC y RTF
 
@@ -329,3 +330,11 @@ Las referencias de disponibilidad se basan en la matriz de seis documentos, con 
 | `meta_fuente` | Se produce por el pipeline, no es indicador clínico. |
 | `meta_uuid` | Permanece igual al volver a procesar el mismo fichero. |
 | `meta_version_control` | El campo histórico es una marca temporal, no un identificador de versión semántica. |
+
+
+### Inclusión y completitud de la extracción (desde el contrato de 157 campos)
+
+- **Inclusión:** detección del título «INFORME DE POLISOMNOGRAFÍA BASAL» (excluidos informes DAM) en el contenido convertido; una tabla ausente o ilegible no invalida por sí sola el documento.
+- **Extracción:** las secciones se evalúan independientemente. Las filas desalineadas no se asignan por conjetura; los valores no recuperables quedan nulos.
+- **`meta_completitud_pct`:** `100 × número de campos no meta con valor / 152`, redondeado a dos decimales. Se calcula en `1_extract`, sin contar los metadatos ni las seis variables derivadas en `2_transform`. El cero explícito cuenta como dato presente. La misma base fija se aplica a DOC y RTF, incluso cuando una plantilla no contiene determinados indicadores: esto mide la completitud del esquema, no la integridad clínica del informe.
+- **Carga:** incorporar la nueva columna `FLOAT64` a la tabla física de BigQuery antes de cargar el esquema nuevo. No mezclar CSV antiguos de 158 columnas con los nuevos de 159 en una misma ejecución de `2_transform`.

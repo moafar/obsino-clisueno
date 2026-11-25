@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 from pathlib import Path
@@ -74,6 +75,7 @@ CLIN_COLUMNS = (
 META_COLUMNS = (
     "meta_fecha_estudio", "meta_solicita", "meta_empresa",
     "meta_fuente", "meta_uuid", "meta_version_control",
+    "meta_completitud_pct",
 )
 PSG_COLUMNS = (
     PTE_COLUMNS + PTE_UNIT_COLUMNS + ARQ_COLUMNS + FASE_COLUMNS + EVRESP_COLUMNS
@@ -82,7 +84,7 @@ PSG_COLUMNS = (
 
 NUMBER = re.compile(r"(?<!\w)[+-]?\d+(?:[.,]\d+)?")
 TITLE = re.compile(
-    r"^\s*INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\b"
+    r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\b"
     r"(?!\s+CON\s+DISPOSITIVO\b)"
 )
 NEXT_REPORT = re.compile(
@@ -314,6 +316,9 @@ def _architecture(out: dict, lines: list[str], delimiter: str) -> None:
     out["arq_tiempo_grabacion_min"] = _labeled_number(
         lines, r"\bTIEMPO\s+DE\s+GRABACION\s*:", delimiter, minutes_only=True
     )
+
+
+def _microalertamientos(out: dict, lines: list[str], delimiter: str) -> None:
     values, index = _required_row(lines, r"^MICROALERTAMIENTOS$", delimiter, 4, "microalertamientos")
     columns = _column_map(lines, index, delimiter, {
         "total": r"\bTOTAL\b", "respiratorios": r"\bRESPIRATORIOS\b",
@@ -332,7 +337,10 @@ def _phases(out: dict, lines: list[str], delimiter: str) -> None:
         patterns = {"episodios": r"\bEPISODIOS\b", **patterns}
     columns = _column_map(lines, first, delimiter, patterns, "fases")
     for phase in ("s1", "s2", "s3", "rem", "despierto"):
-        values, _ = _required_row(lines, rf"^{phase.upper()}\b", delimiter, len(columns), "fases")
+        values, index = _find_row(lines, rf"^{phase.upper()}\b", delimiter)
+        if index is None:
+            continue
+        _check_width(values, len(columns), "fases")
         if "episodios" in columns:
             out[f"fase_{phase}_episodios_n"] = _number(values[columns["episodios"]])
         out[f"fase_{phase}_duracion_min"] = _number(values[columns["duracion"]])
@@ -372,7 +380,10 @@ def _respiratory(out: dict, lines: list[str], delimiter: str) -> None:
         ("duracion_total_min", r"^DURACION TOTAL"),
         ("indice_evhora", r"^INDICE\b"),
     ):
-        values, _ = _required_row(lines, pattern, delimiter, len(events), "eventos respiratorios")
+        values, index = _find_row(lines, pattern, delimiter)
+        if index is None:
+            continue
+        _check_width(values, len(events), "eventos respiratorios")
         for event, cell in zip(events, values):
             if event:
                 out[f"evresp_{event}_{measure}"] = _number(cell)
@@ -387,19 +398,25 @@ def _respiratory(out: dict, lines: list[str], delimiter: str) -> None:
             if event in ("ac", "ao", "am", "hip", "ah"):
                 out[f"evresp_{event}_numero_{phase}_n"] = _number(cell)
     values, index = _find_row(lines, r"^CONFIGURACION", delimiter)
-    if delimiter == "\t" and (index is None or len(values) not in (3, 4)):
-        raise PSGExtractionError("Configuración respiratoria DOC ilegible")
-    if values:
-        numbers = [_number(cell) for cell in values]
-        if len(numbers) == 3 and index is not None:
-            continuation = next(
-                (line for line in lines[index + 1:index + 4] if line.strip()),
-                "",
-            )
-            if re.fullmatch(r"\s*\d+(?:[.,]\d+)?\s*", continuation):
-                numbers.append(_number(continuation))
-        for event, value in zip(("ac", "ao", "am", "hip"), numbers):
-            out[f"evresp_{event}_configuracion_s"] = value
+    if index is not None:
+        if delimiter == "\t" and len(values) in (len(events), len(events) - 1):
+            # Celdas vacías de Suma AP / Eventos A+H conservan su posición.
+            for event, cell in zip(events, values):
+                if event in ("ac", "ao", "am", "hip"):
+                    out[f"evresp_{event}_configuracion_s"] = _number(cell)
+        elif len(values) in (3, 4):
+            numbers = [_number(cell) for cell in values]
+            if len(numbers) == 3:
+                continuation = next(
+                    (line for line in lines[index + 1:index + 4] if line.strip()),
+                    "",
+                )
+                if re.fullmatch(r"\s*\d+(?:[.,]\d+)?\s*", continuation):
+                    numbers.append(_number(continuation))
+            for event, value in zip(("ac", "ao", "am", "hip"), numbers):
+                out[f"evresp_{event}_configuracion_s"] = value
+        else:
+            logging.warning("Configuración respiratoria DOC no alineable: %s columnas", len(values))
 
 
 def _indices(out: dict, lines: list[str], delimiter: str) -> None:
@@ -427,19 +444,6 @@ def _oximetry(out: dict, lines: list[str], delimiter: str) -> None:
         for cell in header
     ] != ["despierto", "rem", "nrem", "tst"]:
         raise PSGExtractionError("Columnas de oximetría ilegibles")
-    for pattern, section in (
-        (r"^PROMEDIO\s*\(%\)", "promedio de oximetría"),
-        (r"^INDICE DESAT", "índice de desaturación"),
-        (r"^SATURACION.*MINIMA DURANTE EL SUENO", "saturación mínima del sueño"),
-        (r"^SATURACION.*EVENTOS RESPIRATORIOS", "saturación en eventos"),
-    ):
-        width = 4 if section in ("promedio de oximetría", "índice de desaturación") else 1
-        _required_row(lines, pattern, delimiter, width, section)
-    thresholds = (90, 80, 70, 60, 50) if delimiter == "\t" else (95, 90, 85, 80, 75, 70, 60)
-    for threshold in thresholds:
-        _required_row(lines, rf"^<\s*{threshold}\s*\(MIN\)", delimiter, 4, "umbrales de oximetría")
-    if delimiter == "|":
-        _required_row(lines, r"^T90\s*%", delimiter, 1, "T90")
     for line in lines:
         label, values = _row(line, delimiter)
         folded = _fold(label)
@@ -470,7 +474,7 @@ def _oximetry(out: dict, lines: list[str], delimiter: str) -> None:
             out["oxi_t90_pct"] = _number(values[0])
 
 
-def _heart_movement_position(out: dict, sections: dict, delimiter: str) -> None:
+def _heart(out: dict, sections: dict, delimiter: str) -> None:
     heart = sections.get("frecuencia", [])
     values, index = _required_row(heart, r"^FRECUENCIA CARDIACA\s+PROMEDIO", delimiter,
                                   3, "frecuencia cardíaca")
@@ -479,6 +483,9 @@ def _heart_movement_position(out: dict, sections: dict, delimiter: str) -> None:
     }, "frecuencia cardíaca")
     for phase, column in columns.items():
         out[f"fc_promedio_{phase}_lpm"] = _number(values[column])
+
+
+def _movements(out: dict, sections: dict, delimiter: str) -> None:
     movement_found = False
     for line in sections.get("movimientos", []):
         cells = _cells(line, delimiter)
@@ -490,6 +497,9 @@ def _heart_movement_position(out: dict, sections: dict, delimiter: str) -> None:
                 out[f"movmi_{kind}_indice_evhora"] = _number(cells[3])
     if not movement_found:
         raise PSGExtractionError("Tabla de movimientos ilegible")
+
+
+def _position(out: dict, sections: dict, delimiter: str) -> None:
     position = sections.get("posicion", [])
     _, first_position = _find_row(position, r"^INDICE A/H", delimiter)
     if first_position is None:
@@ -507,30 +517,49 @@ def _heart_movement_position(out: dict, sections: dict, delimiter: str) -> None:
             out[f"pos_{name}_{measure}"] = _number(values[column])
 
 
+def _completeness(out: dict[str, str | None]) -> str:
+    """Porcentaje de campos no meta recuperados; cero explícito cuenta como presente."""
+    evaluable = [field for field in PSG_COLUMNS if not field.startswith("meta_")]
+    absent = {"", "N/A", "NA", "NONE", "NULL", "NAN"}
+    present = sum(
+        value is not None and str(value).strip().upper() not in absent
+        for field in evaluable
+        for value in (out[field],)
+    )
+    return f"{100 * present / len(evaluable):.2f}"
+
+
 def _extract(text: str, archivo: str | Path | None, delimiter: str) -> dict[str, str | None]:
     from commons.archivo_utils import generar_hash_archivo, marcar_version_extraccion
 
+    # Inclusión por título exclusivamente. Las tablas condicionan la completitud,
+    # nunca la inclusión ni el registro de un informe identificado como PSG.
     sections = _sections(text)
-    required_sections = (
-        "indicacion", "interpretacion", "conclusiones", "arquitectura", "fases",
-        "respiratorios", "indices", "oximetria", "frecuencia", "movimientos", "posicion",
-    )
-    if any(section not in sections for section in required_sections):
-        raise PSGExtractionError("Informe PSG con secciones obligatorias ilegibles")
     out: dict[str, str | None] = dict.fromkeys(PSG_COLUMNS)
     _header(out, sections.get("cabecera", []), delimiter)
     _narrative(out, sections)
-    _architecture(out, sections.get("arquitectura", []), delimiter)
-    _phases(out, sections.get("fases", []), delimiter)
-    _respiratory(out, sections.get("respiratorios", []), delimiter)
-    _indices(out, sections.get("indices", []), delimiter)
-    _oximetry(out, sections.get("oximetria", []), delimiter)
-    _heart_movement_position(out, sections, delimiter)
-    if not all(out[field] is not None for field in (
-        "pte_id", "arq_tiempo_sueno_min", "fase_rem_duracion_min",
-        "evresp_ah_numero_n", "evresp_iah_tst_evhora", "oxi_spo2_promedio_tst_pct",
-    )):
-        raise PSGExtractionError("Informe PSG con estructura obligatoria ilegible")
+
+    extractors = (
+        ("arquitectura", _architecture, (sections.get("arquitectura", []), delimiter)),
+        ("microalertamientos", _microalertamientos, (sections.get("arquitectura", []), delimiter)),
+        ("fases", _phases, (sections.get("fases", []), delimiter)),
+        ("respiratorios", _respiratory, (sections.get("respiratorios", []), delimiter)),
+        ("índices", _indices, (sections.get("indices", []), delimiter)),
+        ("oximetría", _oximetry, (sections.get("oximetria", []), delimiter)),
+        ("frecuencia cardíaca", _heart, (sections, delimiter)),
+        ("movimientos", _movements, (sections, delimiter)),
+        ("posición", _position, (sections, delimiter)),
+    )
+    for section, extractor, args in extractors:
+        candidate = out.copy()
+        try:
+            extractor(candidate, *args)
+        except PSGExtractionError as exc:
+            # Nunca conservar datos parcialmente asignados por una tabla desalineada.
+            logging.warning("Sección PSG sin datos (%s): %s", section, exc)
+        else:
+            out = candidate
+
     if archivo is None:
         raise PSGExtractionError("Falta el archivo fuente para generar metadatos")
     out["meta_fuente"] = str(archivo)
@@ -538,6 +567,7 @@ def _extract(text: str, archivo: str | Path | None, delimiter: str) -> dict[str,
     if out["meta_uuid"] == "N/A":
         raise PSGExtractionError("No se pudo generar el UUID PSG")
     out["meta_version_control"] = marcar_version_extraccion()
+    out["meta_completitud_pct"] = _completeness(out)
     return out
 
 

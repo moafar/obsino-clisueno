@@ -539,8 +539,11 @@ def cast_psg_dataframe(dataframe: pd.DataFrame, schema_yaml: dict[str, str]) -> 
                 dataframe[column] = numeric.astype("float64")
             continue
         die(f"Tipo PSG no admitido en {column}: {field_type}")
-    if dataframe["pte_id"].isna().any():
-        die("pte_id vacío en lote PSG")
+    completeness = dataframe["meta_completitud_pct"]
+    if completeness.notna().any() and (
+        ((completeness < 0) | (completeness > 100)).fillna(False).any()
+    ):
+        die("meta_completitud_pct fuera del rango 0-100")
     return dataframe
 
 
@@ -565,7 +568,7 @@ def validate_target_schema(
             for field in fields
         ]
     if signature(actual) != signature(expected):
-        die("El esquema físico de la tabla destino no coincide con los 156 campos PSG")
+        die("El esquema físico de la tabla destino no coincide con los 157 campos PSG")
 
 
 def cast_dataframe(dataframe: pd.DataFrame, schema_yaml: dict[str, str]) -> pd.DataFrame:
@@ -769,7 +772,7 @@ def run(config: LoaderConfig, flow: str) -> None:
         if config.schema_path_in_yaml != "schema.load.input.columns":
             die("PSG debe usar schema.load.input.columns")
         output_schema = load_schema(config.schema_yaml_path, "schema.transform.output.columns")
-        if schema_yaml != output_schema or len(schema_yaml) != 156:
+        if schema_yaml != output_schema or len(schema_yaml) != 157:
             die("El contrato de carga PSG no coincide con la salida canónica de transform")
         validate_target_schema(client, config.table_fqn, bq_schema)
     log(f"Esquema leído con {len(expected_columns)} campos")
