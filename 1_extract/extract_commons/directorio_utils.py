@@ -2,7 +2,7 @@ from pathlib import Path
 import logging
 import os
 from tqdm import tqdm
-from commons.archivo_utils import procesar_archivo
+from extract_commons.archivo_utils import procesar_archivo
 from typing import List, Optional
 
 def validar_directorio(path) -> Path:

@@ -1,6 +1,6 @@
 import logging
-from commons.texto_utils import extraer_regex
-from commons.archivo_utils import generar_hash_archivo, marcar_version_extraccion
+from extract_commons.texto_utils import extraer_regex
+from extract_commons.archivo_utils import generar_hash_archivo, marcar_version_extraccion
 import re
 
 def procesar_xpap_doc(texto_relevante: str, archivo: str):

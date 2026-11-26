@@ -17,20 +17,20 @@ EXTRACT_FILE_PREFIX = f"extract_{FLOW_NAME}_"
 if str(TRANSFORM_ROOT) not in sys.path:
     sys.path.insert(0, str(TRANSFORM_ROOT))
 
-from commons.logging import configure_flow_logging
+from transform_commons.logging import configure_flow_logging
 
 configure_flow_logging(FLOW_NAME)
 
-from commons.engine import OperationRegistry, run_pipeline
-from commons.io import (
+from transform_commons.engine import OperationRegistry, run_pipeline
+from transform_commons.io import (
     build_default_output_path,
     read_dataset,
     resolve_existing_path,
     resolve_output_path,
     write_dataset,
 )
-from commons.ops import register_builtin_operations
-from commons.schema import validate_input_schema, validate_output_schema
+from transform_commons.ops import register_builtin_operations
+from transform_commons.schema import validate_input_schema, validate_output_schema
 from psg.core.transforms import register_psg_operations
 
 SUPPORTED_INPUT_EXTENSIONS = {".csv"}

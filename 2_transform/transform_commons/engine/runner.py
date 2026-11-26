@@ -1,7 +1,7 @@
 from typing import Any, Mapping
 
-from commons.errors import ConfigError
-from commons.logging import get_logger
+from transform_commons.errors import ConfigError
+from transform_commons.logging import get_logger
 
 
 logger = get_logger(__name__)

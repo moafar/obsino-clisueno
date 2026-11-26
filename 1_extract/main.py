@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 import yaml
 
-from commons.logger import setup_logger
-from commons.directorio_utils import validar_directorio, procesar_directorio
-from commons.archivo_utils import configure_subflows, load_known_psg_uuids
+from extract_commons.logger import setup_logger
+from extract_commons.directorio_utils import validar_directorio, procesar_directorio
+from extract_commons.archivo_utils import configure_subflows, load_known_psg_uuids
 
 EXIT_OK, EXIT_CFG, EXIT_INPUT, EXIT_PROCESS, EXIT_UNIFY = 0, 1, 2, 3, 4
 logger = logging.getLogger(__name__)

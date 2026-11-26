@@ -1,5 +1,5 @@
 import logging
-from commons.texto_utils import extraer_regex
+from extract_commons.texto_utils import extraer_regex
 
 def procesar_poligrafia_docx(texto_relevante: str):
     logging.info("Procesando examen POLIGRAFIA (DOCX)*****************")

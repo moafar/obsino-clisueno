@@ -28,7 +28,7 @@ def generar_hash_archivo(ruta_archivo: str) -> str:
         return "N/A"
 
 # --- utils de texto ---
-from commons.texto_utils import (
+from extract_commons.texto_utils import (
     extraer_texto_docx, extraer_texto_rtf, extraer_texto_doc,
     normalizar_texto, extraer_subcadenas, determinar_tipos_examenes
 )

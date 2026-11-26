@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from commons.logging import configure_flow_logging
+from transform_commons.logging import configure_flow_logging
 
 
 BASE_DIR = Path(__file__).resolve().parent

@@ -530,7 +530,7 @@ def _completeness(out: dict[str, str | None]) -> str:
 
 
 def _extract(text: str, archivo: str | Path | None, delimiter: str) -> dict[str, str | None]:
-    from commons.archivo_utils import generar_hash_archivo, marcar_version_extraccion
+    from extract_commons.archivo_utils import generar_hash_archivo, marcar_version_extraccion
 
     # Inclusión por título exclusivamente. Las tablas condicionan la completitud,
     # nunca la inclusión ni el registro de un informe identificado como PSG.

@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from commons.errors import OperationNotFoundError
+from transform_commons.errors import OperationNotFoundError
 
 
 class OperationRegistry:

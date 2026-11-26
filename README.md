@@ -167,23 +167,23 @@ Ejemplos de nombre de subproceso para documentar/estandarizar comandos:
 
 ## Ejecución de pruebas PSG
 
-Las etapas `1_extract` y `2_transform` utilizan paquetes independientes
-denominados `commons`. Por esta razón, las pruebas deben ejecutarse en
-procesos Python separados para evitar conflictos de importación.
+Las etapas `1_extract` y `2_transform` utilizan los paquetes independientes
+`extract_commons` y `transform_commons`. Las suites pueden ejecutarse por capa
+o conjuntamente en un mismo proceso pytest.
 
 Desde la raíz del repositorio, con el entorno virtual configurado:
 
 ```bash
-PYTHONPATH="$PWD/1_extract" .venv/bin/python -m pytest 1_extract/tests/test_psg_extractor.py -q &&
-PYTHONPATH="$PWD/2_transform" .venv/bin/python -m pytest 2_transform/tests/test_psg_transform.py -q &&
-.venv/bin/python -m pytest 3_load/tests/test_psg_load.py -q
+.venv/bin/python -m pytest -q 1_extract/tests
+.venv/bin/python -m pytest -q 2_transform/tests
+.venv/bin/python -m pytest -q 3_load/tests
+
+# Todas las suites en un mismo proceso
+.venv/bin/python -m pytest -q 1_extract/tests 2_transform/tests 3_load/tests
 ```
 
-**Resultado de referencia (24/11/2026):**
+**Resultado histórico de referencia (24/11/2026):**
 29 pruebas y 283 subpruebas superadas.
-
-No ejecutar las tres suites en un mismo proceso pytest: puede producir
-`ModuleNotFoundError` debido a la colisión entre paquetes `commons`.
 
 Estas pruebas utilizan datos sintéticos y clientes simulados; no realizan
 cargas reales en BigQuery.

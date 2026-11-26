@@ -16,10 +16,10 @@ sys.path.insert(0, str(ROOT / "2_transform"))
 sys.path.insert(0, str(ROOT / "1_extract"))
 
 from src.basal.procesar_basal import PSG_COLUMNS
-from commons.engine import OperationRegistry, run_pipeline
-from commons.errors import SchemaValidationError
-from commons.io import read_dataset
-from commons.schema import validate_input_schema, validate_output_schema
+from transform_commons.engine import OperationRegistry, run_pipeline
+from transform_commons.errors import SchemaValidationError
+from transform_commons.io import read_dataset
+from transform_commons.schema import validate_input_schema, validate_output_schema
 from psg.core.transforms import DATA_TYPES, FINAL_COLS, register_psg_operations
 from psg.main import _discover_input_files, _load_pipeline_config, _require_exact_columns, execute, run
 from xpap.core.transforms import DATA_TYPES as XPAP_DATA_TYPES

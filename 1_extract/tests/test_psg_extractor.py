@@ -9,9 +9,9 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from commons.archivo_utils import _append_psg_row, procesar_archivo
-from commons.directorio_utils import procesar_directorio
-from commons.texto_utils import determinar_tipos_examenes, normalizar_texto
+from extract_commons.archivo_utils import _append_psg_row, procesar_archivo
+from extract_commons.directorio_utils import procesar_directorio
+from extract_commons.texto_utils import determinar_tipos_examenes, normalizar_texto
 from src.basal.procesar_basal import (
     PSG_COLUMNS, PSGExtractionError, procesar_basal_doc, procesar_basal_rtf,
 )
@@ -251,7 +251,7 @@ class PSGExtractorTest(unittest.TestCase):
             self.assertTrue(_append_psg_row(row, csv_path))
             self.assertFalse(_append_psg_row(row, csv_path))
             before_failure = csv_path.read_bytes()
-            with patch("commons.archivo_utils.os.fsync", side_effect=OSError("synthetic")):
+            with patch("extract_commons.archivo_utils.os.fsync", side_effect=OSError("synthetic")):
                 with self.assertRaises(OSError):
                     _append_psg_row(doc_row, csv_path)
             self.assertEqual(before_failure, csv_path.read_bytes())
@@ -414,9 +414,9 @@ class PSGExtractorTest(unittest.TestCase):
             kinds = determinar_tipos_examenes(normalizar_texto(dam))
             self.assertIn("DAM", kinds)
             self.assertNotIn("BASAL", kinds)
-            with patch("commons.archivo_utils._extract_text", return_value=dam), \
-                 patch("commons.archivo_utils._append_psg_row") as append, \
-                 patch("commons.archivo_utils._move_processed_file") as move:
+            with patch("extract_commons.archivo_utils._extract_text", return_value=dam), \
+                 patch("extract_commons.archivo_utils._append_psg_row") as append, \
+                 patch("extract_commons.archivo_utils._move_processed_file") as move:
                 self.assertFalse(procesar_archivo(source.with_suffix(".doc")))
                 append.assert_not_called()
                 move.assert_not_called()
@@ -469,7 +469,7 @@ class PSGExtractorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             for name in ("a.doc", "b.doc", "c.rtf"):
                 (Path(folder) / name).write_bytes(b"synthetic")
-            with patch("commons.directorio_utils.procesar_archivo",
+            with patch("extract_commons.directorio_utils.procesar_archivo",
                        side_effect=[True, False, RuntimeError("synthetic")]):
                 with self.assertLogs(level="CRITICAL"):
                     result = procesar_directorio(Path(folder), barra_progreso=False)

@@ -43,7 +43,7 @@ Flows disponibles actualmente: `psg`, `xpap`.
     main.py
     config/
         psg.yaml
-    commons/
+    extract_commons/
         directorio_utils.py
         unificar_resultados.py
     src/
