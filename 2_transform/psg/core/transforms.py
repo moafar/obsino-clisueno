@@ -192,9 +192,15 @@ def _numeric(series: pd.Series, column: str, integer: bool = False) -> pd.Series
         raise ValueError(f"Valor numérico inválido en {column}") from exc
 
 
-def _date(series: pd.Series, column: str) -> pd.Series:
+def _parse_date(series: pd.Series) -> tuple[pd.Series, pd.Series]:
+    """Normaliza y analiza fechas PSG sin decidir cómo informar los errores."""
     text = series.astype("string").str.strip().replace("", pd.NA)
     parsed = pd.to_datetime(text, errors="coerce", dayfirst=True, format="mixed")
+    return text, parsed
+
+
+def _date(series: pd.Series, column: str) -> pd.Series:
+    text, parsed = _parse_date(series)
     if (text.notna() & parsed.isna()).any():
         raise ValueError(f"Fecha inválida en {column}")
     return parsed

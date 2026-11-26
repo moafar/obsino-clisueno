@@ -21,31 +21,29 @@ from openpyxl import load_workbook
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "1_extract"))
-from src.basal.procesar_basal import PSG_COLUMNS, _completeness  # noqa: E402
+sys.path.insert(0, str(ROOT / "2_transform"))
+from src.basal.procesar_basal import PSG_COLUMNS, _completeness, _is_present  # noqa: E402
+from psg.core.transforms import _parse_date  # noqa: E402
 
 CONTRACT = ROOT / "0_declarations" / "psg.yaml"
 UUID_RE = re.compile(r"[0-9a-fA-F]{32}\Z")
-# Los mismos marcadores ausentes usados por _completeness del extractor.
-ABSENT = {"", "N/A", "NA", "NONE", "NULL", "NAN"}
-
-
-def _present(value: object) -> bool:
-    return value is not None and str(value).strip().upper() not in ABSENT
 
 
 def _uuid(value: object) -> tuple[str, str | None]:
-    if value is None or str(value).strip().upper() in ABSENT - {""}:
+    if value is None:
         return "null", None
     cleaned = str(value).strip()
     if not cleaned:
         return "empty", None
+    if not _is_present(value):
+        return "null", None
     if not UUID_RE.fullmatch(cleaned):
         return "invalid_md5", None
     return "valid", cleaned.lower()
 
 
 def _number(value: object) -> float | None:
-    if not _present(value):
+    if not _is_present(value):
         return None
     try:
         number = float(str(value).strip().replace(",", "."))
@@ -59,6 +57,17 @@ def _percentile(values: list[float], percentile: int) -> float:
     lower = math.floor(position)
     upper = math.ceil(position)
     return values[lower] + (values[upper] - values[lower]) * (position - lower)
+
+
+def _count_explicit_zeros(records: list[dict], numeric_clinical: set[str]) -> int:
+    """Cuenta ceros con la misma conversión numérica, aplicada por columna."""
+    return int(sum(
+        pd.to_numeric(
+            pd.Series([row[column] for row in records], dtype="string")
+            .str.strip().str.replace(",", ".", regex=False), errors="coerce"
+        ).eq(0).sum()
+        for column in numeric_clinical
+    ))
 
 
 def _read_csv(path: Path) -> tuple[list[str], list[list[str]], int]:
@@ -180,24 +189,20 @@ def check_quality(input_path: Path, transformed: Path | None = None,
 
     records = [dict(zip(header, row)) for row in rows]
     clinical = [column for column in source_columns if not column.startswith("meta_")]
-    missing = {column: sum(not _present(row[column]) for row in records) for column in clinical}
+    missing = {column: sum(not _is_present(row[column]) for row in records) for column in clinical}
     stats["missing_by_variable"] = {
         column: {"count": count, "pct": round(100 * count / len(rows), 2) if rows else 0.0}
         for column, count in missing.items()
     }
     stats["completely_empty_variables"] = [column for column in clinical
                                             if rows and missing[column] == len(rows)]
-    stats["explicit_zeros_present"] = int(sum(
-        pd.to_numeric(row[column].strip().replace(",", "."), errors="coerce") == 0
-        for row in records for column in numeric_clinical
-    ))
+    stats["explicit_zeros_present"] = _count_explicit_zeros(records, numeric_clinical)
     if stats["completely_empty_variables"]:
         report["warnings"].append(
             f"Variables clínicas completamente vacías: {len(stats['completely_empty_variables'])}"
         )
 
     uuid_counts = Counter()
-    seen: set[str] = set()
     valid_uuids: set[str] = set()
     for row in records:
         kind, uuid = _uuid(row["meta_uuid"])
@@ -205,10 +210,9 @@ def check_quality(input_path: Path, transformed: Path | None = None,
             uuid_counts[kind] += 1
         else:
             uuid_counts["valid_total"] += 1
-            if uuid in seen:
+            if uuid in valid_uuids:
                 uuid_counts["duplicate"] += 1
             else:
-                seen.add(uuid)
                 valid_uuids.add(uuid)
     known = _check_historical(historical or [], report)
     uuid_counts["valid_unique"] = len(valid_uuids)
@@ -245,10 +249,8 @@ def check_quality(input_path: Path, transformed: Path | None = None,
         "p95": _percentile(ordered, 95) if ordered else None,
     }
 
-    # Misma normalización y condición de rechazo que _date en 2_transform.
-    date_text = pd.Series([row["meta_fecha_estudio"] for row in records],
-                          dtype="string").str.strip().replace("", pd.NA)
-    dates = pd.to_datetime(date_text, errors="coerce", dayfirst=True, format="mixed")
+    date_text, dates = _parse_date(pd.Series([row["meta_fecha_estudio"] for row in records],
+                                            dtype="string"))
     absent_dates = int(date_text.isna().sum())
     invalid_dates = int((date_text.notna() & dates.isna()).sum())
     future_dates = sum(pd.notna(parsed) and parsed.date() > (today or date.today())

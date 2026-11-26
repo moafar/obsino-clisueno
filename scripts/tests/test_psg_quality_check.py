@@ -10,14 +10,16 @@ from datetime import date
 from pathlib import Path
 
 import yaml
+import pandas as pd
 from openpyxl import Workbook
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "1_extract"))
 
-from psg_quality_check import check_quality, main
-from src.basal.procesar_basal import _completeness
+from psg_quality_check import _count_explicit_zeros, check_quality, main
+from src.basal.procesar_basal import PSG_COLUMNS, _completeness, _is_present
+from psg.core.transforms import _date, _parse_date
 
 with (ROOT / "0_declarations" / "psg.yaml").open(encoding="utf-8") as stream:
     CONTRACT = yaml.safe_load(stream)
@@ -99,6 +101,30 @@ class PSGQualityCheckTest(unittest.TestCase):
         self.assertEqual([], report["errors"])
         self.assertEqual(6, report["statistics"]["explicit_zeros_present"])
 
+    def test_vectorized_zero_count_matches_scalar_conversion(self):
+        values = ["0", "0.0", "0,00", "-0", "+0", "0e0", " 0 ",
+                  "0_0", "texto", "N/A", "NaN", "inf", "-", "5", ""]
+        rows = [{"arq_tiempo_sueno_min": value, "arq_eficiencia_pct": value}
+                for value in values]
+        previous = int(sum(
+            pd.to_numeric(row[column].strip().replace(",", "."), errors="coerce") == 0
+            for row in rows for column in {"arq_tiempo_sueno_min", "arq_eficiencia_pct"}
+        ))
+        self.assertEqual(previous, _count_explicit_zeros(
+            rows, {"arq_tiempo_sueno_min", "arq_eficiencia_pct"}
+        ))
+
+    def test_extractor_presence_rule_and_historical_completeness(self):
+        absent = [None, "", "  ", "N/A", " na ", "NONE", "NULL", "NAN"]
+        present = [0, "0", "0.0", "-0", "texto", "0_0"]
+        self.assertTrue(all(not _is_present(value) for value in absent))
+        self.assertTrue(all(_is_present(value) for value in present))
+        row = dict.fromkeys(PSG_COLUMNS)
+        clinical = [column for column in PSG_COLUMNS if not column.startswith("meta_")]
+        for column, value in zip(clinical, absent + present):
+            row[column] = value
+        self.assertEqual(f"{100 * len(present) / len(clinical):.2f}", _completeness(row))
+
     def test_completeness_distribution_percentiles(self):
         rows = [record(i, **{INPUT_COLUMNS[0]: str(i)}) for i in range(1, 21)]
         for i, row in enumerate(rows):
@@ -159,6 +185,22 @@ class PSGQualityCheckTest(unittest.TestCase):
         self.assertIn("UUID históricos inválidos: 1",
                       self.check(historical=paths)["errors"])
 
+    def test_duplicate_uuid_also_present_in_historical_batch(self):
+        rows = [record(1), record(2), record(1)]
+        rows[2]["meta_uuid"] = rows[0]["meta_uuid"].upper()
+        self.write_csv(self.source, rows)
+        historical = self.root / "historical.csv"
+        self.write_csv(historical, [record(1), record(3), record(1)],
+                       columns=["meta_uuid"])
+        report = self.check(historical=[historical])
+        self.assertEqual(3, report["statistics"]["uuid"]["valid_total"])
+        self.assertEqual(2, report["statistics"]["uuid"]["valid_unique"])
+        self.assertEqual(2, report["statistics"]["uuid"]["historical_unique"])
+        self.assertEqual(1, report["statistics"]["uuid"]["duplicate"])
+        self.assertEqual(1, report["statistics"]["uuid"]["shared_historical"])
+        self.assertIn("UUID duplicados: 1", report["errors"])
+        self.assertIn("UUID compartidos con históricos: 1", report["errors"])
+
     def test_completeness_invalid_out_of_range_and_recalculation_block(self):
         rows = [record(i) for i in range(1, 6)]
         rows[0]["meta_completitud_pct"] = ""
@@ -191,6 +233,23 @@ class PSGQualityCheckTest(unittest.TestCase):
         self.assertEqual([], report["errors"])
         self.assertEqual({"by_year": {"2026": 1}, "missing": 1,
                           "invalid": 0, "future": 1}, report["statistics"]["dates"])
+
+    def test_validator_dates_follow_transform_parser(self):
+        values = ["", "  ", "01/02/2025", "2024-12-31", "27/11/2026",
+                  "N/A", "NULL", "31/02/2025"]
+        text, parsed = _parse_date(pd.Series(values, dtype="string"))
+        self.assertEqual(2, int(text.isna().sum()))
+        self.assertEqual(3, int((text.notna() & parsed.isna()).sum()))
+        with self.assertRaisesRegex(ValueError, "Fecha inválida"):
+            _date(pd.Series(values, dtype="string"), "meta_fecha_estudio")
+        self.assertTrue(_date(pd.Series(values[:5], dtype="string"),
+                              "meta_fecha_estudio").equals(parsed.iloc[:5]))
+        self.write_csv(self.source, [record(i + 1, meta_fecha_estudio=value)
+                                     for i, value in enumerate(values)])
+        report = self.check()
+        self.assertEqual(2, report["statistics"]["dates"]["missing"])
+        self.assertEqual(3, report["statistics"]["dates"]["invalid"])
+        self.assertEqual(1, report["statistics"]["dates"]["future"])
 
     def test_xlsx_valid_and_consistency_checks(self):
         transformed = self.write_xlsx(list(reversed(self.rows)))

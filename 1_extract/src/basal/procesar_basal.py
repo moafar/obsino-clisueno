@@ -517,15 +517,17 @@ def _position(out: dict, sections: dict, delimiter: str) -> None:
             out[f"pos_{name}_{measure}"] = _number(values[column])
 
 
+def _is_present(value: object) -> bool:
+    """Criterio de presencia de campos PSG usado para completitud."""
+    return value is not None and str(value).strip().upper() not in {
+        "", "N/A", "NA", "NONE", "NULL", "NAN"
+    }
+
+
 def _completeness(out: dict[str, str | None]) -> str:
     """Porcentaje de campos no meta recuperados; cero explícito cuenta como presente."""
     evaluable = [field for field in PSG_COLUMNS if not field.startswith("meta_")]
-    absent = {"", "N/A", "NA", "NONE", "NULL", "NAN"}
-    present = sum(
-        value is not None and str(value).strip().upper() not in absent
-        for field in evaluable
-        for value in (out[field],)
-    )
+    present = sum(_is_present(out[field]) for field in evaluable)
     return f"{100 * present / len(evaluable):.2f}"
 
 
