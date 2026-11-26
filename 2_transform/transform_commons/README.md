@@ -1,8 +1,8 @@
-# Commons (`transform`)
+# `transform_commons` (`transform`)
 
 ## Guía rápida de ejecución
 
-Contexto: `commons` no se ejecuta directo; se usa a través de un pipeline de `transform`.
+Contexto: `transform_commons` no se ejecuta directo; se usa a través de un pipeline de `transform`.
 
 ```bash
 source ../../.venv/bin/activate

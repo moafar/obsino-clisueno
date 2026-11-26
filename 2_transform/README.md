@@ -31,7 +31,7 @@ Transformación declarativa de datasets clínicos entre `extract` y `load`.
 
 ```text
 2_transform/
-  commons/
+  transform_commons/
   requirements.txt
   psg/
   xpap/
@@ -41,7 +41,7 @@ Transformación declarativa de datasets clínicos entre `extract` y `load`.
     core/
 ```
 
-- `commons/`: motor genérico de pipeline (I/O, validadores, operaciones, runner).
+- `transform_commons/`: motor genérico de pipeline (I/O, validadores, operaciones, runner).
 - `<flow>/`: implementación de dominio por flujo clínico.
 - `staging/` (en raiz del repo): area compartida de entrada/salida entre capas.
 

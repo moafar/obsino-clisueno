@@ -19,8 +19,8 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "1_extract"))
 
-from commons import archivo_utils
-from commons.directorio_utils import procesar_directorio
+from extract_commons import archivo_utils
+from extract_commons.directorio_utils import procesar_directorio
 from test_psg_extractor import synthetic_report
 
 SPEC = importlib.util.spec_from_file_location("psg_extract_main_test", ROOT / "1_extract/main.py")
@@ -221,7 +221,7 @@ class PSGArchivingTest(unittest.TestCase):
         nested.mkdir()
         (nested / "old.doc").write_bytes(b"old")
         (self.source / "new.doc").write_bytes(b"new")
-        with patch("commons.directorio_utils.procesar_archivo", return_value="new") as process:
+        with patch("extract_commons.directorio_utils.procesar_archivo", return_value="new") as process:
             result = procesar_directorio(self.source, barra_progreso=False,
                                          psg_archive_dir=nested, known_psg={})
         self.assertEqual(1, result["num_files"])
@@ -274,7 +274,7 @@ class PSGArchivingTest(unittest.TestCase):
     def test_directory_counts_all_psg_outcomes(self):
         for name in ("a.doc", "b.doc", "c.doc", "d.doc"):
             (self.source / name).write_bytes(b"synthetic")
-        with patch("commons.directorio_utils.procesar_archivo",
+        with patch("extract_commons.directorio_utils.procesar_archivo",
                    side_effect=["new", "duplicate", "new_archive_failed", "retried"]):
             result = procesar_directorio(self.source, barra_progreso=False,
                                          psg_archive_dir=self.destination, known_psg={})
@@ -389,8 +389,8 @@ class PSGArchivingTest(unittest.TestCase):
         def walk(_root, *, onerror, **_kwargs):
             onerror(OSError("synthetic unreadable directory"))
             yield str(self.source), [], [source.name]
-        with patch("commons.directorio_utils.os.walk", side_effect=walk), \
-             patch("commons.directorio_utils.procesar_archivo", return_value="new"):
+        with patch("extract_commons.directorio_utils.os.walk", side_effect=walk), \
+             patch("extract_commons.directorio_utils.procesar_archivo", return_value="new"):
             result = procesar_directorio(self.source, barra_progreso=False,
                                          psg_archive_dir=self.destination, known_psg={})
         self.assertEqual(1, result["errores_recorrido"])

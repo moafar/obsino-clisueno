@@ -1,4 +1,4 @@
-# commons/unificar_resultados.py
+# extract_commons/unificar_resultados.py
 
 import os, glob, re, logging
 from typing import List, Dict

@@ -1,6 +1,6 @@
 from typing import Any, Mapping
 
-from commons.errors import SchemaValidationError
+from transform_commons.errors import SchemaValidationError
 
 import pandas as pd
 
