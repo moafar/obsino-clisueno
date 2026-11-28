@@ -245,8 +245,11 @@ No se comparan CSV históricos. La auditoría no transforma ni carga datos.
 
 Un ERROR de auditoría devuelve código de salida no nulo; no revierte documentos
 ya archivados. Las advertencias (incluidos controles no evaluados) no bloquean
-la ejecución. El informe no incluye nombres, identificadores ni rutas clínicas.
-Los rechazos sin motivo explícito no pueden clasificarse exhaustivamente.
+la ejecución vigente. El informe muestra recuentos, motivos normalizados de
+rechazo, controles técnicos, completitud por formato y sección, y tiempos de
+fase; no incluye nombres, identificadores ni rutas clínicas. El log conserva
+un evento individual por rechazo. La auditoría verifica existencia y rutas del
+archivado sin recalcular MD5 de los documentos archivados.
 La eliminación de CSV previos sigue afectando al mecanismo existente de
 detección histórica de duplicados del extractor; la auditoría no lo modifica.
 

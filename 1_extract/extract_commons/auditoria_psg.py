@@ -1,24 +1,27 @@
 """Auditoría PSG de una sola ejecución; no modifica CSV ni documentos."""
 import argparse
 import csv
-import hashlib
+import json
 import math
 import os
 import re
+import time
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 from statistics import mean, median
 
 import yaml
-from src.basal.procesar_basal import _completeness
+from extract_commons.directorio_utils import PSG_REJECTION_REASONS
+from src.basal.procesar_basal import COMPLETENESS_FIELDS, _completeness
 
 ABSENT = {"", "N/A", "NA", "NONE", "NULL", "NAN"}
 SUMMARY = {"archivos": "num_files", "válidos": "archivos_validos",
            "filas_nuevas": "archivos_registrados", "nuevos_archivados": "archivos_extraidos",
            "duplicados": "archivos_duplicados", "fallos_archivado": "archivos_fallo_archivado",
            "reintentos": "archivos_reintentados", "rechazados": "archivos_rechazados",
-           "errores_recorrido": "errores_recorrido"}
+           "errores_recorrido": "errores_recorrido",
+           "errores_procesamiento": "errores_procesamiento"}
 
 
 def present(value):
@@ -51,14 +54,26 @@ def typed(value, kind):
     return number
 
 
-def digest(path):
-    with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "md5").hexdigest()
+def indicator_present(row, field):
+    if field == "pte_edad_anos":
+        return any(present(row[name]) for name in
+                   ("pte_edad_anos", "pte_edad_meses", "pte_edad_dias"))
+    return present(row[field])
+
+
+def percentile(values, fraction):
+    """Percentil lineal sobre posiciones 0..n-1; requiere al menos un valor."""
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * fraction
+    low = math.floor(position)
+    high = math.ceil(position)
+    return ordered[low] + (ordered[high] - ordered[low]) * (position - low)
 
 
 def read_log(path):
-    """Solo mensajes agregados; las rutas nunca se copian al informe."""
-    moves, duplicates, reasons = defaultdict(list), [], Counter()
+    """Lee eventos del log; las rutas individuales nunca se copian al informe."""
+    moves, duplicates, warnings, rejects = defaultdict(list), [], Counter(), []
+    malformed_rejects = 0
     summary = None
     for line in path.read_text(encoding="utf-8").splitlines():
         message = line.split(" $$ ", 2)[-1]
@@ -70,20 +85,25 @@ def read_log(path):
         elif message.startswith(("UUID PSG duplicado en otro origen; no se archiva: ",
                                  "UUID PSG ya presente en CSV; no se archiva: ")):
             duplicates.append(message.split(": ", 1)[1])
-        elif message.startswith("Archivo excluido por patrón OXIGENO"):
-            reasons["Exclusión OXIGENO"] += 1
-        elif message.startswith("Extracción PSG omitida:"):
-            reasons["Extracción PSG omitida"] += 1
-        elif message.startswith("Error al procesar documento:"):
-            reasons["Error al procesar documento"] += 1
+        elif message.startswith("Rechazo PSG: "):
+            try:
+                event = json.loads(message.removeprefix("Rechazo PSG: "))
+                if (not isinstance(event, dict) or
+                        event.get("codigo") not in PSG_REJECTION_REASONS or
+                        event.get("motivo") != PSG_REJECTION_REASONS[event["codigo"]] or
+                        not isinstance(event.get("origen"), str) or not event["origen"]):
+                    raise ValueError("Evento de rechazo inválido")
+                rejects.append(event)
+            except (ValueError, TypeError, KeyError):
+                malformed_rejects += 1
         elif message.startswith("Sección PSG sin datos ("):
             section = message.split("(", 1)[1].split(")", 1)[0]
-            reasons["Advertencia de sección: " + section] += 1
+            warnings[section] += 1
         elif message.startswith("Resumen:"):
             fields = dict(re.findall(r"([\w]+)=(\d+)", message))
-            if all(key in fields for key in SUMMARY):
-                summary = {target: int(fields[key]) for key, target in SUMMARY.items()}
-    return moves, duplicates, reasons, summary
+            if all(key in fields for key in SUMMARY if key != "errores_procesamiento"):
+                summary = {target: int(fields.get(key, 0)) for key, target in SUMMARY.items()}
+    return moves, duplicates, warnings, rejects, malformed_rejects, summary
 
 
 def residual_count(source, archive, extensions):
@@ -99,8 +119,10 @@ def residual_count(source, archive, extensions):
 
 
 def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
-              extensions=("doc", "rtf"), elapsed=None):
+              extensions=("doc", "rtf"), elapsed=None, phase_times=None,
+              orchestration_started_at=None):
     """Devuelve (ruta del informe, estado). ERROR no revierte el archivado."""
+    audit_started_at = time.perf_counter()
     csv_path, log_path, contract_path, source, archive = map(
         Path, (csv_path, log_path, contract_path, source, archive))
     source, archive = source.resolve(), archive.resolve()
@@ -116,7 +138,7 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
 
     with contract_path.open(encoding="utf-8") as stream:
         schema = yaml.safe_load(stream)["schema"]["transform"]["input"]["columns"]
-    moves, duplicates, reasons, logged = read_log(log_path)
+    moves, duplicates, section_warnings, rejects, malformed_rejects, logged = read_log(log_path)
     result = result if result is not None else logged
     if result is None:
         raise ValueError("No se dispone del resumen de ejecución")
@@ -125,27 +147,63 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
     retried = result["archivos_reintentados"]
     failed = result["archivos_fallo_archivado"]
     rejected = result["archivos_rechazados"]
+    processing_errors = result.get("errores_procesamiento", 0)
     duplicate_count = result["archivos_duplicados"]
     valid = result["archivos_validos"]
-    lines += ["## Integridad operativa", "",
-              f"Encontrados: {result['num_files']}; válidos: {valid}; filas nuevas: {n}; "
-              f"archivados nuevos: {archived}; duplicados: {duplicate_count}; "
-              f"rechazados: {rejected}; reintentos: {retried}; fallos: {failed}."]
+    reject_codes = Counter(event["codigo"] for event in rejects)
+    reject_origins = [event["origen"] for event in rejects]
+    invalid_reject_sources = 0
+    for event in rejects:
+        origin = Path(event["origen"])
+        try:
+            in_root = origin.is_absolute() and origin.parent.resolve().is_relative_to(source)
+            valid_type = (origin.is_symlink() if event["codigo"] == "ENLACE_SIMBOLICO"
+                          else origin.is_file() and not origin.is_symlink())
+            invalid_reject_sources += not (in_root and valid_type)
+        except OSError:
+            invalid_reject_sources += 1
+    lines += ["## Resumen operativo", "",
+              "| Concepto | Documentos |", "|---|---:|",
+              f"| Encontrados | {result['num_files']} |",
+              f"| Válidos por extensión | {valid} |",
+              f"| Filas nuevas | {n} |",
+              f"| Archivados nuevos | {archived} |",
+              f"| Reintentos de archivado | {retried} |",
+              f"| Duplicados detectados | {duplicate_count} |",
+              f"| Rechazados | {rejected} |",
+              f"| Fallos de archivado | {failed} |",
+              f"| Errores de recorrido | {result['errores_recorrido']} |",
+              f"| Errores técnicos de procesamiento | {processing_errors} |", ""]
     if elapsed is not None:
         lines.append(f"Duración de extracción (s): {elapsed:.2f}.")
-    check("Conciliación", status(valid == archived + retried + failed + rejected + duplicate_count
+    counted_valid = archived + retried + failed + rejected + duplicate_count + processing_errors
+    check("Conciliación", status(valid == counted_valid
                                 and archived <= n <= archived + failed
                                 and valid <= result["num_files"]),
-          "Contadores de la ejecución.")
-    check("Archivado y recorrido", status(not failed and not result["errores_recorrido"]),
-          f"Fallos de archivado: {failed}; errores de recorrido: {result['errores_recorrido']}.")
+          f"Válidos={valid}; archivados + reintentos + fallos + rechazados + duplicados + "
+          f"errores técnicos="
+          f"{counted_valid}; filas nuevas={n}; archivados nuevos={archived}; "
+          f"fallos de archivado={failed}.")
+    check("Procesamiento, archivado y recorrido",
+          status(not failed and not result["errores_recorrido"] and not processing_errors),
+          f"Fallos de archivado: {failed}; errores de recorrido: "
+          f"{result['errores_recorrido']}; errores técnicos: {processing_errors}.")
+    check("Rechazos por motivo", status(sum(reject_codes.values()) == rejected
+          and not malformed_rejects and len(set(reject_origins)) == len(reject_origins)
+          and not invalid_reject_sources),
+          f"Contador: {rejected}; eventos: {sum(reject_codes.values())}; "
+          f"eventos malformados: {malformed_rejects}; orígenes repetidos: "
+          f"{len(reject_origins)-len(set(reject_origins))}; "
+          f"orígenes ausentes o fuera de raíz: {invalid_reject_sources}.")
     try:
+        if not source.is_dir():
+            raise OSError("Origen PSG no accesible")
         residual = residual_count(source, archive, set(extensions))
         expected = valid - archived - retried
         check("Inventario residual", status(residual == expected),
               f"Observado: {residual}; esperado: {expected}.")
     except OSError:
-        check("Inventario residual", "NO EVALUADO", "No se pudo recorrer el origen.")
+        check("Inventario residual", "ERROR", "No se pudo recorrer el origen.")
 
     lines += ["", "## Integridad y calidad del CSV", ""]
     rows = []
@@ -163,8 +221,9 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
     check("Número de registros", status(len(rows) == n and not malformed),
           f"Esperados: {n}; filas completas: {len(rows)}; filas malformadas: {malformed}.")
     schema_ok = header == list(schema)
+    empty_batch = n == 0 and not rows and not malformed and (schema_ok or not csv_path.exists())
     if not header and n == 0 and not csv_path.exists():
-        check("Esquema", "NO EVALUADO", "No se generó CSV porque no hubo filas nuevas.")
+        check("Esquema", "NO APLICA", "No se generó CSV porque no hubo filas nuevas.")
     else:
         check("Esquema", status(schema_ok),
               f"Esperadas: {len(schema)}; observadas: {len(header)}; "
@@ -172,11 +231,13 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
               f"adicionales: {len(set(header) - set(schema))}; orden exacto: {schema_ok}.")
 
     uuids = Counter()
-    invalid_types, available, months = Counter(), Counter(), Counter()
-    by_format, format_rows = defaultdict(Counter), Counter()
+    invalid_types, months = Counter(), Counter()
+    indicator_counts = defaultdict(Counter)
+    format_rows, scores_by_format = Counter(), defaultdict(list)
     scores, dates, ids = [], [], set()
     invalid_uuid = missing_id = missing_date = invalid_date = bad_score = 0
-    trace_missing = trace_bad = trace_ok = 0
+    trace_missing = trace_bad = trace_ok = trace_reused = 0
+    seen_targets = set()
     if schema_ok and rows:
         for row in rows:
             uid = row["meta_uuid"].strip()
@@ -189,11 +250,11 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
             fmt = Path(row["meta_fuente"]).suffix.lower().lstrip(".")
             fmt = fmt if fmt in {"doc", "rtf"} else "otro"
             format_rows[fmt] += 1
+            if fmt in COMPLETENESS_FIELDS:
+                for field in COMPLETENESS_FIELDS[fmt]:
+                    indicator_counts[fmt][field] += indicator_present(row, field)
             for name, kind in schema.items():
                 value = row[name]
-                if present(value):
-                    available[name] += 1
-                    by_format[fmt][name] += 1
                 try:
                     typed(value, kind)
                 except (ValueError, OverflowError):
@@ -212,6 +273,7 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
                 if not math.isfinite(score) or abs(score - float(_completeness(row, fmt))) > 0.00001:
                     raise ValueError()
                 scores.append(score)
+                scores_by_format[fmt].append(score)
             except (ValueError, KeyError):
                 bad_score += 1
             paths = moves.get(row["meta_fuente"], [])
@@ -219,11 +281,18 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
                 trace_missing += 1
             else:
                 try:
+                    origin = Path(row["meta_fuente"])
                     target = Path(paths[0])
-                    if (not target.resolve().is_relative_to(archive) or
-                            target.is_symlink() or digest(target) != uid):
+                    resolved_target = target.resolve()
+                    if (not origin.is_absolute() or
+                            not origin.resolve().is_relative_to(source) or
+                            not resolved_target.is_relative_to(archive) or
+                            target.is_symlink() or not target.is_file()):
                         trace_bad += 1
+                    elif resolved_target in seen_targets:
+                        trace_reused += 1
                     else:
+                        seen_targets.add(resolved_target)
                         trace_ok += 1
                 except OSError:
                     trace_bad += 1
@@ -243,32 +312,66 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
         if scores:
             lines.append(f"  - Mínimo: {min(scores):.2f}%; media: {mean(scores):.2f}%; "
                          f"mediana: {median(scores):.2f}%; máximo: {max(scores):.2f}%.")
-        lines += ["", "### Completitud por variable y formato", "",
-                  "| Campo | Presentes | Ausentes | % | DOC % | RTF % |",
-                  "|---|---:|---:|---:|---:|---:|"]
-        def pct(a, b):
-            return f"{100*a/b:.2f}" if b else "—"
+        def fraction_text(count, total):
+            return f"{count}/{total}" if total else "—"
+        def pct(count, total):
+            return f"{100*count/total:.2f}" if total else "—"
+        fields_by_format = {fmt: set(fields) for fmt, fields in COMPLETENESS_FIELDS.items()}
+        all_fields = fields_by_format["doc"] | fields_by_format["rtf"]
+        logical_fields = [name for name in schema if name in all_fields]
         groups = defaultdict(list)
-        for name in schema:
-            a = available[name]
-            lines.append(f"| {name} | {a} | {len(rows)-a} | {pct(a,len(rows))} | "
-                         f"{pct(by_format['doc'][name],format_rows['doc'])} | "
-                         f"{pct(by_format['rtf'][name],format_rows['rtf'])} |")
-            groups[name.split("_", 1)[0]].append(name)
-        lines += ["", "### Completitud por sección", ""]
+        lines += ["", "### Completitud por variable y formato", "",
+                  "`—` indica campo no aplicable o formato sin filas; edad agrupa años, meses y días.", "",
+                  "| Indicador lógico | DOC presentes/aplicables | DOC % | RTF presentes/aplicables | RTF % |",
+                  "|---|---:|---:|---:|---:|"]
+        for field in logical_fields:
+            groups[field.split("_", 1)[0]].append(field)
+            cells = []
+            for fmt in ("doc", "rtf"):
+                if field in fields_by_format[fmt] and format_rows[fmt]:
+                    count = indicator_counts[fmt][field]
+                    cells += [fraction_text(count, format_rows[fmt]), pct(count, format_rows[fmt])]
+                else:
+                    cells += ["—", "—"]
+            label = "pte_edad_anos (edad)" if field == "pte_edad_anos" else field
+            lines.append(f"| {label} | {' | '.join(cells)} |")
+        lines += ["", "### Completitud por sección", "",
+                  "| Sección | DOC indicadores | DOC presentes/aplicables | DOC % | "
+                  "RTF indicadores | RTF presentes/aplicables | RTF % |",
+                  "|---|---:|---:|---:|---:|---:|---:|"]
         for group, names in groups.items():
-            lines.append(f"- {group}: {pct(sum(available[x] for x in names),len(rows)*len(names))}%")
-        lines.append(f"- Formatos: DOC={format_rows['doc']}; RTF={format_rows['rtf']}; otro={format_rows['otro']}.")
+            cells = []
+            for fmt in ("doc", "rtf"):
+                applicable = [name for name in names if name in fields_by_format[fmt]]
+                total = format_rows[fmt] * len(applicable)
+                count = sum(indicator_counts[fmt][name] for name in applicable)
+                cells += [str(len(applicable)), fraction_text(count, total), pct(count, total)]
+            lines.append(f"| {group} | {' | '.join(cells)} |")
+        lines += ["", "### Distribución de completitud por formato", "",
+                  "Percentiles lineales sobre puntuaciones válidas; las discrepantes quedan fuera de esta tabla.", "",
+                  "| Formato | Filas | Puntuaciones válidas | Mínimo % | P50 % | P90 % | Máximo % |",
+                  "|---|---:|---:|---:|---:|---:|---:|"]
+        for fmt in ("doc", "rtf"):
+            values = scores_by_format[fmt]
+            stats = ([f"{min(values):.2f}", f"{percentile(values, 0.5):.2f}",
+                      f"{percentile(values, 0.9):.2f}", f"{max(values):.2f}"]
+                     if values else ["—"] * 4)
+            lines.append(f"| {fmt.upper()} | {format_rows[fmt]} | {len(values)} | "
+                         f"{' | '.join(stats)} |")
+        lines.append(f"- Formato desconocido: {format_rows['otro']} filas; "
+                     "no se calcula su completitud.")
     else:
-        check("Calidad de campos", "NO EVALUADO", "Sin filas o esquema incompatible.")
+        check("Calidad de campos", "NO APLICA" if empty_batch else "NO EVALUADO",
+              "Sin filas nuevas." if empty_batch else "Sin filas o esquema incompatible.")
 
     lines += ["", "## Trazabilidad y rechazos", ""]
     if schema_ok and rows:
         check("Trazabilidad CSV–log–archivo", status(trace_ok == len(rows)),
-              f"MD5 correctos: {trace_ok}; rutas ausentes/ambiguas: {trace_missing}; "
-              f"archivos ausentes o hash incorrecto: {trace_bad}.")
+              f"Archivos localizados: {trace_ok}; rutas ausentes/ambiguas: {trace_missing}; "
+              f"rutas inválidas o archivos ausentes: {trace_bad}; destinos reutilizados: {trace_reused}.")
     else:
-        check("Trazabilidad CSV", "NO EVALUADO", "Sin filas auditables.")
+        check("Trazabilidad CSV", "NO APLICA" if empty_batch else "NO EVALUADO",
+              "Sin filas nuevas." if empty_batch else "Sin filas auditables.")
     check("Traslados registrados", status(sum(map(len, moves.values())) == archived + retried),
           f"Log: {sum(map(len,moves.values()))}; esperados: {archived+retried}.")
     check("Duplicados registrados", "OK" if len(duplicates) == duplicate_count else "ADVERTENCIA",
@@ -278,22 +381,51 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
         try:
             candidate = Path(origin)
             if (candidate.resolve().is_relative_to(source) and not candidate.is_symlink()
-                    and digest(candidate) in uuids):
+                    and candidate.is_file()):
                 duplicate_matches += 1
             else:
                 duplicate_unverified += 1
         except OSError:
             duplicate_unverified += 1
-    lines.append(f"- Duplicados con MD5 en este CSV: {duplicate_matches}; no verificables "
-                 f"sin histórico o archivo accesible: {duplicate_unverified}.")
-    lines.append(f"- Rechazados: {rejected}. Motivos explícitos y advertencias del log (no equivalen a documentos únicos):")
-    for reason, count in reasons.items():
-        lines.append(f"  - {reason}: {count}")
-    lines.append("- Clasificación exhaustiva de rechazados: NO EVALUADO; algunas salidas no registran motivo.")
-    lines.append("- Unicidad histórica: NO EVALUADO; fuera del alcance.")
+    lines.append(f"- Fuentes duplicadas presentes en origen: {duplicate_matches}; "
+                 f"no localizadas o fuera del origen: {duplicate_unverified}. "
+                 "Contenido no verificado por la auditoría.")
+    lines += ["", "### Motivos de rechazo", "",
+              f"Eventos: {sum(reject_codes.values())}; contador: {rejected}.", "",
+              "| Código | Documentos | Motivo |", "|---|---:|---|"]
+    for code, count in sorted(reject_codes.items()):
+        lines.append(f"| {code} | {count} | {PSG_REJECTION_REASONS[code]} |")
+    if not reject_codes:
+        lines.append("| — | 0 | Sin rechazos registrados |")
+    if section_warnings:
+        lines += ["", "### Advertencias de sección", "",
+                  "Estas incidencias no son rechazos.", "",
+                  "| Sección | Avisos |", "|---|---:|"]
+        for section, count in sorted(section_warnings.items()):
+            lines.append(f"| {section} | {count} |")
+    lines += ["", "- Unicidad histórica: NO EVALUADO; fuera del alcance."]
+    if phase_times is not None:
+        audit_seconds = time.perf_counter() - audit_started_at
+        lines += ["", "## Tiempos de la ejecución", "",
+                  "| Fase | Segundos |", "|---|---:|",
+                  f"| Lectura de UUID históricos | {phase_times['historicos_s']:.3f} |",
+                  f"| Procesamiento | {phase_times['procesamiento_s']:.3f} |",
+                  f"| Auditoría hasta escritura del informe | {audit_seconds:.3f} |"]
+        if orchestration_started_at is not None:
+            lines.append("| Orquestación hasta escritura del informe | "
+                         f"{time.perf_counter() - orchestration_started_at:.3f} |")
+        lines.append("")
     final = ("ERROR" if "ERROR" in states else "ADVERTENCIA" if
              any(s in states for s in ("ADVERTENCIA", "NO EVALUADO")) else "OK")
-    lines[1:1] = ["", f"**Resultado: {final}**"]
+    counts = Counter(states)
+    action = ("Detener la continuación automática y revisar el log; el archivado no se revierte."
+              if final == "ERROR" else
+              "Revisar advertencias y controles no evaluados antes de una carga desatendida."
+              if final == "ADVERTENCIA" else "Sin incidencias técnicas detectadas.")
+    lines[2:2] = [f"**Resultado: {final}**", "", action, "",
+                  f"Controles: OK={counts['OK']}; ADVERTENCIA={counts['ADVERTENCIA']}; "
+                  f"ERROR={counts['ERROR']}; NO EVALUADO={counts['NO EVALUADO']}; "
+                  f"NO APLICA={counts['NO APLICA']}.", ""]
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return output, final
 

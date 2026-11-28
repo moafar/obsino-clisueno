@@ -2,6 +2,7 @@
 
 import argparse
 import csv
+import json
 import errno
 import hashlib
 import io
@@ -290,9 +291,84 @@ class PSGArchivingTest(unittest.TestCase):
         self.assertEqual(0, self.run_cli())
         reports = list((self.root / "logs").glob("extract_psg_*_auditoria.md"))
         self.assertEqual(1, len(reports))
-        self.assertIn("MD5 correctos: 1", reports[0].read_text(encoding="utf-8"))
+        report_text = reports[0].read_text(encoding="utf-8")
+        self.assertIn("Archivos localizados: 1", report_text)
+        self.assertIn("## Tiempos de la ejecución", report_text)
+        for phase in ("Lectura de UUID históricos", "Procesamiento",
+                      "Auditoría hasta escritura del informe",
+                      "Orquestación hasta escritura del informe"):
+            self.assertIn(f"| {phase} |", report_text)
+        logs = list((self.root / "logs").glob("extract_psg_*.log"))
+        self.assertEqual(1, len(logs))
+        log_text = logs[0].read_text(encoding="utf-8")
+        for step in ("1/3", "2/3", "3/3"):
+            self.assertIn(f"Progreso PSG {step}", log_text)
+        self.assertRegex(log_text, r"orquestacion_total_s=\d+\.\d{3}")
         self.assertFalse(source.exists())
         self.assertEqual(1, len(self.csv_rows()))
+
+    def test_each_rejected_document_has_one_coded_log_event(self):
+        for name in ("unreadable.doc", "other.doc", "nohash.doc", "OXIGENO.doc"):
+            (self.source / name).write_bytes(b"synthetic")
+
+        def converted(path):
+            return (None if path.name == "unreadable.doc" else
+                    "Documento sintético ajeno a PSG" if path.name == "other.doc" else
+                    synthetic_report("doc"))
+
+        with patch("extract_commons.archivo_utils._extract_text", side_effect=converted), \
+             patch("extract_commons.archivo_utils.generar_hash_archivo", return_value="N/A"), \
+             self.assertLogs(level="WARNING") as captured:
+            result = procesar_directorio(self.source, barra_progreso=False,
+                                         psg_archive_dir=self.destination, known_psg={})
+        events = [json.loads(line.split("Rechazo PSG: ", 1)[1])
+                  for line in captured.output if "Rechazo PSG: " in line]
+        self.assertEqual(4, result["archivos_rechazados"])
+        self.assertEqual(4, len(events))
+        self.assertEqual(4, len({event["origen"] for event in events}))
+        self.assertEqual({
+            "unreadable.doc": "TEXTO_ILEGIBLE", "other.doc": "NO_PSG_BASAL",
+            "nohash.doc": "UUID_NO_GENERADO", "OXIGENO.doc": "EXCLUIDO_OXIGENO",
+        }, {Path(event["origen"]).name: event["codigo"] for event in events})
+        self.assertTrue(all(event["motivo"] for event in events))
+
+    def test_csv_write_failure_blocks_without_counting_rejection(self):
+        source = self.source / "synthetic.doc"
+        source.write_bytes(b"synthetic")
+        with patch("extract_commons.archivo_utils._append_psg_row",
+                   side_effect=OSError("fallo sintético de escritura")):
+            self.assertEqual(extract_main.EXIT_PROCESS, self.run_cli())
+        self.assertTrue(source.exists())
+        logs = list((self.root / "logs").glob("extract_psg_*.log"))
+        self.assertEqual(1, len(logs))
+        log_text = logs[0].read_text(encoding="utf-8")
+        self.assertIn("errores_procesamiento=1", log_text)
+        self.assertIn("rechazados=0", log_text)
+        self.assertNotIn("Rechazo PSG:", log_text)
+        reports = list((self.root / "logs").glob("extract_psg_*_auditoria.md"))
+        self.assertEqual(1, len(reports))
+        report_text = reports[0].read_text(encoding="utf-8")
+        self.assertIn("**Resultado: ERROR**", report_text)
+        self.assertIn("| Errores técnicos de procesamiento | 1 |", report_text)
+
+    def test_unexpected_basal_parser_failure_blocks_without_rejection(self):
+        source = self.source / "synthetic.doc"
+        source.write_bytes(b"synthetic")
+
+        def unexpected_parser(*_):
+            raise RuntimeError("fallo sintético")
+
+        with patch.dict(archivo_utils.EXAMS["BASAL"].processors,
+                        {".doc": unexpected_parser}):
+            self.assertEqual(extract_main.EXIT_PROCESS, self.run_cli())
+        self.assertTrue(source.exists())
+        log = next((self.root / "logs").glob("extract_psg_*.log"))
+        log_text = log.read_text(encoding="utf-8")
+        self.assertIn("errores_procesamiento=1", log_text)
+        self.assertIn("rechazados=0", log_text)
+        self.assertNotIn("Rechazo PSG:", log_text)
+        report = next((self.root / "logs").glob("extract_psg_*_auditoria.md"))
+        self.assertIn("**Resultado: ERROR**", report.read_text(encoding="utf-8"))
 
     def test_normal_mode_accepts_alternate_origin(self):
         source, destination, output, _ = extract_main._psg_runtime(

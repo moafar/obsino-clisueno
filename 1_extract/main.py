@@ -152,14 +152,16 @@ def report(res: dict, ruta: Path, dt: float, verbose: bool):
         "extraidos": res.get("archivos_extraidos", 0),
         "registrados": res.get("archivos_registrados", 0),
         "rechazados": res.get("archivos_rechazados", 0),
+        "errores_procesamiento": res.get("errores_procesamiento", 0),
         "tiempo_s": f"{dt:.2f}",
     }
     logger.info(
-        "Resumen: archivos=%s, válidos=%s, descartados=%s, filas_nuevas=%s, nuevos_archivados=%s, duplicados=%s, fallos_archivado=%s, reintentos=%s, rechazados=%s, errores_recorrido=%s, tiempo_s=%s",
+        "Resumen: archivos=%s, válidos=%s, descartados=%s, filas_nuevas=%s, nuevos_archivados=%s, duplicados=%s, fallos_archivado=%s, reintentos=%s, rechazados=%s, errores_recorrido=%s, errores_procesamiento=%s, tiempo_s=%s",
         base["num_files"], base["validos"], base["descartados"],
         base["registrados"], base["extraidos"], res.get("archivos_duplicados", 0),
         res.get("archivos_fallo_archivado", 0), res.get("archivos_reintentados", 0),
-        base["rechazados"], res.get("errores_recorrido", 0), base["tiempo_s"],
+        base["rechazados"], res.get("errores_recorrido", 0),
+        base["errores_procesamiento"], base["tiempo_s"],
     )
     if verbose:
         print(f"\n{' Resumen de procesamiento ':-^60}")
@@ -175,6 +177,7 @@ def report(res: dict, ruta: Path, dt: float, verbose: bool):
               f"Fallos de archivado: {res.get('archivos_fallo_archivado', 0)} | "
               f"Reintentos: {res.get('archivos_reintentados', 0)} | "
               f"Errores de recorrido: {res.get('errores_recorrido', 0)} | "
+              f"Errores de procesamiento: {base['errores_procesamiento']} | "
               f"Rechazados: {base['rechazados']} | "
               f"Tiempo(s): {base['tiempo_s']}\n")
 
@@ -257,6 +260,8 @@ def _orchestrate_psg(args, cfg: Config) -> int:
     if answer not in ("s", "si", "sí"):
         return EXIT_OK
     log_path = setup_logging_from_config(cfg, force_debug=args.verbose, flow="psg")
+    orchestration_started_at = time.perf_counter()
+    phase_times = {}
     with (output / ".psg-archive.lock").open("a+b") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
@@ -273,24 +278,45 @@ def _orchestrate_psg(args, cfg: Config) -> int:
             configure_subflows(unified_file_for=output_map, prefixes=cfg.subflujos_prefijos,
                                output_dir=output)
             logger.info("PSG: modo=%s origen=%s destino=%s salida=%s", args.mode, source, destination, output)
+            logger.info("Progreso PSG 1/3: lectura de UUID históricos iniciada")
+            history_started_at = time.perf_counter()
             known = load_known_psg_uuids(output)
+            phase_times["historicos_s"] = time.perf_counter() - history_started_at
+            logger.info("Progreso PSG 1/3: lectura de UUID históricos terminada; tiempo_s=%.3f",
+                        phase_times["historicos_s"])
+            logger.info("Progreso PSG 2/3: procesamiento iniciado")
             result, elapsed = run_processing(source, cfg, archive_dir=destination, known_psg=known)
+            phase_times["procesamiento_s"] = elapsed
+            logger.info("Progreso PSG 2/3: procesamiento terminado; tiempo_s=%.3f", elapsed)
             report(result, source, elapsed, args.verbose)
+            logger.info("Progreso PSG 3/3: auditoría iniciada")
+            audit_started_at = time.perf_counter()
             try:
                 audit_path, audit_state = audit_psg(
                     csv_path, log_path, args.config or resolve_config_yaml_path("psg"),
                     source, destination, result=result,
-                    extensions=cfg.tipos_validos or ("doc", "rtf"), elapsed=elapsed)
+                    extensions=cfg.tipos_validos or ("doc", "rtf"), elapsed=elapsed,
+                    phase_times=phase_times, orchestration_started_at=orchestration_started_at)
+                phase_times["auditoria_s"] = time.perf_counter() - audit_started_at
+                logger.info("Progreso PSG 3/3: auditoría terminada; estado=%s; tiempo_s=%.3f",
+                            audit_state, phase_times["auditoria_s"])
                 print(f"Auditoría PSG: {audit_state} | {audit_path}")
             except Exception as error:
+                phase_times["auditoria_s"] = time.perf_counter() - audit_started_at
                 logger.error("Auditoría PSG no completada: %s", type(error).__name__)
                 print("Auditoría PSG no completada; consulte el log. No se revierten los traslados.",
                       file=sys.stderr)
                 return EXIT_PROCESS
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
+            logger.info("Tiempo PSG: historicos_s=%s procesamiento_s=%s auditoria_s=%s "
+                        "orquestacion_total_s=%.3f",
+                        f"{phase_times['historicos_s']:.3f}" if "historicos_s" in phase_times else "NO_EVALUADO",
+                        f"{phase_times['procesamiento_s']:.3f}" if "procesamiento_s" in phase_times else "NO_EVALUADO",
+                        f"{phase_times['auditoria_s']:.3f}" if "auditoria_s" in phase_times else "NO_EVALUADO",
+                        time.perf_counter() - orchestration_started_at)
     if (audit_state == "ERROR" or result.get("archivos_fallo_archivado", 0)
-            or result.get("errores_recorrido", 0)):
+            or result.get("errores_recorrido", 0) or result.get("errores_procesamiento", 0)):
         return EXIT_PROCESS
     return EXIT_OK
 

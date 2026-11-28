@@ -471,11 +471,11 @@ def procesar_archivo(archivo: Path, *, psg_archive_dir: Path | None = None,
     """Procesa un archivo y escribe en un CSV unificado por tipo de examen (solo activos)."""
     if EXCLUDE_PATTERNS.search(archivo.name):
         logging.info("Archivo excluido por patrón OXIGENO")
-        return False
+        return "rejected:EXCLUIDO_OXIGENO" if psg_archive_dir is not None else False
 
     texto = _extract_text(archivo)
     if not texto:
-        return False
+        return "rejected:TEXTO_ILEGIBLE" if psg_archive_dir is not None else False
 
     texto_norm = normalizar_texto(texto)
 
@@ -483,7 +483,7 @@ def procesar_archivo(archivo: Path, *, psg_archive_dir: Path | None = None,
     # print(f"[DEBUG] Tipos detectados en {archivo.name}: {tipos}")
     if not tipos:
         # print(f"[DEBUG] No se encontraron tipos de examen en el archivo {archivo}.")
-        return False
+        return "rejected:NO_PSG_BASAL" if psg_archive_dir is not None else False
 
     ext = archivo.suffix.lower()
     
@@ -519,7 +519,12 @@ def procesar_archivo(archivo: Path, *, psg_archive_dir: Path | None = None,
         # print(f"[DEBUG] ** INICIO ** Procesando archivo {tipo} válido: {archivo}")
         try:
             if tipo == "BASAL":
-                resultados = procesador(texto_relevante, archivo)
+                try:
+                    resultados = procesador(texto_relevante, archivo)
+                except PSGExtractionError as error:
+                    code = ("UUID_NO_GENERADO" if str(error) == "No se pudo generar el UUID PSG"
+                            else "EXTRACCION_ILEGIBLE")
+                    return f"rejected:{code}"
             else:
                 try:
                     resultados = procesador(texto_relevante, archivo)  # (texto, archivo)
@@ -569,9 +574,7 @@ def procesar_archivo(archivo: Path, *, psg_archive_dir: Path | None = None,
                 applied_prefixes.add(prefix)
         except Exception as e:
             if tipo == "BASAL":
-                detail = str(e) if isinstance(e, PSGExtractionError) else type(e).__name__
-                logging.warning("Extracción PSG omitida: %s", detail)
-                return "rejected"
+                raise
             # print(f"[DEBUG] Error procesando {tipo} en {archivo}: {e}")
             processing_results.append((tipo, False))
             continue
@@ -587,4 +590,6 @@ def procesar_archivo(archivo: Path, *, psg_archive_dir: Path | None = None,
     success = any(result for _, result in processing_results)
     if success:
         _move_processed_file(archivo, applied_prefixes, detected_date)
+    if psg_archive_dir is not None and not success:
+        return "rejected:NO_PSG_BASAL"
     return success

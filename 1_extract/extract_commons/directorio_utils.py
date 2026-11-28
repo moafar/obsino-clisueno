@@ -1,9 +1,28 @@
 from pathlib import Path
+import json
 import logging
 import os
 from tqdm import tqdm
 from extract_commons.archivo_utils import procesar_archivo
 from typing import List, Optional
+
+PSG_REJECTION_REASONS = {
+    "EXCLUIDO_OXIGENO": "Nombre excluido por patrón OXIGENO",
+    "TEXTO_ILEGIBLE": "Texto del documento ausente o ilegible",
+    "NO_PSG_BASAL": "No se identificó un informe PSG basal procesable",
+    "UUID_NO_GENERADO": "No se pudo generar el UUID del documento original",
+    "EXTRACCION_ILEGIBLE": "Estructura PSG no recuperable",
+    "ENLACE_SIMBOLICO": "Enlace simbólico no admitido como documento PSG",
+    "ERROR_DOCUMENTO": "Error individual al procesar el documento",
+}
+
+
+def _log_psg_rejection(archivo: Path, code: str) -> None:
+    if code not in PSG_REJECTION_REASONS:
+        code = "ERROR_DOCUMENTO"
+    logging.warning("Rechazo PSG: %s", json.dumps({
+        "codigo": code, "origen": str(archivo), "motivo": PSG_REJECTION_REASONS[code]
+    }, ensure_ascii=False))
 
 def validar_directorio(path) -> Path:
     ruta = Path(path).resolve()
@@ -34,6 +53,7 @@ def procesar_directorio(
     archivos_fallo_archivado = 0
     archivos_reintentados = 0
     errores_recorrido = 0
+    errores_procesamiento = 0
 
     ruta = Path(ruta).resolve()
     if psg_archive_dir is not None:
@@ -63,9 +83,11 @@ def procesar_directorio(
             if extension in tipos_validos:
                 archivos_validos += 1
                 logging.info("Procesando archivo válido")
+                if psg_archive_dir is not None and archivo.is_symlink():
+                    archivos_rechazados += 1
+                    _log_psg_rejection(archivo, "ENLACE_SIMBOLICO")
+                    continue
                 try:
-                    if psg_archive_dir is not None and archivo.is_symlink():
-                        raise RuntimeError("No se procesan enlaces simbólicos PSG")
                     result = (procesar_archivo(archivo, psg_archive_dir=psg_archive_dir,
                                                known_psg=known_psg)
                               if psg_archive_dir is not None else procesar_archivo(archivo))
@@ -82,15 +104,25 @@ def procesar_directorio(
                         archivos_registrados += 1
                     else:
                         archivos_rechazados += 1
+                        if psg_archive_dir is not None:
+                            code = (result.removeprefix("rejected:")
+                                    if isinstance(result, str) and result.startswith("rejected:")
+                                    else "ERROR_DOCUMENTO")
+                            _log_psg_rejection(archivo, code)
                 except Exception as e:
-                    archivos_rechazados += 1
-                    logging.critical("Error al procesar documento: %s", type(e).__name__)
+                    if psg_archive_dir is not None:
+                        errores_procesamiento += 1
+                        logging.critical("Fallo técnico PSG al procesar documento: %s",
+                                         type(e).__name__)
+                    else:
+                        archivos_rechazados += 1
+                        logging.critical("Error al procesar documento: %s", type(e).__name__)
             else:
                 logging.warning("Archivo descartado por tipo no válido (%s)", extension)
         elif archivo.is_dir():
             num_dirs += 1
 
-    return {
+    result = {
         "num_files": num_files, "num_dirs": num_dirs,
         "archivos_validos": archivos_validos,
         "archivos_extraidos": archivos_extraidos,
@@ -101,3 +133,6 @@ def procesar_directorio(
         "archivos_reintentados": archivos_reintentados,
         "errores_recorrido": errores_recorrido,
     }
+    if psg_archive_dir is not None:
+        result["errores_procesamiento"] = errores_procesamiento
+    return result
