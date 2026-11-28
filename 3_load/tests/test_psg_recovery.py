@@ -10,6 +10,7 @@ import unittest
 from google.api_core.exceptions import NotFound
 import test_psg_load as fixture
 FakeClient, load = fixture.FakeClient, fixture.load
+UUID1, UUID2 = fixture.UUID1, fixture.UUID2
 
 
 class RecoveryLoadTest(unittest.TestCase):
@@ -233,20 +234,20 @@ class RecoveryLoadTest(unittest.TestCase):
                 self.execute(client)
         client.load_table_from_dataframe.assert_not_called()
         # Compatibilidad con un READY legado cuyo UUID ya fue cargado por otro lote.
-        client.existing.add("synthetic-uuid-1")
+        client.existing.add(UUID1)
         result = self.execute(client)
         self.assertEqual({"received": 1, "omitted": 1, "sent": 0, "inserted": 0}, result["counts"])
         client.load_table_from_dataframe.assert_not_called()
         self.assertTrue(second.exists())
 
     def test_ready_replans_partial_batch_without_changing_logical_attempt(self):
-        self.write([self.row(), self.row(meta_uuid="synthetic-uuid-2", pte_id="000124")])
+        self.write([self.row(), self.row(meta_uuid=UUID2, pte_id="000124")])
         client = FakeClient(self.schema)
         self.pause_ready(client)
         ready = self.state()
-        client.existing.add("synthetic-uuid-1")
+        client.existing.add(UUID1)
         result = self.execute(client)
-        self.assertEqual(["synthetic-uuid-2"], client.load_table_from_dataframe.call_args.args[0]["meta_uuid"].tolist())
+        self.assertEqual([UUID2], client.load_table_from_dataframe.call_args.args[0]["meta_uuid"].tolist())
         self.assertEqual(1, result["counts"]["omitted"])
         self.assertEqual(ready["attempt"], self.state()["attempt"])
         self.assertNotEqual(ready["job_id"], result["job_id"])

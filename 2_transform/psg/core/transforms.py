@@ -297,17 +297,12 @@ def _op_psg_basal_transform(dataframe: pd.DataFrame, **_: Any) -> pd.DataFrame:
     sleep_minutes = df["arq_tiempo_sueno_min"]
     calculable = missing_t90 & t90_minutes.notna() & sleep_minutes.notna()
     # Sin sueño registrado, 0/0 es indefinido: conservar T90% nulo.
-    # El resto de combinaciones con denominador cero sigue siendo inválido.
     zero_over_zero = (t90_minutes.eq(0) & sleep_minutes.eq(0)).fillna(False)
-    calculable = calculable & ~zero_over_zero
+    # La división por cero deja el derivado ausente; no valida relaciones clínicas.
+    calculable = calculable & ~zero_over_zero & sleep_minutes.ne(0).fillna(False)
     if calculable.any():
         numerator = t90_minutes.loc[calculable]
         denominator = sleep_minutes.loc[calculable]
-        if (any(not math.isfinite(value) for value in numerator) or
-                any(not math.isfinite(value) for value in denominator) or
-                (numerator < 0).any() or (denominator <= 0).any() or
-                (numerator > denominator).any()):
-            raise ValueError("No se puede derivar oxi_t90_pct con los minutos TST disponibles")
         df.loc[calculable, "oxi_t90_pct"] = (100 * numerator / denominator).astype("Float64")
 
     completeness = df["meta_completitud_pct"]

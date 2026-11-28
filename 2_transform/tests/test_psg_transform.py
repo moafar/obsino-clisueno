@@ -291,11 +291,18 @@ class PSGTransformTest(unittest.TestCase):
         self.assertEqual(0.0, result.loc[0, "arq_tiempo_sueno_min"])
         self.assertEqual(0.0, result.loc[0, "oxi_t90_tst_min"])
 
-    def test_t90_percentage_rejects_invalid_derivation(self):
-        for minutes, total in (("1", "0"), ("11", "10"), ("-1", "200")):
-            with self.subTest(minutes=minutes, total=total), self.assertRaisesRegex(ValueError, "oxi_t90_pct"):
-                self.transform([source_row(oxi_t90_tst_min=minutes,
-                                           arq_tiempo_sueno_min=total)])
+    def test_t90_derivation_has_no_clinical_consistency_gate(self):
+        for minutes, total, expected in (("1", "0", None), ("11", "10", 110.0),
+                                         ("-1", "200", -0.5), ("1", "-10", -10.0)):
+            with self.subTest(minutes=minutes, total=total):
+                result = self.transform([source_row(oxi_t90_tst_min=minutes,
+                                                     arq_tiempo_sueno_min=total)])
+                if expected is None:
+                    self.assertTrue(pd.isna(result.loc[0, "oxi_t90_pct"]))
+                else:
+                    self.assertEqual(expected, result.loc[0, "oxi_t90_pct"])
+                self.assertEqual(float(minutes), result.loc[0, "oxi_t90_tst_min"])
+                self.assertEqual(float(total), result.loc[0, "arq_tiempo_sueno_min"])
 
     def test_csv_to_parquet_preserves_typed_values(self):
         with tempfile.TemporaryDirectory() as folder:

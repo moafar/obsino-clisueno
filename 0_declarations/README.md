@@ -8,10 +8,10 @@ Contexto: esta capa no tiene entrypoint propio; define contratos YAML consumidos
 source .venv/bin/activate
 
 # Validar uso con transform (ejemplo PSG)
-cd ../2_transform && ../.venv/bin/python main.py --flow psg --input ../staging/extract_psg_YYYY-MM-DD_HH-MM.csv --dry-run
+.venv/bin/python 2_transform/main.py --flow psg --input staging/extract_psg_YYYY-MM-DD_HH-MM.csv --dry-run
 
 # Validar uso con load (ejemplo)
-cd ../3_load && ../.venv/bin/python main.py --flow <subproceso_ejemplo> --input ../staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
+.venv/bin/python 3_load/main.py --flow psg --table-id TABLA_AUTORIZADA --input staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.parquet
 ```
 
 Fuente única de verdad para contratos compartidos entre capas del ETL.
@@ -37,7 +37,7 @@ En el caso de `psg`, `load.input.columns` reutiliza `transform.output.columns` p
 
 ## ¿Cómo se usa en `transform`?
 
-El pipeline de `transform` referencia este contrato en su `config.yaml` mediante:
+Las CLI actuales consumen directamente las secciones `transform` y `schema.transform` de este YAML. PSG lee CSV y publica Parquet; XPAP mantiene su salida XLSX. Para configuraciones declarativas externas también se admiten las referencias:
 
 - `declarations.input_schema_yaml_path`
 - `declarations.input_schema_path_in_yaml`
@@ -52,7 +52,7 @@ Ejemplo típico:
 
 ## ¿Cómo se usa en `load`?
 
-La config de `load` referencia el mismo contrato para construir schema de BigQuery:
+La CLI actual usa la sección `load` y `schema.load.input.columns` del mismo YAML. PSG declara `load.input_format: parquet`. En configuraciones externas siguen disponibles las referencias:
 
 - `shared_schema_yaml_path` (o `schema_yaml_path`)
 - `schema_path_in_yaml`

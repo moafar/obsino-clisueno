@@ -7,15 +7,19 @@ Contexto: ejecutar desde la raíz del repo con entorno virtual activo.
 ```bash
 source .venv/bin/activate
 
-# 1) Extract
-cd 1_extract && ../.venv/bin/python main.py --flow psg --input /ruta/de/entrada
+# PSG: rutas y destino explícitos; este comando procesa y mueve documentos.
+.venv/bin/python scripts/run_psg.py --input /ruta/origen \
+  --archive-dest /ruta/archivo --mount /mnt/letra --table-id TABLA_AUTORIZADA
 
-# 2) Transform (ejemplo PSG)
-cd ../2_transform && ../.venv/bin/python main.py --flow psg --input ../staging/extract_psg_YYYY-MM-DD_HH-MM.csv
-
-# 3) Load
-cd ../../3_load && ../.venv/bin/python main.py --flow <subproceso_ejemplo> --input ../staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
+# Reanudación explícita de la misma ejecución.
+.venv/bin/python scripts/run_psg.py --resume ID_EJECUCION
 ```
+
+PSG conserva CSV crudo y publica Parquet tipado (PyArrow/Snappy). Documentos y archivo
+permanecen en NTFS; staging y estados, en Linux nativo de WSL2. XPAP mantiene XLSX.
+La validación operativa y el despliegue requieren autorización; protocolo, limitaciones
+y propuesta v6.0.0 en [PT07](docs/pt07_validacion_despliegue.md). El marcador vigente
+continúa siendo v5.0.1 en `CHANGELOG.md`.
 
 Proyecto ETL modular para procesamiento clínico de estudios de sueño, organizado en tres capas independientes:
 
@@ -42,7 +46,7 @@ Responsabilidad:
 
 - Leer fuentes de entrada (reportes/documentos por flujo).
 - Extraer campos relevantes y normalizarlos a una salida tabular base.
-- Registrar trazabilidad y errores de parsing sin detener todo el procesamiento.
+- Registrar rechazos individuales y advertencias; detener PSG ante errores técnicos bloqueantes.
 
 Entrada/salida esperada:
 
@@ -75,8 +79,8 @@ Referencia de detalle:
 Responsabilidad:
 
 - Cargar manualmente a BigQuery con control de ejecución por consola.
-- Mostrar configuración activa y solicitar confirmación humana.
-- Validar duplicados en lote y contra tabla destino (modo `WRITE_APPEND`).
+- Mostrar configuración y confirmar por defecto; el orquestador PSG usa el modo no interactivo explícito.
+- Validar duplicados internos; PSG omite UUID ya existentes, concilia `output_rows` y recupera cargas inciertas mediante journals.
 
 Entrada/salida esperada:
 
@@ -101,6 +105,8 @@ Referencia de detalle:
 
 ## Flujo operativo end-to-end
 
+PSG diario usa `scripts/run_psg.py`, que incluye la auditoría dentro de extracción, enlaza rutas explícitas y conserva un registro JSON por ejecución. La ejecución manual por capas sigue disponible:
+
 1. Ejecutar `1_extract` para generar dataset base en `staging/` con nombre `extract_<flow>_YYYY-MM-DD_HH-MM.csv`.
 
 2. Ejecutar `2_transform` para leer automáticamente desde `staging/` (filtrando por `extract_<flow>_...`) y generar salida con el sufijo `_transformed`.
@@ -115,16 +121,16 @@ python3 main.py --flow psg --input /ruta/de/la/carpeta
 
 # Desde raíz del proyecto
 ./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --dry-run
-./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
+./.venv/bin/python 3_load/main.py --flow psg --table-id TABLA_AUTORIZADA --input staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.parquet
 # Alternativa posicional para load
-./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
+./.venv/bin/python 3_load/main.py --flow psg --table-id TABLA_AUTORIZADA staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.parquet
 ```
 
 Modos de ejecución relevantes:
 
-- `1_extract`: completo (default), `--no-process`, `--no-unify`, `--dry-run`.
+- `1_extract`: PSG siempre procesa y audita; `--dry-run` no ejecuta el procesamiento. Las opciones de unificación y `--no-process` corresponden al flujo XPAP.
 - `2_transform`: ejecución por archivo o autodiscovery en `staging/` filtrando por flow; `--dry-run` sin escritura.
-- `3_load`: ejecución manual por `--flow` con confirmación interactiva previa.
+- `3_load`: ejecución manual por `--flow` con confirmación previa; PSG admite `--yes`, preservando el bloqueo compartido y el journal de carga.
 
 Chuleta rápida:
 
@@ -132,8 +138,8 @@ Chuleta rápida:
 |---|---|---|
 | `extract` | `python3 main.py --flow <subproceso_ejemplo> --input /ruta/de/la/carpeta` *(desde `1_extract/`)* | Procesa + unifica (default). |
 | `transform` | `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --dry-run` | Valida y transforma sin escribir salida. |
-| `load` | `./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx` | Carga manual con confirmación previa. |
-| `load` (posicional) | `./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx` | Igual que el anterior, pasando el Excel como argumento posicional. |
+| `load` | `./.venv/bin/python 3_load/main.py --flow psg --table-id TABLA_AUTORIZADA --input staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.parquet` | Carga manual con confirmación previa. |
+| `load` (posicional) | `./.venv/bin/python 3_load/main.py --flow psg --table-id TABLA_AUTORIZADA staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.parquet` | Igual que el anterior, pasando el artefacto como argumento posicional. |
 
 Ejemplos de nombre de subproceso para documentar/estandarizar comandos:
 
@@ -143,7 +149,7 @@ Ejemplos de nombre de subproceso para documentar/estandarizar comandos:
 ## Convenciones del repositorio
 
 - Aislamiento por capa: `1_extract`, `2_transform` y `3_load` evolucionan de forma independiente, compartiendo `staging/` como area de handoff lineal.
-- Logs centralizados: las tres capas escriben en `/home/rom/obsino/clisueno/logs`.
+- Logs centralizados: las tres capas escriben en `logs/` bajo la raíz de la instalación.
     - `1_extract`: `extract_<flow>_YYYY-MM-DD_HH-MM-SS.log`
     - `2_transform`: `transform_<flow>_YYYY-MM-DD_HH-MM-SS.log`
     - `3_load`: `load_<flow>_YYYY-MM-DD_HH-MM-SS.log`
@@ -167,23 +173,19 @@ Ejemplos de nombre de subproceso para documentar/estandarizar comandos:
 
 ## Ejecución de pruebas PSG
 
-Las etapas `1_extract` y `2_transform` utilizan los paquetes independientes
-`extract_commons` y `transform_commons`. Las suites pueden ejecutarse por capa
-o conjuntamente en un mismo proceso pytest.
-
-Desde la raíz del repositorio, con el entorno virtual configurado:
+Las suites utilizan procesos separados porque existen módulos de prueba con el mismo nombre en distintas capas. Ejecutar una sola batería con estas cuatro invocaciones desde la raíz:
 
 ```bash
-.venv/bin/python -m pytest -q 1_extract/tests
-.venv/bin/python -m pytest -q 2_transform/tests
-.venv/bin/python -m pytest -q 3_load/tests
-
-# Todas las suites en un mismo proceso
-.venv/bin/python -m pytest -q 1_extract/tests 2_transform/tests 3_load/tests
+PYTHONPATH=1_extract .venv/bin/python -m unittest discover -s 1_extract/tests
+PYTHONPATH=1_extract:2_transform .venv/bin/python -m unittest discover -s 2_transform/tests
+PYTHONPATH=1_extract:2_transform .venv/bin/python -m unittest discover -s 3_load/tests
+.venv/bin/python -m unittest discover -s scripts/tests
 ```
+
+Incluyen las regresiones XPAP y la recuperación PSG, sin BigQuery real.
 
 **Resultado histórico de referencia (24/11/2026):**
 29 pruebas y 283 subpruebas superadas.
 
 Estas pruebas utilizan datos sintéticos y clientes simulados; no realizan
-cargas reales en BigQuery.
+cargas reales en BigQuery. Los resultados de la validación candidata se registran en PT07.

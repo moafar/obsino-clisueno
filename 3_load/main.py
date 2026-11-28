@@ -525,16 +525,16 @@ def validate_psg_values(dataframe: pd.DataFrame, schema_yaml: dict[str, str]) ->
         ).any():
             die(f"Fecha PSG con hora en {column}")
     completeness = dataframe["meta_completitud_pct"]
-    if completeness.notna().any() and (
+    if completeness.isna().any() or (
         ((completeness < 0) | (completeness > 100)).fillna(False).any()
     ):
-        die("meta_completitud_pct fuera del rango 0-100")
+        die("meta_completitud_pct ausente o fuera del rango 0-100")
 
 
 def validate_psg_uuids(dataframe: pd.DataFrame) -> list[str]:
     values = dataframe["meta_uuid"]
-    if values.isna().any() or values.str.strip().eq("").fillna(False).any() or dataframe.empty:
-        die("meta_uuid vacío en lote PSG")
+    if dataframe.empty or not values.str.fullmatch(r"[0-9a-f]{32}", na=False).all():
+        die("meta_uuid ausente o inválido en lote PSG")
     uuids = values.tolist()
     if len(uuids) != len(set(uuids)):
         die("meta_uuid duplicado dentro del lote PSG")

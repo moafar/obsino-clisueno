@@ -95,7 +95,7 @@ El script configura `GOOGLE_APPLICATION_CREDENTIALS` en tiempo de ejecución.
 ## Validaciones
 
 - existencia de archivos requeridos (credencial, artefacto, schema)
-- PSG: nombres, orden y tipos físicos Parquet y tipos pandas exactos según YAML, sin conversiones silenciosas; fecha sin hora, números finitos y completitud técnica válida
+- PSG: nombres, orden y tipos físicos Parquet y tipos pandas exactos según YAML, sin conversiones silenciosas; fecha sin hora, números finitos y completitud técnica presente y válida, UUID hexadecimal canónico de 32 caracteres
 - XPAP: casting y normalización de valores según su flujo vigente
 - duplicados dentro del lote (`uuid_field`)
 - PSG: UUID existentes en BigQuery se omiten; solo los nuevos se envían con `WRITE_APPEND`, bajo bloqueo local y con conciliación de `output_rows`
@@ -114,7 +114,7 @@ Ejemplo:
 - `staging/extract_psg_2026-03-08_20-01_transformed.parquet`
 - `staging/extract_psg_2026-03-08_20-01_transformed_loaded.parquet`
 
-Si ya existe un archivo con ese nombre, se agrega un timestamp para evitar sobrescritura.
+PSG exige el nombre determinista `_loaded.parquet` y reconcilia una colisión con la evidencia del journal; no sobrescribe otro archivo. XPAP conserva su sufijo temporal ante colisiones.
 
 ## Ejecución
 
@@ -151,7 +151,7 @@ El script muestra configuración activa y solicita confirmación por teclado ant
 - El flujo seleccionado debe tener contrato en `0_declarations/<flow>.yaml`.
 - Si `write_disposition` es `WRITE_APPEND`, se validan duplicados en lote y contra BigQuery.
 - Si falla cualquier validación, la carga se cancela.
-- Logs de esta capa se escriben en `/home/rom/obsino/clisueno/logs` con nombre `load_<flow>_YYYY-MM-DD_HH-MM-SS.log`.
+- Logs de esta capa se escriben en `logs/` bajo la raíz de la instalación con nombre `load_<flow>_YYYY-MM-DD_HH-MM-SS.log`.
 
 ## Dependencias
 

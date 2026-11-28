@@ -34,6 +34,9 @@ sys.modules[SPEC.name] = load
 SPEC.loader.exec_module(load)
 CONTRACT = ROOT / "0_declarations/psg.yaml"
 SCHEMA = load.load_schema(CONTRACT, "schema.load.input.columns")
+UUID1 = hashlib.md5(b"synthetic-uuid-1").hexdigest()
+UUID2 = hashlib.md5(b"synthetic-uuid-2").hexdigest()
+
 NAMES = list(SCHEMA)
 
 
@@ -81,7 +84,7 @@ class PsgLoadTest(unittest.TestCase):
 
     def row(self, **changes):
         row = {name: None for name in NAMES}
-        row.update(pte_id="000123", meta_uuid="synthetic-uuid-1", meta_fecha_estudio=datetime(2025, 1, 2),
+        row.update(pte_id="000123", meta_uuid=UUID1, meta_fecha_estudio=datetime(2025, 1, 2),
                    pte_edad_anos=0, arq_tiempo_sueno_min=12.5, meta_completitud_pct=20.0, clin_ronquido="Ronquido persistente. Acentos: niño.")
         row.update(changes)
         return row
@@ -152,7 +155,7 @@ class PsgLoadTest(unittest.TestCase):
         result = self.execute()
         self.assertEqual(list(result.columns), NAMES)
         self.assertEqual(result.loc[0, "pte_id"], "000123")
-        self.assertEqual(result.loc[0, "meta_uuid"], "synthetic-uuid-1")
+        self.assertEqual(result.loc[0, "meta_uuid"], UUID1)
         self.assertEqual(result.loc[0, "meta_fecha_estudio"], pd.Timestamp("2025-01-02"))
         self.assertEqual(result.loc[0, "pte_edad_anos"], 0)
         self.assertEqual(result.loc[0, "arq_tiempo_sueno_min"], 12.5)
@@ -241,27 +244,40 @@ class PsgLoadTest(unittest.TestCase):
                 self.write([self.row(**changes)])
                 self.execute(expect_error=True)
 
+    def test_invalid_identity_and_missing_completeness_block_before_dedup(self):
+        for changes in ({"meta_uuid": "not-a-uuid"}, {"meta_uuid": "A" * 32},
+                        {"meta_uuid": " " + UUID1}, {"meta_completitud_pct": None}):
+            with self.subTest(changes=changes):
+                self.write([self.row(**changes)])
+                with patch.object(load, "find_existing_uuids") as find:
+                    self.execute(FakeClient(self.schema, existing={UUID1}), expect_error=True)
+                    find.assert_not_called()
+
+    def test_zero_completeness_is_informative(self):
+        self.write([self.row(meta_completitud_pct=0)])
+        self.assertEqual(0, self.execute().loc[0, "meta_completitud_pct"])
+
     def test_duplicate_uuids_and_existing(self):
         self.write([self.row(), self.row(pte_id="000124")])
         self.execute(expect_error=True)
         self.write([self.row()])
-        self.execute(FakeClient(self.schema, existing={"synthetic-uuid-1"}), expect_no_load=True)
+        self.execute(FakeClient(self.schema, existing={UUID1}), expect_no_load=True)
 
     def test_first_partial_and_repeated_loads_reconcile(self):
-        rows = [self.row(), self.row(meta_uuid="synthetic-uuid-2", pte_id="000124")]
+        rows = [self.row(), self.row(meta_uuid=UUID2, pte_id="000124")]
         self.write(rows)
         client = FakeClient(self.schema)
         self.assertEqual(2, len(self.execute(client)))
         client.load_table_from_dataframe.reset_mock()
-        client.existing.remove("synthetic-uuid-2")
+        client.existing.remove(UUID2)
         with patch.object(load, "log") as log_event:
             sent = self.execute(client)
-        self.assertEqual(["synthetic-uuid-2"], sent["meta_uuid"].tolist())
+        self.assertEqual([UUID2], sent["meta_uuid"].tolist())
         self.assertTrue(any("recibidos=2, omitidos=1, enviados=1, insertados=1" in str(call)
                             for call in log_event.call_args_list))
         client.load_table_from_dataframe.reset_mock()
         self.execute(client, expect_no_load=True)
-        self.assertEqual({"synthetic-uuid-1", "synthetic-uuid-2"}, client.existing)
+        self.assertEqual({UUID1, UUID2}, client.existing)
 
     def test_output_rows_mismatch_and_load_failure_keep_artifact(self):
         self.write([self.row()])
@@ -291,7 +307,7 @@ class PsgLoadTest(unittest.TestCase):
                                "error": "entero_incompatible", "accion": "convertido_a_null"}],
                              ensure_ascii=False, separators=(",", ":"))
         self.write([self.row(meta_incidencias_calidad=payload),
-                    self.row(meta_uuid="synthetic-uuid-2", pte_id=None,
+                    self.row(meta_uuid=UUID2, pte_id=None,
                              meta_incidencias_calidad=None)])
         sent = self.execute()
         self.assertEqual(payload, sent.loc[0, "meta_incidencias_calidad"])

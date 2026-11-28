@@ -47,7 +47,7 @@ Transformación declarativa de datasets clínicos entre `extract` y `load`.
 
 ## Flujo estándar
 
-1. Leer input (`xlsx` o `csv`).
+1. Leer CSV crudo en PSG; XPAP conserva sus entradas vigentes.
 2. Validar esquema de entrada.
 3. Ejecutar transformaciones declarativas (`steps`).
 4. Limpiar duplicados por `UUID` (se conserva la primera fila por UUID, cuando exista esa columna).
@@ -56,9 +56,7 @@ Transformación declarativa de datasets clínicos entre `extract` y `load`.
 
 ## Configuración
 
-Cada pipeline define su contrato en:
-
-- `2_transform/<subproceso_ejemplo>/config.yaml`
+Cada flujo define su contrato en `0_declarations/<flow>.yaml`; la CLI consume `transform` y `schema.transform`.
 
 Secciones clave:
 
@@ -154,7 +152,7 @@ Si necesitas forzar una ruta/nombre de salida:
 - PSG admite CSV como entrada y publica un único Parquet con PyArrow/Snappy. El CSV crudo se conserva; XPAP mantiene su flujo XLSX.
 - La publicación PSG valida el Parquet escrito, sincroniza archivo y directorio, y falla si el nombre final ya existe. Los temporales usan el mismo directorio que el destino.
 - Si no se especifica `--output`, el nombre se genera como `<input>_transformed`.
-- El formato final se define con `output.format` en `config.yaml`.
+- El formato final se define con `transform.output.format` en `0_declarations/<flow>.yaml`.
 
 ## Dependencias
 

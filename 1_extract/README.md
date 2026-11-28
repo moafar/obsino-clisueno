@@ -29,9 +29,9 @@ Extracción estructurada desde reportes clínicos de laboratorio de sueño.
 
 ## Entradas y salidas
 
-- Entrada: directorio configurado en `1_extract/config/<flow>.yaml` (`entrada.ruta`) o por CLI.
+- Entrada: directorio configurado en `0_declarations/<flow>.yaml` (sección `extract`) (`extract.entrada.ruta`) o por CLI.
 - Salida de procesamiento: archivo CSV en `staging/` (por defecto) con nombre `extract_<flow>_{timestamp}.csv` (ejemplo: `extract_psg_2026-03-29_14-19.csv`).
-- Salida de trazabilidad: logs en `/home/rom/obsino/clisueno/logs`.
+- Salida de trazabilidad: logs en `logs/` bajo la raíz de la instalación.
     - Convencion: `extract_<flow>_YYYY-MM-DD_HH-MM-SS.log`.
 
 Flows disponibles actualmente: `psg`, `xpap`.
@@ -41,22 +41,20 @@ Flows disponibles actualmente: `psg`, `xpap`.
 ```text
 1_extract/
     main.py
-    config/
-        psg.yaml
     extract_commons/
         directorio_utils.py
         unificar_resultados.py
     src/
     ../staging/
     ../procesados/
-    ../logs/  # /home/rom/obsino/clisueno/logs
+    ../logs/
 ```
 
 ## Configuración
 
 Archivo principal por flujo:
 
-- `1_extract/config/<flow>.yaml`
+- `0_declarations/<flow>.yaml` (sección `extract`)
 
 Secciones clave:
 
