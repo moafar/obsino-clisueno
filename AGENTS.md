@@ -60,6 +60,11 @@ La economía de recursos nunca debe comprometer la corrección, la seguridad, la
 
 - Ejecutar pruebas proporcionales al alcance y riesgo de los cambios.
 - Reutilizar las pruebas existentes y añadir únicamente las necesarias.
+- No ejecutar rutinariamente validaciones, comprobaciones de estado, lecturas de archivos ni pruebas después de cada modificación.
+- Agrupar los cambios relacionados antes de verificarlos.
+- Realizar una única ronda consolidada de validación al finalizar cada evolución o paquete autorizado.
+- Reservar las comprobaciones intermedias para operaciones críticas o cuando su resultado sea imprescindible para continuar.
+- Repetir únicamente las pruebas afectadas por las correcciones realizadas. Ejecutar nuevamente la batería completa cuando exista riesgo de regresión transversal.
 - No eliminar ni debilitar pruebas para conseguir resultados satisfactorios.
 - No afirmar que una prueba ha sido superada sin haberla ejecutado.
 - Utilizar datos sintéticos, anonimizados o muestras expresamente autorizadas.
