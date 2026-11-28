@@ -4,7 +4,7 @@
 **Fecha de referencia:** 2026-11-28  
 **Rama de desarrollo:** `integration/psg-evoluciones`  
 **Commit base:** `d11abaf`  
-**Estado inicial:** 0/36 evoluciones cerradas.
+**Estado actual:** 1/36 evoluciones cerradas.
 
 ## 1. Contexto y reglas de trabajo
 
@@ -33,7 +33,7 @@
 
 **Objetivo:** medir y entender los cuellos de botella antes de modificar el extractor. Fase inicialmente de análisis, no de implementación.
 
-- [ ] **E01 — Revisión profunda del extractor.** Analizar flujo de funciones, operaciones de disco, CPU, memoria, extracción DOC/RTF, expresiones regulares, hashes, escrituras y auditoría. **Aceptación:** informe con hallazgos sustentados, cuellos de botella y propuestas priorizadas, sin cambios funcionales.
+- [x] **E01 — Revisión profunda del extractor.** Analizar flujo de funciones, operaciones de disco, CPU, memoria, extracción DOC/RTF, expresiones regulares, hashes, escrituras y auditoría. **Aceptación:** informe con hallazgos sustentados, cuellos de botella y propuestas priorizadas, sin cambios funcionales.
 - [ ] **E02 — Benchmark de entornos de ejecución.** Comparar WSL sobre NTFS (`/mnt/e`), WSL sobre sistema de archivos Linux y Windows nativo cuando sea viable, con la misma muestra aislada y condiciones documentadas. Medir tiempo, rendimiento, CPU/memoria cuando sea posible y equivalencia de resultados. **Aceptación:** resultados reproducibles; separar entornos no medidos de los medidos.
 - [ ] **E03 — Compatibilidad de catdoc y archivado en Windows.** Evaluar viabilidad de catdoc (incluida opción Cygwin si procede), equivalencia del texto y las garantías de `flock`, `renameat2` y operaciones con descriptores de directorio. **Aceptación:** matriz de compatibilidad, limitaciones y pruebas disponibles; no sustituir garantías de seguridad sin equivalencia demostrada.
 - [ ] **E04 — Decisión de arquitectura de ejecución.** Elegir entorno y estrategia a partir de E01–E03, considerando rendimiento, mantenimiento e integridad. **Aceptación:** decisión documentada y aprobada por el responsable del proyecto.
@@ -122,5 +122,6 @@ Añadir una entrada por tarea terminada o bloqueada. Mantener el historial; no s
 | Fecha | Tarea | Estado | Evidencia / resultado | Commit o referencia |
 |---|---|---|---|---|
 | 2026-11-28 | Base | Consolidación previa | Rama integrada; 54 + 12 + 9 pruebas superadas en sus etapas respectivas. Sin ejecución integral de la versión consolidada. | `d11abaf` |
+| 2026-11-28 | E01 | Cerrada | Diagnóstico y propuestas en `docs/e01_diagnostico_extractor.md`; perfil reproducible en `docs/e01_perfil_extractor.py`. Dos mediciones por lote de 30, 120 y 480 RTF PSG sintéticos: 480 en 2,517–2,603 s, CSV/archivo/auditoría conciliados; microbenchmark del append usado por XPAP (300/600 filas: 0,137–0,142/0,519–0,573 s); 54 pruebas del extractor superadas. DOC y XPAP integrales no medidos. Sin cambios funcionales. | `dc5e278` (base de análisis) |
 
-**Próxima tarea:** E01 — revisión profunda del extractor (solo diagnóstico).
+**Próxima tarea pendiente:** E02 — benchmark de entornos (no iniciada).
