@@ -40,6 +40,8 @@ def output_extension_from_config(pipeline_config: Mapping[str, object]) -> str:
         return ".xlsx"
     if configured_format == "csv":
         return ".csv"
+    if configured_format == "parquet":
+        return ".parquet"
     return ".xlsx"
 
 

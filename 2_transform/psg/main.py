@@ -3,10 +3,13 @@ from __future__ import annotations
 import argparse
 import csv
 import logging
+import os
 from pathlib import Path
 import re
 import sys
+import tempfile
 from typing import Any
+import pandas as pd
 import yaml
 
 TRANSFORM_ROOT = Path(__file__).resolve().parents[1]
@@ -28,7 +31,6 @@ from transform_commons.io import (
     read_dataset,
     resolve_existing_path,
     resolve_output_path,
-    write_dataset,
 )
 from transform_commons.ops import register_builtin_operations
 from transform_commons.schema import validate_input_schema, validate_output_schema
@@ -184,13 +186,47 @@ def _resolve_output_target(
     search_bases: list[Path],
 ) -> Path:
     if output_path:
-        return resolve_output_path(output_path, search_bases)
+        target = resolve_output_path(output_path, search_bases)
+        if target.suffix.lower() != ".parquet":
+            raise ValueError("La salida PSG debe ser Parquet")
+        return target
 
     return build_default_output_path(
         input_path=resolved_input_path,
         pipeline_output_dir=STAGING_DIR,
         pipeline_config=pipeline_config,
     )
+
+
+def _publish_psg_parquet(dataframe: pd.DataFrame, target: Path) -> Path:
+    """Valida y publica un Parquet completo sin reemplazar un destino existente."""
+    def sync_directory() -> None:
+        descriptor = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(prefix=f".{target.name}.", suffix=".tmp",
+                                     dir=target.parent, delete=False) as stream:
+        temporary = Path(stream.name)
+    linked = False
+    try:
+        dataframe.to_parquet(temporary, index=False, engine="pyarrow", compression="snappy")
+        actual = pd.read_parquet(temporary, engine="pyarrow")
+        pd.testing.assert_frame_equal(dataframe, actual, check_dtype=True, check_exact=True)
+        with temporary.open("rb") as stream:
+            os.fsync(stream.fileno())
+        os.link(temporary, target)
+        linked = True
+        sync_directory()
+        temporary.unlink()
+        sync_directory()
+        return target
+    finally:
+        if not linked:
+            temporary.unlink(missing_ok=True)
 
 
 def _confirm_execution(plans: list[tuple[Path, Path]], dry_run: bool) -> bool:
@@ -202,7 +238,7 @@ def _confirm_execution(plans: list[tuple[Path, Path]], dry_run: bool) -> bool:
         else:
             print(f"  Output: {output_file}")
             if output_file.exists():
-                print(f"  WARNING: El archivo de destino ya existe y será sobrescrito: {output_file}")
+                print(f"  WARNING: El archivo de destino ya existe; la publicación fallará: {output_file}")
 
     answer = input("\n¿Deseas continuar con el procesamiento? [y/N]: ").strip().lower()
     return answer in {"y", "yes", "s", "si", "sí"}
@@ -259,11 +295,7 @@ def run(
         pipeline_config=pipeline_config,
         search_bases=search_bases,
     )
-    return write_dataset(
-        dataframe=transformed,
-        output_path=str(resolved_output_path),
-        config=pipeline_config.get("output", {}),
-    )
+    return _publish_psg_parquet(transformed, resolved_output_path)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -328,7 +360,7 @@ def execute(
     if not input_files:
         raise FileNotFoundError(
             "No se encontraron archivos de entrada para este flow en staging/. "
-            "Agrega un archivo 'extract_<flow>_...(.csv/.xlsx/.xls)' o usa --input."
+            "Agrega un archivo 'extract_psg_....csv' o usa --input."
         )
 
     if output_path and len(input_files) > 1:

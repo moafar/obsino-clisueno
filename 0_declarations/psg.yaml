@@ -36,8 +36,7 @@ transform:
     - op: psg_basal_transform
       params: {}
   output:
-    format: xlsx
-    sheet_name: procesado
+    format: parquet
 
 load:
   project_id: observatorio-ino-1

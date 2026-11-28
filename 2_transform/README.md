@@ -100,7 +100,7 @@ Chuleta operativa (desde raíz del proyecto):
 | `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --dry-run` | Valida y transforma sin escribir salida. |
 | `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --input staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM.csv` | Procesa un archivo específico. |
 | `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM.csv` | Procesa un archivo específico usando argumento posicional. |
-| `./.venv/bin/python 2_transform/main.py --flow <subproceso_ejemplo> --output staging/mi_archivo.xlsx` | Fuerza ruta/nombre de salida. |
+| `./.venv/bin/python 2_transform/main.py --flow psg --output staging/mi_archivo.parquet` | Fuerza ruta/nombre de salida PSG. |
 
 Comandos desde raíz del proyecto:
 
@@ -131,28 +131,28 @@ Modos de ejecución soportados:
 
 Entrada por defecto:
 
-- Si no se pasa `--input`, el runner procesa automáticamente todos los archivos válidos (`.csv`, `.xlsx`, `.xls`) que encuentre en `staging/` y correspondan al flow (`extract_<flow>_...`).
+- Si no se pasa `--input`, PSG procesa los CSV crudos `extract_psg_...` de `staging/`; XPAP conserva sus formatos de entrada vigentes.
 - Si quieres procesar uno específico, usa `--input <ruta_archivo>`.
 
 Salida por defecto:
 
 - Si no se pasa `--output`, el runner genera automáticamente el nombre como:
   - `<nombre_input>_transformed.<extensión>`
-- La extensión se define con `output.format` en `config.yaml` (`xlsx` o `csv`).
+- La extensión se define con `output.format` en el contrato del flow: Parquet para PSG y XLSX para XPAP.
 - Para el input `extract_psg_YYYY-MM-DD_HH-MM.csv`, la salida será:
-  - `staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.xlsx`
+  - `staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.parquet`
 
 Si necesitas forzar una ruta/nombre de salida:
 
 ```bash
 ./.venv/bin/python 2_transform/main.py \
-  --flow <subproceso_ejemplo> \
-  --output staging/mi_archivo.xlsx
+  --flow psg --output staging/mi_archivo.parquet
 ```
 
 ## Notas operativas
 
-- El runner admite entrada `csv`, `xlsx` y `xls`.
+- PSG admite CSV como entrada y publica un único Parquet con PyArrow/Snappy. El CSV crudo se conserva; XPAP mantiene su flujo XLSX.
+- La publicación PSG valida el Parquet escrito, sincroniza archivo y directorio, y falla si el nombre final ya existe. Los temporales usan el mismo directorio que el destino.
 - Si no se especifica `--output`, el nombre se genera como `<input>_transformed`.
 - El formato final se define con `output.format` en `config.yaml`.
 

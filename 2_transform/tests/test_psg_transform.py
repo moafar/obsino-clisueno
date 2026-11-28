@@ -10,8 +10,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
+import pyarrow.parquet as pq
 import yaml
-from openpyxl import load_workbook
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "2_transform"))
@@ -172,7 +172,7 @@ class PSGTransformTest(unittest.TestCase):
             self.transform(rows)
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "extract_psg_synthetic.csv"
-            output = Path(folder) / "output.xlsx"
+            output = Path(folder) / "output.parquet"
             pd.DataFrame(rows, columns=PSG_COLUMNS).to_csv(source, index=False)
             with self.assertRaises((ValueError, SchemaValidationError)):
                 run(str(CONTRACT), str(source), str(output))
@@ -297,46 +297,60 @@ class PSGTransformTest(unittest.TestCase):
                 self.transform([source_row(oxi_t90_tst_min=minutes,
                                            arq_tiempo_sueno_min=total)])
 
-    def test_csv_to_xlsx_runs_psg_step_and_preserves_id(self):
+    def test_csv_to_parquet_preserves_typed_values(self):
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "extract_psg_2026-11-23_12-00.csv"
-            target = Path(folder) / "output.xlsx"
-            pd.DataFrame([source_row(arq_tiempo_sueno_min="200", oxi_t90_tst_min="11")],
+            target = Path(folder) / "output.parquet"
+            row = source_row(arq_tiempo_sueno_min="200", oxi_t90_tst_min="11")
+            pd.DataFrame([row],
                          columns=PSG_COLUMNS).to_csv(source, index=False)
             read_back = read_dataset(str(source), config=self.config["input"])
             self.assertEqual("000123", read_back.loc[0, "pte_id"])
             self.assertEqual("", read_back.loc[0, "pte_edad_meses"])
             self.assertEqual("string", str(read_back["pte_edad_anos"].dtype))
             self.assertEqual(target, run(str(CONTRACT), str(source), str(target)))
-            workbook = load_workbook(target, read_only=True, data_only=True)
-            try:
-                sheet = workbook.active
-                self.assertEqual(158, sheet.max_column)
-                self.assertEqual("000123", sheet.cell(2, FINAL_COLS.index("pte_id") + 1).value)
-                self.assertEqual(70, sheet.cell(2, FINAL_COLS.index("pte_peso_kg") + 1).value)
-                self.assertEqual(5.5, sheet.cell(2, FINAL_COLS.index("oxi_t90_pct") + 1).value)
-                self.assertEqual("De 12 a 18", sheet.cell(2, FINAL_COLS.index("pte_grupo_edad") + 1).value)
-                self.assertEqual("Texto íntegro con acentos.\nSegunda línea.",
-                                 sheet.cell(2, FINAL_COLS.index("clin_interpretacion") + 1).value)
-            finally:
-                workbook.close()
+            actual = pd.read_parquet(target)
+            pd.testing.assert_frame_equal(self.transform([row]), actual, check_dtype=True,
+                                          check_exact=True)
+            self.assertEqual("000123", actual.loc[0, "pte_id"])
+            self.assertEqual(158, len(actual.columns))
+            metadata = pq.read_metadata(target)
+            self.assertTrue(all(metadata.row_group(0).column(i).compression == "SNAPPY"
+                                for i in range(metadata.num_columns)))
+            self.assertTrue(source.exists())
 
-    def test_incidence_is_serialized_in_xlsx_output(self):
+    def test_incidence_is_serialized_in_parquet_output(self):
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "extract_psg_synthetic.csv"
-            target = Path(folder) / "output.xlsx"
+            target = Path(folder) / "output.parquet"
             pd.DataFrame([source_row(arq_tiempo_sueno_min="no numérico")],
                          columns=PSG_COLUMNS).to_csv(source, index=False)
             self.assertEqual(target, run(str(CONTRACT), str(source), str(target)))
-            workbook = load_workbook(target, read_only=True, data_only=True)
-            try:
-                value = workbook.active.cell(2, FINAL_COLS.index("meta_incidencias_calidad") + 1).value
-                self.assertEqual([{
-                    "campo": "arq_tiempo_sueno_min", "valor_original": "no numérico",
-                    "error": "decimal_incompatible", "accion": "convertido_a_null",
-                }], json.loads(value))
-            finally:
-                workbook.close()
+            value = pd.read_parquet(target).loc[0, "meta_incidencias_calidad"]
+            self.assertEqual([{
+                "campo": "arq_tiempo_sueno_min", "valor_original": "no numérico",
+                "error": "decimal_incompatible", "accion": "convertido_a_null",
+            }], json.loads(value))
+
+    def test_parquet_collision_and_failed_write_preserve_recoverable_csv(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "extract_psg_synthetic.csv"
+            target = Path(folder) / "output.parquet"
+            pd.DataFrame([source_row()], columns=PSG_COLUMNS).to_csv(source, index=False)
+            run(str(CONTRACT), str(source), str(target))
+            original = target.read_bytes()
+            with self.assertRaises(FileExistsError):
+                run(str(CONTRACT), str(source), str(target))
+            self.assertEqual(original, target.read_bytes())
+            target.unlink()
+            for failing_call in ("pandas.DataFrame.to_parquet", "psg.main.os.link"):
+                with self.subTest(failing_call=failing_call), \
+                     patch(failing_call, side_effect=OSError("fallo sintético")):
+                    with self.assertRaises(OSError):
+                        run(str(CONTRACT), str(source), str(target))
+                self.assertFalse(target.exists())
+                self.assertEqual([], list(Path(folder).glob(".output.parquet.*.tmp")))
+                self.assertTrue(source.exists())
 
     def test_exact_schema_and_autodiscovery_excludes_results(self):
         frame = pd.DataFrame([source_row()], columns=PSG_COLUMNS)
@@ -351,6 +365,7 @@ class PSGTransformTest(unittest.TestCase):
                 "extract_psg_2026-11-23_12-00.csv",
                 "extract_psg_2026-11-23_12-00_transformed.csv",
                 "extract_psg_2026-11-23_12-00_transformed.xlsx",
+                "extract_psg_2026-11-23_12-00_transformed.parquet",
             ):
                 (Path(folder) / name).touch()
             with patch("psg.main.STAGING_DIR", Path(folder)):
@@ -392,7 +407,7 @@ class PSGTransformTest(unittest.TestCase):
                         error = None
                     except ValueError as exc:
                         result, error = None, str(exc)
-                return result, error, sorted(path.name for path in staging.glob("*_transformed.xlsx"))
+                return result, error, sorted(path.name for path in staging.glob("*_transformed.parquet"))
 
         unique = {
             first_name: [source_row(meta_uuid="uuid-1")],
@@ -404,7 +419,7 @@ class PSGTransformTest(unittest.TestCase):
         shared = {**unique, second_name: [source_row(meta_uuid="uuid-1", pte_id="000124")]}
         with self.assertLogs(level="WARNING") as captured:
             result, error, outputs = exercise(shared)
-        self.assertEqual((0, None, [first_name.replace(".csv", "_transformed.xlsx")]),
+        self.assertEqual((0, None, [first_name.replace(".csv", "_transformed.parquet")]),
                          (result, error, outputs))
         self.assertIn("1 con valores distintos", " ".join(captured.output))
 
