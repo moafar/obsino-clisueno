@@ -96,6 +96,26 @@ La economía de recursos nunca debe comprometer la corrección, la seguridad, la
 
 No modificar estas políticas sin autorización del responsable del proyecto.
 
+## 10. Versionado y publicación
+
+- Aplicar versionado semántico (MAJOR.MINOR.PATCH).
+- Incrementar MAJOR cuando se introduzcan cambios incompatibles en contratos de datos, interfaces o comportamiento público.
+- Incrementar MINOR cuando se incorporen funcionalidades compatibles con la versión anterior.
+- Incrementar PATCH cuando se introduzcan correcciones u optimizaciones compatibles.
+- No incrementar la versión por cambios exclusivamente documentales, diagnósticos, benchmarks o pruebas.
+- Distinguir entre commit, evolución completada, paquete de trabajo completado y publicación de una versión.
+- No incrementar automáticamente la versión al completar una evolución.
+- Evaluar el incremento de versión al completar un paquete de trabajo o alcanzar un hito funcional.
+- Identificar y respetar el archivo de marcado de versión existente en el repositorio como fuente de verdad.
+- No crear archivos adicionales de versionado ni duplicar el número de versión innecesariamente.
+- Al proponer una nueva versión, justificar el incremento según los cambios acumulados y su compatibilidad.
+- Actualizar el archivo de marcado de versión únicamente cuando el incremento haya sido autorizado.
+- Mantener coherencia entre el marcador de versión, las referencias documentales existentes y las etiquetas Git.
+- Registrar los cambios funcionales, incompatibilidades y requisitos de migración de cada versión.
+- No crear etiquetas Git, releases ni desplegar versiones sin autorización expresa.
+- No modificar retrospectivamente versiones publicadas ni sus etiquetas Git.
+- Verificar las pruebas, los criterios de aceptación y el estado del repositorio antes de publicar una versión.
+
 ## Principio rector
 
 Precisión antes que suposición. Evidencia antes que especulación. Simplicidad justificada antes que complejidad. Eficiencia sin comprometer la seguridad ni la integridad de los datos.

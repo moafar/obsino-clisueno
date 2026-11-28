@@ -4,7 +4,7 @@
 **Fecha de referencia:** 2026-11-28  
 **Rama de desarrollo:** `integration/psg-evoluciones`  
 **Commit base:** `d11abaf`  
-**Estado actual:** 1/36 evoluciones cerradas.
+**Estado:** 1/36 evoluciones cerradas (E01 validada; E02 pendiente).
 
 ## 1. Contexto y reglas de trabajo
 
@@ -63,30 +63,30 @@
 
 **Dependencias:** E05; coordinar el cambio de contrato con PT05 y PT06.
 
-- [ ] **E16 — Gestionar tipos incompatibles.** Convertir a NULL los valores clínicos técnicamente incompatibles con el tipo declarado, sin bloquear el lote por ese motivo; preservar el valor original en la incidencia. **Aceptación:** pruebas de enteros, decimales y valores inválidos; distinguir ausencias legítimas de incidencias.
+- [ ] **E16 — Gestionar tipos incompatibles.** Convertir a NULL los valores clínicos técnicamente incompatibles con el tipo declarado, sin bloquear el lote por ese motivo; preservar el valor original en la incidencia. Revisar conversiones y copias redundantes, evitando repetir normalizaciones cuando la equivalencia esté demostrada. **Aceptación:** pruebas de enteros, decimales y valores inválidos; distinguir ausencias legítimas de incidencias, conservar máscaras de nulos y tipos; medir cualquier optimización aplicada.
 - [ ] **E17 — Incorporar `meta_incidencias_calidad`.** Única columna de metadatos, JSON serializado como STRING en BigQuery; NULL si no hay incidencias. Cada objeto tendrá `campo`, `valor_original`, `error` y `accion`. **Aceptación:** serialización reproducible, múltiples incidencias por fila y ausencia de validaciones clínicas.
 - [ ] **E18 — Identificar problemas de identificación y fechas.** Marcar ID de paciente ausente y fecha ausente o inválida; comprobar que una fecha NULL es admitida por la tabla y el cargador antes de definir su tratamiento definitivo. **Aceptación:** reglas técnicas documentadas, probadas y alineadas con E05 y E17.
 - [ ] **E19 — Gestionar UUID duplicados dentro del lote.** Conservar la primera aparición y descartar las posteriores, contabilizándolas; advertir si difieren. UUID ausente o inválido sigue siendo bloqueante. El auditor no comparará CSV históricos. **Aceptación:** conciliación de cantidades y pruebas de duplicados idénticos/diferentes y UUID inválidos.
-- [ ] **E20 — Actualizar el contrato YAML.** Reflejar los campos, tipos y reglas aprobados; evitar cantidades de columnas codificadas de forma redundante cuando el YAML sea la fuente de verdad. **Aceptación:** contrato coherente con extractor, transformador, cargador y pruebas.
+- [ ] **E20 — Actualizar el contrato YAML.** Reflejar los campos, tipos y reglas aprobados; evitar cantidades de columnas codificadas de forma redundante cuando el YAML sea la fuente de verdad. **Aceptación:** comprobar explícitamente nombres, orden y tipos aplicables entre salida de extracción y entrada de transformación, y entre salida de transformación y entrada de carga; validar correspondencia con el esquema físico en E21. Pruebas que detecten incompatibilidades sin asumir igualdad de tipos entre CSV crudo y datos tipados.
 
 ### PT05 — Formato intermedio y carga eficiente (prioridad 5)
 
 **Dependencias:** PT04 para el contrato de datos definitivo. El benchmark E34 puede adelantarse sin modificar el flujo productivo.
 
 - [ ] **E34 — Comparar XLSX, CSV y Parquet.** Medir escritura, lectura, tamaño, consumo de recursos, fidelidad de tipos y posibilidades de carga BigQuery con una muestra idéntica. **Aceptación:** benchmark reproducible, decisión sustentada y limitaciones explícitas.
-- [ ] **E35 — Sustituir XLSX por Parquet si se confirma su idoneidad.** Mantener un artefacto intermedio persistente, tipado y recuperable para reiniciar la carga. **Aceptación:** decisión aprobada, equivalencia de registros/campos/UUID, pruebas de transformación y persistencia. Si se descarta Parquet, documentar la alternativa y su aprobación.
-- [ ] **E36 — Adaptar carga al formato intermedio.** Evaluar carga nativa BigQuery desde Parquet y alternativas, sin sacrificar validación, deduplicación ni capacidad de reintento. **Aceptación:** implementación acorde con E35 y medición comparativa; pruebas en entorno aislado.
+- [ ] **E35 — Sustituir XLSX por Parquet si se confirma su idoneidad.** Mantener un artefacto intermedio persistente, tipado y recuperable para reiniciar la carga. Publicar el artefacto intermedio mediante escritura temporal en el mismo sistema de archivos, validación, sincronización según garantías requeridas y renombrado atómico; no exponer archivos parciales ni sobrescribir resultados válidos inadvertidamente. **Aceptación:** decisión aprobada, equivalencia de registros/campos/UUID, pruebas de transformación, persistencia y recuperación ante escritura interrumpida. Si se descarta Parquet, documentar la alternativa y su aprobación.
+- [ ] **E36 — Adaptar carga al formato intermedio.** Evaluar carga nativa BigQuery desde Parquet y alternativas, sin sacrificar validación, deduplicación ni capacidad de reintento. Revisar conversiones, copias y lecturas redundantes en el cargador; verificar fidelidad de tipos, identificadores, fechas, nulos y metadatos. **Aceptación:** implementación acorde con E35 y medición comparativa; pruebas en entorno aislado, equivalencia de tipos y valores, y exclusión de archivos parciales.
 - [ ] **E21 — Alinear el esquema físico de BigQuery.** Preparar y validar el cambio de esquema correspondiente al contrato E20, incluida la columna de incidencias; proteger la tabla histórica legacy. **Aceptación:** esquema validado en entorno aislado y migración productiva autorizada y verificada cuando corresponda. No modificar PRD en esta fase sin aprobación.
 - [ ] **E22 — Propagar metadatos hasta BigQuery.** Verificar que `meta_incidencias_calidad` y el resto de metadatos se conservan en todas las etapas pertinentes. **Aceptación:** conciliación de valores desde transformación hasta carga de prueba.
-- [ ] **E23 — Omitir UUID existentes en BigQuery.** No sobrescribir registros existentes. Conciliar entradas, duplicados, omitidos e insertados; respetar filtros de partición cuando sean exigibles. **Aceptación:** prueba de reejecución idempotente y conteos exactos.
+- [ ] **E23 — Omitir UUID existentes en BigQuery.** No sobrescribir registros existentes. Conciliar entradas, duplicados, omitidos e insertados; respetar filtros de partición cuando sean exigibles. Verificar la implementación vigente y comparar consultas por bloques, consulta parametrizada única y, si el volumen lo justifica, staging/anti-join o MERGE. Evaluar latencia, trabajos, bytes procesados, coste y riesgo de concurrencia entre comprobación e inserción; no asumir que MERGE garantiza unicidad por sí solo. **Aceptación:** alternativa justificada mediante mediciones disponibles, prueba de reejecución idempotente, conteos exactos y garantías de concurrencia documentadas y probadas según el alcance operativo.
 
 ### PT06 — Orquestación y recuperación (prioridad 6)
 
 **Dependencias:** PT02–PT05, especialmente las reglas de identidad y el formato intermedio definitivo.
 
-- [ ] **E24 — Definir limpieza de staging y deduplicación.** Establecer cuándo conservar, archivar o retirar artefactos. Verificar el efecto de retirar CSV sobre `load_known_psg_uuids` y la prevención de reprocesamiento/archivado repetido. **Aceptación:** política aprobada, trazabilidad y pruebas de reejecución; ninguna eliminación de originales.
-- [ ] **E25 — Automatizar el flujo extract → audit → transform → load.** Usar la separación de espacios de nombres ya integrada y conservar artefactos y estados de cada etapa. **Aceptación:** ejecución integrada en entorno aislado, sin continuar ante errores bloqueantes.
-- [ ] **E26 — Gestionar interrupciones y reintentos.** Definir reanudación, errores bloqueantes y recuperación segura sin duplicar cargas o perder documentos. **Aceptación:** pruebas de interrupción y reintento en las fronteras críticas de las etapas.
+- [ ] **E24 — Definir limpieza de staging y deduplicación.** Establecer cuándo conservar, archivar o retirar artefactos. Verificar el efecto de retirar CSV sobre `load_known_psg_uuids` y la prevención de reprocesamiento/archivado repetido. Verificar que el descubrimiento automático solo selecciona entradas elegibles y excluye resultados transformados, cargados o temporales; comprobar explícitamente que no se generan transformaciones de transformaciones. **Aceptación:** política aprobada, trazabilidad y pruebas de descubrimiento y reejecución; ninguna eliminación de originales.
+- [ ] **E25 — Automatizar el flujo extract → audit → transform → load.** Usar la separación de espacios de nombres ya integrada y conservar artefactos y estados de cada etapa. Incorporar un registro persistente mínimo por lote (preferentemente JSON local si es suficiente): identificador, etapas y estados, artefactos, recuentos, referencia del trabajo BigQuery y error cuando corresponda; sin datos clínicos innecesarios. **Aceptación:** ejecución integrada en entorno aislado, estados persistidos de forma segura y sin continuar ante errores bloqueantes.
+- [ ] **E26 — Gestionar interrupciones y reintentos.** Definir reanudación, errores bloqueantes y recuperación segura sin duplicar cargas o perder documentos. Evaluar un `job_id` determinista asociado a la identidad del lote, destino y operación de carga; consultar el estado del trabajo anterior antes de reintentar, distinguir trabajos fallidos de resultados inciertos y reconciliar BigQuery con el estado local. No usarlo como sustituto de la deduplicación. **Aceptación:** pruebas de interrupción y reintento en las fronteras críticas, incluida carga exitosa seguida de fallo local antes de registrar el éxito, sin duplicados ni pérdida de documentos.
 
 ### PT07 — Validación, consolidación y despliegue (prioridad 7)
 
@@ -115,13 +115,19 @@
 - Benchmark histórico de carga XLSX: lectura aproximada 46,4 s, duración total aproximada 66,5 s para el lote de 9.080 filas. Es una observación previa, no un benchmark controlado frente a Parquet.
 - El validador local respaldado puede aportar percentiles y conciliación de conjuntos UUID entre etapas; no incorporar su comparación con históricos ni mantener una segunda herramienta redundante por defecto.
 
+- Diagnóstico E01: `docs/e01_diagnostico_extractor.md` y `docs/e01_perfil_extractor.py`. En dos ejecuciones de 480 RTF sintéticos sobre el sistema Linux de WSL, tiempo total 2,517–2,603 s, `fsync` 0,961–1,019 s, parseo 0,688–0,701 s; 480 filas y archivos archivados, auditoría OK. No extrapolar a DOC, NTFS ni documentos clínicos reales. No eliminar `fsync` sin garantías equivalentes. El tiempo del resumen del extractor no incluye lectura histórica ni auditoría: considerar en E15.
+- E01 confirmó que la relectura cuadrática del CSV y la enumeración materializada del árbol afectan a XPAP, no al camino PSG actual. Conservar como referencia para una revisión futura de XPAP, sin ampliar el alcance de las 36 evoluciones PSG.
+- La propuesta histórica de refactorización sobre `b7c3f2d` (v4.1.1) se revisó como antecedente. Los posibles defectos de esa versión deben comprobarse en el código vigente antes de corregirlos. Las aportaciones pertinentes se incorporan a E16, E20, E23–E26 y E35–E36. No se amplía el alcance a DOCX, cambio de algoritmo MD5, nuevas columnas de migración, unificación integral PSG/XPAP ni frameworks externos sin decisión expresa.
+
 ## 4. Registro de ejecución
 
-Añadir una entrada por tarea terminada o bloqueada. Mantener el historial; no sustituir entradas anteriores. Ejemplo de formato (no constituye una ejecución real):
+Añadir una entrada por tarea terminada o bloqueada. Mantener el historial; no sustituir entradas anteriores.
 
 | Fecha | Tarea | Estado | Evidencia / resultado | Commit o referencia |
 |---|---|---|---|---|
 | 2026-11-28 | Base | Consolidación previa | Rama integrada; 54 + 12 + 9 pruebas superadas en sus etapas respectivas. Sin ejecución integral de la versión consolidada. | `d11abaf` |
-| 2026-11-28 | E01 | Cerrada | Diagnóstico y propuestas en `docs/e01_diagnostico_extractor.md`; perfil reproducible en `docs/e01_perfil_extractor.py`. Dos mediciones por lote de 30, 120 y 480 RTF PSG sintéticos: 480 en 2,517–2,603 s, CSV/archivo/auditoría conciliados; microbenchmark del append usado por XPAP (300/600 filas: 0,137–0,142/0,519–0,573 s); 54 pruebas del extractor superadas. DOC y XPAP integrales no medidos. Sin cambios funcionales. | `dc5e278` (base de análisis) |
 
-**Próxima tarea pendiente:** E02 — benchmark de entornos (no iniciada).
+| 2026-11-28 | E01 | Completada y validada | Diagnóstico y script reproducible; 54 pruebas superadas según Codex. Revisión estática del script y del informe; sin cambios funcionales. DOC integral no medido por limitación del entorno; XPAP solo microbenchmark de append. | `docs/e01_diagnostico_extractor.md`, `docs/e01_perfil_extractor.py` (base de medición `dc5e278`) |
+| 2026-11-28 | Hoja de ruta | Actualizada | Integración selectiva de aportaciones del diagnóstico histórico; sin nuevas tareas ni cambios de prioridad. | Propuesta histórica `b7c3f2d` |
+
+**Próxima tarea:** E02 — benchmark de entornos de ejecución (solo diagnóstico).
