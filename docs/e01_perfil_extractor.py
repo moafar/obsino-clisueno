@@ -8,10 +8,12 @@ import argparse
 import contextlib
 import csv
 import functools
+import hashlib
 import importlib.util
 import io
 import json
 import resource
+import shutil
 import sys
 import tempfile
 import time
@@ -55,17 +57,29 @@ def measured(totals, name, function):
     return wrapper
 
 
-def run(count, prior_rows=0):
+def run(count, prior_rows=0, *, temp_base=None, fixture_dir=None):
     totals = defaultdict(float)
-    with tempfile.TemporaryDirectory(prefix="e01-psg-") as folder:
+    with tempfile.TemporaryDirectory(prefix="e01-psg-", dir=temp_base) as folder:
         root = Path(folder)
         (root / ".psg-test-root").touch()
         source, archive, output = (root / name for name in ("source", "archive", "csv"))
         for directory in (source, archive, output):
             directory.mkdir()
-        for number in range(count):
-            report = synthetic_report("rtf").replace("000123", f"{number + 1:06d}")
-            (source / f"synthetic_{number:04d}.rtf").write_bytes(as_rtf(report))
+        if fixture_dir is None:
+            suffix = ".rtf"
+            for number in range(count):
+                report = synthetic_report("rtf").replace("000123", f"{number + 1:06d}")
+                (source / f"synthetic_{number:04d}.rtf").write_bytes(as_rtf(report))
+        else:
+            fixtures = sorted(Path(fixture_dir).iterdir())
+            suffixes = {path.suffix.lower() for path in fixtures}
+            if len(fixtures) != count or len(suffixes) != 1 or not suffixes <= {".rtf", ".doc"}:
+                raise ValueError("La muestra debe tener count archivos DOC o RTF del mismo formato")
+            suffix = suffixes.pop()
+            for path in fixtures:
+                if not path.is_file() or path.is_symlink():
+                    raise ValueError("La muestra debe contener solo archivos regulares")
+                shutil.copyfile(path, source / path.name)
         if prior_rows:
             with (output / "extract_psg_prior.csv").open("w", newline="", encoding="utf-8") as stream:
                 writer = csv.DictWriter(stream, fieldnames=archivo_utils.PSG_COLUMNS)
@@ -86,7 +100,7 @@ def run(count, prior_rows=0):
             patch.object(main, "load_known_psg_uuids", measured(totals, "csv_previos", main.load_known_psg_uuids)),
             patch.object(main, "run_processing", measured(totals, "procesamiento", main.run_processing)),
             patch.object(main, "audit_psg", measured(totals, "auditoria", main.audit_psg)),
-            patch.object(archivo_utils, "_extract_text", measured(totals, "lectura_rtf", archivo_utils._extract_text)),
+            patch.object(archivo_utils, "_extract_text", measured(totals, "lectura_" + suffix[1:], archivo_utils._extract_text)),
             patch.object(archivo_utils, "generar_hash_archivo", measured(totals, "hash_inicial", archivo_utils.generar_hash_archivo)),
             patch.object(archivo_utils, "_append_psg_row", measured(totals, "csv_append", archivo_utils._append_psg_row)),
             patch.object(archivo_utils.os, "fsync", measured(totals, "csv_fsync", archivo_utils.os.fsync)),
@@ -94,11 +108,11 @@ def run(count, prior_rows=0):
             patch.object(auditoria_psg, "digest", measured(totals, "auditoria_hash", auditoria_psg.digest)),
             patch.object(auditoria_psg, "residual_count", measured(totals, "auditoria_inventario", auditoria_psg.residual_count)),
         ]
-        processor = archivo_utils.EXAMS["BASAL"].processors[".rtf"]
+        processor = archivo_utils.EXAMS["BASAL"].processors[suffix]
         with contextlib.ExitStack() as stack:
             for item in patches:
                 stack.enter_context(item)
-            archivo_utils.EXAMS["BASAL"].processors[".rtf"] = measured(totals, "parseo", processor)
+            archivo_utils.EXAMS["BASAL"].processors[suffix] = measured(totals, "parseo", processor)
             try:
                 start_wall, start_cpu = time.perf_counter(), time.process_time()
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
@@ -106,22 +120,37 @@ def run(count, prior_rows=0):
                 wall = time.perf_counter() - start_wall
                 cpu = time.process_time() - start_cpu
             finally:
-                archivo_utils.EXAMS["BASAL"].processors[".rtf"] = processor
+                archivo_utils.EXAMS["BASAL"].processors[suffix] = processor
 
         csv_files = [path for path in output.glob("extract_psg_*.csv")
                      if path.name != "extract_psg_prior.csv"]
         rows = 0
+        row_digest = None
         if len(csv_files) == 1:
             with csv_files[0].open(newline="", encoding="utf-8") as stream:
-                rows = sum(1 for _ in csv.DictReader(stream))
-        archived = sum(1 for _ in archive.rglob("*.rtf"))
+                records = list(csv.DictReader(stream))
+                rows = len(records)
+            if fixture_dir is not None:
+                for record in records:
+                    record.pop("meta_fuente", None)
+                    record.pop("meta_version_control", None)
+                records.sort(key=lambda record: record["meta_uuid"])
+                row_digest = hashlib.sha256(json.dumps(records, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+        archive_files = sorted(archive.rglob("*"))
+        archive_files = [path for path in archive_files if path.is_file()]
+        archived = sum(path.suffix.lower() == suffix for path in archive_files)
+        archive_digest = None
+        if fixture_dir is not None:
+            pairs = [(path.name, hashlib.sha256(path.read_bytes()).hexdigest()) for path in archive_files]
+            archive_digest = hashlib.sha256(json.dumps(pairs).encode("ascii")).hexdigest()
         audit_files = list((root / "logs").glob("*_auditoria.md"))
         audit_state = (audit_files[0].read_text(encoding="utf-8").split("**Resultado: ", 1)[1].split("**", 1)[0]
                        if len(audit_files) == 1 else None)
         return {
             "count": count, "prior_rows": prior_rows,
-            "input_bytes": sum(path.stat().st_size for path in archive.rglob("*.rtf")),
+            "input_bytes": sum(path.stat().st_size for path in archive_files),
             "exit_code": exit_code, "csv_rows": rows, "archived": archived,
+            "format": suffix[1:], "row_digest": row_digest, "archive_digest": archive_digest,
             "audit_state": audit_state, "wall_s": round(wall, 6), "cpu_s": round(cpu, 6),
             "peak_rss_kib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
             "phases_s": {name: round(value, 6) for name, value in sorted(totals.items())},
@@ -151,6 +180,8 @@ if __name__ == "__main__":
     parser.add_argument("--count", type=int)
     parser.add_argument("--prior-rows", type=int, default=0)
     parser.add_argument("--generic-rows", type=int)
+    parser.add_argument("--temp-base", type=Path)
+    parser.add_argument("--fixture-dir", type=Path)
     options = parser.parse_args()
     if options.generic_rows is not None:
         if options.generic_rows < 1 or options.count is not None or options.prior_rows:
@@ -162,7 +193,8 @@ if __name__ == "__main__":
         raise SystemExit(0)
     if options.count is None or options.count < 1 or options.prior_rows < 0:
         parser.error("--count debe ser positivo y --prior-rows no negativo")
-    result = run(options.count, options.prior_rows)
+    result = run(options.count, options.prior_rows,
+                 temp_base=options.temp_base, fixture_dir=options.fixture_dir)
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     if (result["exit_code"] or result["csv_rows"] != options.count or
             result["archived"] != options.count or result["audit_state"] != "OK"):

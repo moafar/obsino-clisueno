@@ -4,7 +4,7 @@
 **Fecha de referencia:** 2026-11-28  
 **Rama de desarrollo:** `integration/psg-evoluciones`  
 **Commit base:** `d11abaf`  
-**Estado:** 1/36 evoluciones cerradas (E01 validada; E02 pendiente).
+**Estado:** 2/36 evoluciones cerradas (E01 validada; E02 completada; E03 pendiente).
 
 ## 1. Contexto y reglas de trabajo
 
@@ -34,7 +34,7 @@
 **Objetivo:** medir y entender los cuellos de botella antes de modificar el extractor. Fase inicialmente de análisis, no de implementación.
 
 - [x] **E01 — Revisión profunda del extractor.** Analizar flujo de funciones, operaciones de disco, CPU, memoria, extracción DOC/RTF, expresiones regulares, hashes, escrituras y auditoría. **Aceptación:** informe con hallazgos sustentados, cuellos de botella y propuestas priorizadas, sin cambios funcionales.
-- [ ] **E02 — Benchmark de entornos de ejecución.** Comparar WSL sobre NTFS (`/mnt/e`), WSL sobre sistema de archivos Linux y Windows nativo cuando sea viable, con la misma muestra aislada y condiciones documentadas. Medir tiempo, rendimiento, CPU/memoria cuando sea posible y equivalencia de resultados. **Aceptación:** resultados reproducibles; separar entornos no medidos de los medidos.
+- [x] **E02 — Benchmark de entornos de ejecución.** Comparar WSL sobre NTFS (`/mnt/e`), WSL sobre sistema de archivos Linux y Windows nativo cuando sea viable, con la misma muestra aislada y condiciones documentadas. Medir tiempo, rendimiento, CPU/memoria cuando sea posible y equivalencia de resultados. **Aceptación:** resultados reproducibles; separar entornos no medidos de los medidos.
 - [ ] **E03 — Compatibilidad de catdoc y archivado en Windows.** Evaluar viabilidad de catdoc (incluida opción Cygwin si procede), equivalencia del texto y las garantías de `flock`, `renameat2` y operaciones con descriptores de directorio. **Aceptación:** matriz de compatibilidad, limitaciones y pruebas disponibles; no sustituir garantías de seguridad sin equivalencia demostrada.
 - [ ] **E04 — Decisión de arquitectura de ejecución.** Elegir entorno y estrategia a partir de E01–E03, considerando rendimiento, mantenimiento e integridad. **Aceptación:** decisión documentada y aprobada por el responsable del proyecto.
 
@@ -129,5 +129,6 @@ Añadir una entrada por tarea terminada o bloqueada. Mantener el historial; no s
 
 | 2026-11-28 | E01 | Completada y validada | Diagnóstico y script reproducible; 54 pruebas superadas según Codex. Revisión estática del script y del informe; sin cambios funcionales. DOC integral no medido por limitación del entorno; XPAP solo microbenchmark de append. | `docs/e01_diagnostico_extractor.md`, `docs/e01_perfil_extractor.py` (base de medición `dc5e278`) |
 | 2026-11-28 | Hoja de ruta | Actualizada | Integración selectiva de aportaciones del diagnóstico histórico; sin nuevas tareas ni cambios de prioridad. | Propuesta histórica `b7c3f2d` |
+| 2026-11-28 | E02 | Completada | 24 ejecuciones sintéticas (DOC/RTF; 30/120; tres repeticiones) en WSL ext4 y C: NTFS/DrvFs. Filas y archivados equivalentes por SHA-256; auditorías OK. NTFS/DrvFs 6,49–8,82× más lento según formato y lote. `/mnt/e` sin montar; Windows nativo sin Python y con incompatibilidades POSIX pendientes de E03. CPU/RSS, método y límites en `docs/e02_benchmark_entornos.md`; datos íntegros en `docs/e02_mediciones.json`. Sin cambios funcionales; versión v5.0.1 conservada. | `d64afa3` (base de medición) |
 
-**Próxima tarea:** E02 — benchmark de entornos de ejecución (solo diagnóstico).
+**Próxima tarea:** E03 — compatibilidad de catdoc y archivado en Windows (no iniciada).
