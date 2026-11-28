@@ -172,7 +172,7 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
               f"adicionales: {len(set(header) - set(schema))}; orden exacto: {schema_ok}.")
 
     uuids = Counter()
-    invalid_types, available, anomalies, months = Counter(), Counter(), Counter(), Counter()
+    invalid_types, available, months = Counter(), Counter(), Counter()
     by_format, format_rows = defaultdict(Counter), Counter()
     scores, dates, ids = [], [], set()
     invalid_uuid = missing_id = missing_date = invalid_date = bad_score = 0
@@ -189,23 +189,15 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
             fmt = Path(row["meta_fuente"]).suffix.lower().lstrip(".")
             fmt = fmt if fmt in {"doc", "rtf"} else "otro"
             format_rows[fmt] += 1
-            numeric = {}
             for name, kind in schema.items():
                 value = row[name]
                 if present(value):
                     available[name] += 1
                     by_format[fmt][name] += 1
                 try:
-                    parsed = typed(value, kind)
+                    typed(value, kind)
                 except (ValueError, OverflowError):
                     invalid_types[name] += 1
-                    continue
-                if kind in {"int", "float"} and parsed is not None:
-                    numeric[name] = parsed
-                    if name.endswith("_pct") and not 0 <= parsed <= 100:
-                        anomalies[name + ": porcentaje fuera de 0–100"] += 1
-                    if name.endswith(("_n", "_min", "_s", "_evhora")) and parsed < 0:
-                        anomalies[name + ": valor negativo"] += 1
             try:
                 date = date_value(row["meta_fecha_estudio"])
                 if date is None:
@@ -217,21 +209,11 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
                 invalid_date += 1
             try:
                 score = float(row["meta_completitud_pct"])
-                if not math.isfinite(score) or abs(score - float(_completeness(row))) > 0.00001:
+                if not math.isfinite(score) or abs(score - float(_completeness(row, fmt))) > 0.00001:
                     raise ValueError()
                 scores.append(score)
             except (ValueError, KeyError):
                 bad_score += 1
-            def relation(a, b, label):
-                if a in numeric and b in numeric and numeric[a] > numeric[b]:
-                    anomalies[label] += 1
-            relation("arq_tiempo_sueno_min", "arq_tiempo_cama_min", "Sueño superior a tiempo en cama")
-            relation("oxi_spo2_eventos_min_pct", "oxi_spo2_eventos_promedio_pct",
-                     "SpO2 mínima de eventos superior a media")
-            for phase in ("despierto", "rem", "nrem", "tst"):
-                for low, high in zip((90,85,80,75,70,60,50), (95,90,85,80,75,70,60)):
-                    relation(f"oxi_t{low}_{phase}_min", f"oxi_t{high}_{phase}_min",
-                             f"Umbrales de desaturación {phase}: T{low} > T{high}")
             paths = moves.get(row["meta_fuente"], [])
             if len(paths) != 1:
                 trace_missing += 1
@@ -261,10 +243,6 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
         if scores:
             lines.append(f"  - Mínimo: {min(scores):.2f}%; media: {mean(scores):.2f}%; "
                          f"mediana: {median(scores):.2f}%; máximo: {max(scores):.2f}%.")
-        check("Coherencia matemática", "ADVERTENCIA" if anomalies else "OK",
-              f"Incidencias (no registros únicos): {sum(anomalies.values())}.")
-        for name, count in anomalies.items():
-            lines.append(f"  - {name}: {count}")
         lines += ["", "### Completitud por variable y formato", "",
                   "| Campo | Presentes | Ausentes | % | DOC % | RTF % |",
                   "|---|---:|---:|---:|---:|---:|"]

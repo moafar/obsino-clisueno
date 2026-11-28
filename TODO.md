@@ -4,7 +4,7 @@
 **Fecha de referencia:** 2026-11-28  
 **Rama de desarrollo:** `integration/psg-evoluciones`  
 **Commit base:** `d11abaf`  
-**Estado:** 4/36 evoluciones completadas (E01–E04); PT01 cerrado. 32 pendientes.
+**Estado:** 8/36 evoluciones completadas (E01–E07 y E10); PT01 y PT02 cerrados. 28 pendientes.
 **Versión de referencia:** `v5.0.1`.
 **Objetivo prioritario:** operación diaria autónoma, fiable, recuperable e idempotente; rendimiento suficiente, no máximo.
 
@@ -58,10 +58,12 @@ Decisión, fundamentos, alternativas y riesgos: `docs/e04_decision_arquitectura.
 
 **Dependencia:** PT01. Establecer reglas técnicas antes de modificar el pipeline.
 
-- [ ] **E05 — Política de auditoría técnica.** Definir controles bloqueantes, advertencias y correcciones tolerables; alinear extracción, transformación y carga. **Aceptación:** matriz de reglas aprobada, sin validaciones clínicas.
-- [ ] **E06 — Verificar denominadores DOC/RTF.** Contrastar campos esperados contra el diccionario, contrato YAML, extractores y documentos representativos. **Aceptación:** listas exactas de campos aplicables por formato y sección, con justificación de exclusiones y tratamiento de la edad como indicador lógico único.
-- [ ] **E07 — Implementar completitud por formato.** Sustituir el denominador uniforme por los campos esperados según DOC/RTF. Los ceros explícitos cuentan como presentes; los campos no aplicables no penalizan. **Aceptación:** pruebas por formato, ausencia, cero y edad; fórmula documentada y consistente entre extractor y auditor.
-- [ ] **E10 — Eliminar controles clínicos y matemáticos del auditor.** Retirar reglas de rangos y coherencia clínica/matemática; no convertirlas en advertencias ETL. **Aceptación:** no quedan estas reglas en el auditor y los controles técnicos siguen operativos.
+**Estado:** completado el 2026-11-28; E05, E06, E07 y E10 cerradas conforme a sus criterios de aceptación.
+
+- [x] **E05 — Política de auditoría técnica.** Definir controles bloqueantes, advertencias y correcciones tolerables; alinear extracción, transformación y carga. **Aceptación:** matriz de reglas aprobada, sin validaciones clínicas. **Resultado:** matriz revisada y aprobada por el responsable el 2026-11-28 en `docs/e05_politica_auditoria_pt02.md`; distingue comportamiento vigente y objetivo, rechazos individuales, fallos bloqueantes, escenarios de UUID y completitud. Las implementaciones posteriores permanecen en sus evoluciones.
+- [x] **E06 — Verificar denominadores DOC/RTF.** Contrastar campos esperados contra el diccionario, contrato YAML, extractores y documentos representativos. **Aceptación:** listas exactas de campos aplicables por formato y sección, con justificación de exclusiones y tratamiento de la edad como indicador lógico único. **Resultado:** `docs/e06_denominadores_psg.md`; 124 DOC y 129 RTF, con edad lógica única. El candidato previo de 123 RTF se descartó por no distinguir celdas vacías de campos no aplicables.
+- [x] **E07 — Implementar completitud por formato.** Sustituir el denominador uniforme por los campos esperados según DOC/RTF. Los ceros explícitos cuentan como presentes; los campos no aplicables no penalizan. **Aceptación:** pruebas por formato, ausencia, cero y edad; fórmula documentada y consistente entre extractor y auditor. **Resultado:** listas y cálculo compartido en extracción/auditoría; `docs/e07_completitud_psg.md`; 58 pruebas de extracción superadas, 12 de transformación y 9 de carga.
+- [x] **E10 — Eliminar controles clínicos y matemáticos del auditor.** Retirar reglas de rangos y coherencia clínica/matemática; no convertirlas en advertencias ETL. **Aceptación:** no quedan estas reglas en el auditor y los controles técnicos siguen operativos. **Resultado:** `docs/e10_auditoria_tecnica_psg.md`; prueba sintética de valores clínicos extremos sin aviso y prueba de tipo técnico inválido bloqueante.
 
 ### PT03 — Trazabilidad, rechazos y auditoría (prioridad 3)
 
@@ -128,7 +130,7 @@ Decisión, fundamentos, alternativas y riesgos: `docs/e04_decision_arquitectura.
 
 ## 3. Decisiones y referencias que deben preservarse
 
-- Completitud preliminar: 124 indicadores aplicables en DOC y 123 en RTF. Son denominadores candidatos, no valores definitivos hasta completar E06. La edad en años/meses/días constituye un único indicador lógico. El cero explícito se considera presente.
+- Completitud E06–E07: 124 indicadores lógicos aplicables en DOC y 129 en RTF, definidos en `docs/e06_denominadores_psg.md`. El candidato preliminar de 123 RTF no quedó sustentado. La edad en años/meses/días constituye un único indicador lógico. El cero explícito se considera presente.
 - La completitud mide presencia de información extraída; no certifica validez clínica. La relación entre completitud de extracción y normalización posterior de valores inválidos debe quedar definida en E05–E07.
 - El contrato actual observado tiene 159 columnas de extracción y 157 de transformación; consultar el YAML vigente antes de implementar. No asumir que estos totales permanecerán constantes.
 - Tabla productiva: `observatorio-ino-1.clisueno.tbl_psg_prd`. Proteger `tbl_psg_legacy_prd`.
@@ -158,5 +160,10 @@ Añadir una entrada por tarea terminada o bloqueada. Mantener el historial; no s
 | 2026-11-28 | E03 | Diagnóstico completado | Informe y comprobaciones sintéticas; revisión del informe y script de archivado, sin revisión independiente del script de texto ni ejecución independiente. Limitaciones registradas; sin cambio funcional. | `docs/e03_compatibilidad_windows.md`, `docs/e03_archivado_sintetico.py`, `docs/e03_texto_sintetico.py` (base `adcd03e`) |
 | 2026-11-28 | Hoja de ruta | Reorientada | Prioridad a operación diaria fiable, recuperación e idempotencia; optimizaciones de rendimiento condicionadas y no bloqueantes; 36 identificadores conservados. | Decisión del responsable del proyecto; formalización pendiente E04 |
 | 2026-11-28 | E04 / PT01 | Completada / cerrado | Decisiones aprobadas formalizadas; criterio de suficiencia, dependencias, riesgos e incertidumbres con responsable y momento de resolución documentados. Sin cambios funcionales ni nuevos benchmarks; versión `v5.0.1` conservada. | `docs/e04_decision_arquitectura.md`; aprobación del responsable en la solicitud de E04 (base `5c66e50`) |
+| 2026-11-28 | E05 | Pendiente de aprobación | Matriz de bloqueos, advertencias, rechazos individuales y correcciones tolerables preparada; desajustes actuales y tareas posteriores identificados. No se marca cerrada sin aprobación del responsable. | `docs/e05_politica_auditoria_pt02.md` (base `4939b99`) |
+| 2026-11-28 | E06 | Completada | Diccionario, YAML, extractor y plantillas sintéticas contrastados; 159 columnas físicas, 150 indicadores lógicos antes de exclusiones; DOC 124, RTF 129; lista exacta por sección y exclusiones justificadas. Se corrigió el candidato RTF 123. | `docs/e06_denominadores_psg.md`, `1_extract/tests/test_psg_extractor.py` (base `4939b99`) |
+| 2026-11-28 | E07 | Completada | Extracción y auditoría usan cálculo compartido por formato; edad única, cero presente y exclusiones comprobadas; conversión histórica v5.0.1 conserva su fórmula. 58 pruebas de extracción, 12 de transformación y 9 de carga superadas. | `docs/e07_completitud_psg.md`, `1_extract/src/basal/procesar_basal.py`, `scripts/psg_csv_v501.py` (base `4939b99`) |
+| 2026-11-28 | E10 | Completada | Retiradas reglas de rangos y relaciones clínicas del auditor; persisten controles técnicos. Pruebas de extremos clínicos y tipo inválido incluidas en las 58 de extracción superadas. | `docs/e10_auditoria_tecnica_psg.md`, `1_extract/extract_commons/auditoria_psg.py` (base `4939b99`) |
+| 2026-11-28 | E05 / PT02 | Aprobada / cerrado | El responsable aprobó expresamente la matriz revisada de E05. E06, E07 y E10 ya cumplían sus criterios; PT02 queda cerrado con 8/36 evoluciones completadas. Sin nuevas pruebas ni cambios funcionales en este cierre; `v5.0.1` conservada. | `docs/e05_politica_auditoria_pt02.md`; aprobación en la solicitud de cierre de E05 (base `4939b99`) |
 
-**Próxima tarea pendiente:** E05 de PT02; requiere autorización para iniciarla.
+**Próximo paquete pendiente:** PT03, comenzando por E08; no iniciado.

@@ -200,7 +200,7 @@ y la ejecución termina con código no nulo; los documentos afectados permanecen
 
 El documento se incluye si su texto convertido contiene el título PSG basal (excluyendo DAM). La ausencia de una tabla no provoca por sí sola el rechazo: cada sección se valida por separado, y una tabla desalineada deja sus campos vacíos sin asignar datos dudosos. Los errores imprevistos de código y los errores de escritura/archivado siguen notificándose.
 
-El CSV tiene **159 columnas**. `meta_completitud_pct` se calcula como el porcentaje de los **152 campos no meta** con valor extraído; el valor `0` cuenta como presente y los valores ausentes no cuentan. Esta métrica no acredita exactitud clínica. `2_transform` produce **157 columnas**, sin modificar este porcentaje.
+El CSV tiene **159 columnas**. `meta_completitud_pct` mide los indicadores lógicos aplicables con valor extraído: **124 en DOC** y **129 en RTF**. Los componentes de edad cuentan como un único indicador; el valor `0` cuenta como presente y los campos exclusivos del otro formato no penalizan. Esta métrica no acredita exactitud clínica. `2_transform` produce **157 columnas**, sin modificar este porcentaje. Véanse `docs/e06_denominadores_psg.md` y `docs/e07_completitud_psg.md` desde la raíz del repositorio.
 
 La reextracción limpia requiere tratar expresamente los CSV y documentos ya archivados; no ejecutar una nueva extracción sobre el histórico sin un plan de conciliación y respaldo.
 
@@ -221,7 +221,7 @@ Para añadir exclusivamente la calificación de completitud a un CSV PSG ya extr
 ```
 
 El CLI comprueba estrictamente el esquema anterior y los UUID, utiliza la
-misma función de completitud del extractor v5.0.1, conserva los valores y
+misma función de completitud en su modo histórico v5.0.1, conserva los valores y
 metadatos existentes y agrega `meta_completitud_pct` al final (159 columnas).
 No sobrescribe el origen ni un archivo de salida existente; la escritura de
 la nueva versión es atómica. El nombre de salida de ejemplo evita el patrón

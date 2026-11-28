@@ -36,7 +36,7 @@ class AuditTest(unittest.TestCase):
                         meta_uuid=hashlib.md5(b"synthetic").hexdigest(),
                         meta_fecha_estudio="01/02/2024", pte_id="001",
                         arq_tiempo_sueno_min="0")
-        self.row["meta_completitud_pct"] = _completeness(self.row)
+        self.row["meta_completitud_pct"] = _completeness(self.row, "doc")
         self.log.write_text(f"Traslado PSG correcto: origen={self.original} destino={self.archived}\n")
 
     def write_csv(self):
@@ -82,6 +82,46 @@ class AuditTest(unittest.TestCase):
         state, report = self.audit()
         self.assertEqual("ERROR", state)
         self.assertIn("orden exacto: False", report)
+
+    def test_rtf_score_uses_rtf_fields_and_ignores_doc_only(self):
+        self.original = self.source / "synthetic.rtf"
+        self.row["meta_fuente"] = str(self.original)
+        self.row["evresp_ac_numero_nrem_n"] = "0"
+        self.row["fase_s1_episodios_n"] = "999"
+        self.log.write_text(
+            f"Traslado PSG correcto: origen={self.original} destino={self.archived}\n"
+        )
+        self.row["meta_completitud_pct"] = _completeness(self.row, "rtf")
+        self.write_csv()
+        state, report = self.audit()
+        self.assertEqual("OK", state)
+        self.assertIn("Discrepancias: 0", report)
+
+        self.row["meta_completitud_pct"] = _completeness(self.row, "doc")
+        self.write_csv()
+        state, report = self.audit()
+        self.assertEqual("ERROR", state)
+        self.assertIn("Discrepancias: 1", report)
+
+    def test_clinical_ranges_and_relations_are_not_audited(self):
+        self.row.update(arq_tiempo_sueno_min="999", arq_tiempo_cama_min="1",
+                        oxi_spo2_eventos_min_pct="150",
+                        oxi_spo2_eventos_promedio_pct="20",
+                        oxi_t90_tst_min="200", oxi_t95_tst_min="10")
+        self.row["meta_completitud_pct"] = _completeness(self.row, "doc")
+        self.write_csv()
+        state, report = self.audit()
+        self.assertEqual("OK", state)
+        self.assertNotIn("Coherencia matemática", report)
+        self.assertNotIn("porcentaje fuera de 0", report)
+
+    def test_invalid_technical_type_remains_blocking(self):
+        self.row["arq_tiempo_sueno_min"] = "ilegible"
+        self.row["meta_completitud_pct"] = _completeness(self.row, "doc")
+        self.write_csv()
+        state, report = self.audit()
+        self.assertEqual("ERROR", state)
+        self.assertIn("ERROR — Tipos YAML", report)
 
 
 if __name__ == "__main__":

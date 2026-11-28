@@ -94,7 +94,7 @@ def convert_psg_csv(source: Path, destination: Path | None = None, *,
                 uuids.add(uuid)
 
                 row = dict(zip(legacy_columns, record))
-                percentage = _completeness(row)
+                percentage = _completeness(row, "legacy")
                 value = float(percentage)
                 count += 1
                 sum_pct += value

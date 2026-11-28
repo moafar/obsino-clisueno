@@ -1,6 +1,6 @@
 # Diccionario de datos — polisomnografía (PSG)
 
-> **Estado:** propuesta consolidada de nomenclatura aprobada durante la revisión; **no implementada** en el repositorio. Fecha: 23 de noviembre de 2026.
+> **Estado:** diccionario canónico de 157 campos usado por el contrato de salida vigente; la matriz de disponibilidad procede de la revisión del 23 de noviembre de 2026. La entrada de extracción contiene 159 columnas físicas por el desglose de cuatro medidas antropométricas en valor y unidad. La completitud por formato se documenta en `e06_denominadores_psg.md` y `e07_completitud_psg.md`.
 
 ## 1. Alcance y verificación
 
@@ -241,7 +241,7 @@ Las referencias de disponibilidad se basan en la matriz de seis documentos, con 
 | 154 | `meta_fuente` | Identificador o ruta del archivo origen utilizado para la extracción. | texto | — | Generado | Generado |
 | 155 | `meta_uuid` | Hash identificador determinista del contenido binario del archivo de origen. | texto | — | Generado | Generado |
 | 156 | `meta_version_control` | Marca de fecha y hora de la ejecución de extracción, en el formato histórico. | texto | — | Generado | Generado |
-| 157 | `meta_completitud_pct` | Porcentaje de campos clínicos y técnicos del CSV de extracción con valor recuperado, sobre un denominador fijo de 152 campos no `meta_*`; 0 explícito cuenta como presente. No es una medida de exactitud clínica. | decimal | % | Generado | Generado |
+| 157 | `meta_completitud_pct` | Porcentaje de indicadores lógicos aplicables con valor recuperado: 124 en DOC y 129 en RTF. Edad en años/meses/días cuenta una sola vez; 0 explícito cuenta como presente. No mide exactitud clínica. | decimal | % | Generado | Generado |
 
 ## 3. Diferencias de disponibilidad entre DOC y RTF
 
@@ -336,5 +336,5 @@ Las referencias de disponibilidad se basan en la matriz de seis documentos, con 
 
 - **Inclusión:** detección del título «INFORME DE POLISOMNOGRAFÍA BASAL» (excluidos informes DAM) en el contenido convertido; una tabla ausente o ilegible no invalida por sí sola el documento.
 - **Extracción:** las secciones se evalúan independientemente. Las filas desalineadas no se asignan por conjetura; los valores no recuperables quedan nulos.
-- **`meta_completitud_pct`:** `100 × número de campos no meta con valor / 152`, redondeado a dos decimales. Se calcula en `1_extract`, sin contar los metadatos ni las seis variables derivadas en `2_transform`. El cero explícito cuenta como dato presente. La misma base fija se aplica a DOC y RTF, incluso cuando una plantilla no contiene determinados indicadores: esto mide la completitud del esquema, no la integridad clínica del informe.
+- **`meta_completitud_pct`:** `100 × indicadores lógicos aplicables presentes / indicadores lógicos aplicables`, redondeado a dos decimales. Denominadores: DOC 124, RTF 129. Se calcula en `1_extract` y se recalcula en su auditor con la misma función; la edad se cuenta una sola vez si aparece algún componente. Se excluyen `meta_*`, derivados de `2_transform` y campos exclusivos del otro formato. Un cero explícito cuenta como presente. Véanse `e06_denominadores_psg.md` y `e07_completitud_psg.md`.
 - **Carga:** incorporar la nueva columna `FLOAT64` a la tabla física de BigQuery antes de cargar el esquema nuevo. No mezclar CSV antiguos de 158 columnas con los nuevos de 159 en una misma ejecución de `2_transform`.

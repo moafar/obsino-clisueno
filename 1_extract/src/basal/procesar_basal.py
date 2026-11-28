@@ -82,6 +82,35 @@ PSG_COLUMNS = (
     + OXI_COLUMNS + FC_COLUMNS + MOVMI_COLUMNS + POS_COLUMNS + CLIN_COLUMNS + META_COLUMNS
 )
 
+DOC_ONLY_COMPLETENESS_FIELDS = frozenset(
+    f"fase_{phase}_episodios_n" for phase in ("s1", "s2", "s3", "rem", "despierto")
+) | frozenset(
+    f"evresp_{event}_configuracion_s" for event in ("ac", "ao", "am", "hip")
+) | frozenset(
+    f"evresp_ap_{measure}" for measure in
+    ("numero_n", "duracion_max_s", "duracion_media_s", "duracion_total_min", "indice_evhora")
+) | frozenset(
+    f"oxi_t50_{phase}_min" for phase in ("despierto", "rem", "nrem", "tst")
+) | {"oxi_spo2_eventos_min_pct", "movmi_lm_total_n", "movmi_lm_indice_evhora"}
+RTF_ONLY_COMPLETENESS_FIELDS = frozenset(
+    f"evresp_{event}_numero_{phase}_n"
+    for event in ("ac", "ao", "am", "hip", "ah") for phase in ("nrem", "rem")
+) | frozenset(
+    f"oxi_t{threshold}_{phase}_min"
+    for threshold in (95, 85, 75) for phase in ("despierto", "rem", "nrem", "tst")
+) | {"oxi_spo2_eventos_promedio_pct", "movmi_plm_total_n",
+     "movmi_plm_indice_evhora", "arq_tiempo_grabacion_min"}
+_LOGICAL_COMPLETENESS_FIELDS = tuple(
+    field for field in PSG_COLUMNS
+    if not field.startswith("meta_") and field not in {"pte_edad_meses", "pte_edad_dias"}
+)
+COMPLETENESS_FIELDS = {
+    "doc": tuple(field for field in _LOGICAL_COMPLETENESS_FIELDS
+                 if field not in RTF_ONLY_COMPLETENESS_FIELDS),
+    "rtf": tuple(field for field in _LOGICAL_COMPLETENESS_FIELDS
+                 if field not in DOC_ONLY_COMPLETENESS_FIELDS),
+}
+
 NUMBER = re.compile(r"(?<!\w)[+-]?\d+(?:[.,]\d+)?")
 TITLE = re.compile(
     r"INFORME\s+DE\s+POLISOMNOGRAFIA\s+BASAL\b"
@@ -517,15 +546,19 @@ def _position(out: dict, sections: dict, delimiter: str) -> None:
             out[f"pos_{name}_{measure}"] = _number(values[column])
 
 
-def _completeness(out: dict[str, str | None]) -> str:
-    """Porcentaje de campos no meta recuperados; cero explícito cuenta como presente."""
-    evaluable = [field for field in PSG_COLUMNS if not field.startswith("meta_")]
+def _completeness(out: dict[str, str | None], kind: str) -> str:
+    """Presencia por formato; ``legacy`` conserva la conversión histórica v5.0.1."""
+    if kind == "legacy":
+        evaluable = tuple(field for field in PSG_COLUMNS if not field.startswith("meta_"))
+    else:
+        evaluable = COMPLETENESS_FIELDS[kind]
     absent = {"", "N/A", "NA", "NONE", "NULL", "NAN"}
-    present = sum(
-        value is not None and str(value).strip().upper() not in absent
-        for field in evaluable
-        for value in (out[field],)
-    )
+    present = 0
+    for field in evaluable:
+        values = ((out["pte_edad_anos"], out["pte_edad_meses"], out["pte_edad_dias"])
+                  if field == "pte_edad_anos" and kind != "legacy" else (out[field],))
+        present += any(value is not None and str(value).strip().upper() not in absent
+                       for value in values)
     return f"{100 * present / len(evaluable):.2f}"
 
 
@@ -567,7 +600,7 @@ def _extract(text: str, archivo: str | Path | None, delimiter: str) -> dict[str,
     if out["meta_uuid"] == "N/A":
         raise PSGExtractionError("No se pudo generar el UUID PSG")
     out["meta_version_control"] = marcar_version_extraccion()
-    out["meta_completitud_pct"] = _completeness(out)
+    out["meta_completitud_pct"] = _completeness(out, "doc" if delimiter == "\t" else "rtf")
     return out
 
 

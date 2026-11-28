@@ -1,0 +1,11 @@
+# E07 — Cálculo de completitud por formato
+
+La extracción y su auditor usan `src.basal.procesar_basal._completeness` con formato explícito `doc` o `rtf`. El formato del auditor procede de la extensión de `meta_fuente`; un formato desconocido impide validar el porcentaje y produce error de auditoría. La función conserva una rama `legacy` exclusivamente para `scripts/psg_csv_v501.py`, que debe seguir generando el valor histórico de la conversión v5.0.1; no se usa para extracciones nuevas.
+
+**Fórmula:** `meta_completitud_pct = redondear(100 × presentes / aplicables, 2)`, con **124** aplicables en DOC y **129** en RTF según E06. Cada campo aplicable cuenta una vez si su valor no es nulo, vacío ni un marcador de ausencia (`N/A`, `NA`, `NONE`, `NULL`, `NAN`, sin distinguir mayúsculas). `0` cuenta como presente. El indicador edad cuenta una vez si está presente al menos uno de `pte_edad_anos`, `pte_edad_meses` o `pte_edad_dias`; dos o tres componentes no lo multiplican. Un campo exclusivo del otro formato no entra en numerador ni denominador aunque aparezca accidentalmente en la fila.
+
+La puntuación se calcula **antes** de la transformación: la normalización posterior de un valor técnicamente inválido aún no reduce la completitud de extracción. E16–E17 deberán registrar esa incidencia y conservar el valor original; no se recalcula aquí la completitud después de transformar. La auditoría de E07 solo comprueba que el porcentaje declarado coincide con la presencia observada y sigue bloqueando discrepancias.
+
+La tabla de disponibilidad por variable y la agregación por sección del informe de auditoría aún presentan estadísticas de columnas físicas, incluidas las no aplicables. E13 adaptará ese informe a los denominadores lógicos de E06–E07; el valor de `meta_completitud_pct` y su recálculo ya usan el contrato nuevo. Los porcentajes de CSV previos conservan su definición histórica y no se reinterpretan sin E31.
+
+**Versionado:** cambia el significado de una columna pública existente, aunque su nombre y tipo no cambien. Según `AGENTS.md` §10, una publicación de este contrato requeriría incremento **MAJOR** (propuesta `v6.0.0`), sujeto a autorización. El marcador `v5.0.1` permanece intacto durante PT02.

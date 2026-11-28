@@ -13,7 +13,9 @@ from extract_commons.archivo_utils import _append_psg_row, procesar_archivo
 from extract_commons.directorio_utils import procesar_directorio
 from extract_commons.texto_utils import determinar_tipos_examenes, normalizar_texto
 from src.basal.procesar_basal import (
-    PSG_COLUMNS, PSGExtractionError, procesar_basal_doc, procesar_basal_rtf,
+    COMPLETENESS_FIELDS, DOC_ONLY_COMPLETENESS_FIELDS,
+    RTF_ONLY_COMPLETENESS_FIELDS, PSG_COLUMNS, PSGExtractionError, _completeness,
+    procesar_basal_doc, procesar_basal_rtf,
 )
 
 
@@ -151,6 +153,8 @@ class PSGExtractorTest(unittest.TestCase):
                     if field != "meta_completitud_pct"
                 ))
                 self.assertIsNotNone(row["meta_completitud_pct"])
+                self.assertEqual("100.00" if kind == "doc" else "96.12",
+                                 row["meta_completitud_pct"])
                 self.assertEqual("000123", row["pte_id"])
                 self.assertEqual("Paciente Sintético", row["pte_nombre"])
                 self.assertIsNone(row["pte_edad_meses"])
@@ -224,6 +228,8 @@ class PSGExtractorTest(unittest.TestCase):
                "movmi_plm_indice_evhora", "arq_tiempo_grabacion_min"]
         )
         self.assertEqual((21, 26), (len(doc_only), len(rtf_only)))
+        self.assertEqual(set(doc_only), DOC_ONLY_COMPLETENESS_FIELDS)
+        self.assertEqual(set(rtf_only), RTF_ONLY_COMPLETENESS_FIELDS)
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "synthetic"
             source.write_bytes(b"synthetic")
@@ -369,7 +375,7 @@ class PSGExtractorTest(unittest.TestCase):
             self.assertIsNone(row["arq_microalertamientos_total_n"])
             self.assertEqual("400", row["arq_tiempo_sueno_min"])
 
-    def test_title_only_inclusion_zero_values_and_fixed_denominator(self):
+    def test_title_only_inclusion_zero_values_and_format_denominator(self):
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "title-only.doc"
             source.write_bytes(b"synthetic")
@@ -383,10 +389,31 @@ class PSGExtractorTest(unittest.TestCase):
             full = procesar_basal_doc(base, source)
             self.assertEqual("0", full["oxi_t90_despierto_min"])
             self.assertGreater(float(full["meta_completitud_pct"]), 0)
-            # El cero se cuenta como presente; la fórmula usa 152 campos fijos.
-            count = sum(value is not None and str(value).strip() not in ("", "N/A")
-                        for field, value in full.items() if not field.startswith("meta_"))
-            self.assertEqual(f"{100 * count / 152:.2f}", full["meta_completitud_pct"])
+            # DOC: los 124 campos aplicables están presentes, incluido el cero.
+            self.assertEqual(124, len(COMPLETENESS_FIELDS["doc"]))
+            self.assertEqual(129, len(COMPLETENESS_FIELDS["rtf"]))
+            self.assertEqual("100.00", full["meta_completitud_pct"])
+
+    def test_completeness_age_absence_zero_and_nonapplicable_fields(self):
+        for kind, ignored in (("doc", "evresp_ac_numero_nrem_n"),
+                              ("rtf", "fase_s1_episodios_n")):
+            with self.subTest(kind=kind):
+                row = dict.fromkeys(PSG_COLUMNS)
+                self.assertEqual("0.00", _completeness(row, kind))
+                row[ignored] = "999"
+                self.assertEqual("0.00", _completeness(row, kind))
+                row["pte_edad_meses"] = "0"
+                self.assertEqual(f"{100 / len(COMPLETENESS_FIELDS[kind]):.2f}",
+                                 _completeness(row, kind))
+                row["pte_edad_dias"] = "10"
+                self.assertEqual(f"{100 / len(COMPLETENESS_FIELDS[kind]):.2f}",
+                                 _completeness(row, kind))
+                row["pte_edad_meses"] = "N/A"
+                row["pte_edad_dias"] = ""
+                self.assertEqual("0.00", _completeness(row, kind))
+                row["arq_tiempo_sueno_min"] = "0"
+                self.assertEqual(f"{100 / len(COMPLETENESS_FIELDS[kind]):.2f}",
+                                 _completeness(row, kind))
 
     def test_doc_configuration_row_with_blank_sum_and_total_cells(self):
         with tempfile.TemporaryDirectory() as folder:
