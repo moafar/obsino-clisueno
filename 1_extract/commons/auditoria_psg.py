@@ -28,7 +28,7 @@ def present(value):
 def date_value(value):
     if not present(value):
         return None
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%y", "%d-%m-%y"):
         try:
             return datetime.strptime(value.strip(), fmt).date()
         except ValueError:
@@ -174,7 +174,7 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
     uuids = Counter()
     invalid_types, available, anomalies, months = Counter(), Counter(), Counter(), Counter()
     by_format, format_rows = defaultdict(Counter), Counter()
-    scores = []
+    scores, dates, ids = [], [], set()
     invalid_uuid = missing_id = missing_date = invalid_date = bad_score = 0
     trace_missing = trace_bad = trace_ok = 0
     if schema_ok and rows:
@@ -184,6 +184,8 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
                 invalid_uuid += 1
             uuids[uid] += 1
             missing_id += not present(row["pte_id"])
+            if present(row["pte_id"]):
+                ids.add(row["pte_id"].strip())
             fmt = Path(row["meta_fuente"]).suffix.lower().lstrip(".")
             fmt = fmt if fmt in {"doc", "rtf"} else "otro"
             format_rows[fmt] += 1
@@ -209,6 +211,7 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
                 if date is None:
                     missing_date += 1
                 else:
+                    dates.append(date)
                     months[date.strftime("%Y-%m")] += 1
             except ValueError:
                 invalid_date += 1
@@ -247,9 +250,11 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
         check("Tipos YAML", status(not invalid_types), f"Valores inválidos: {sum(invalid_types.values())}.")
         for name, count in invalid_types.items():
             lines.append(f"  - {name}: {count}")
-        check("Identificación", "ADVERTENCIA" if missing_id else "OK", f"ID ausentes: {missing_id}.")
+        check("Identificación", "ADVERTENCIA" if missing_id else "OK", f"ID ausentes: {missing_id}; identificadores distintos: {len(ids)}.")
         check("Fechas", "ADVERTENCIA" if missing_date or invalid_date else "OK",
               f"Ausentes: {missing_date}; inválidas: {invalid_date}.")
+        if dates:
+            lines.append(f"  - Fecha mínima: {min(dates)}; máxima: {max(dates)}.")
         for month, count in sorted(months.items()):
             lines.append(f"  - {month}: {count}")
         check("Recálculo de completitud", status(not bad_score), f"Discrepancias: {bad_score}.")
@@ -290,6 +295,19 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
           f"Log: {sum(map(len,moves.values()))}; esperados: {archived+retried}.")
     check("Duplicados registrados", "OK" if len(duplicates) == duplicate_count else "ADVERTENCIA",
           f"Log: {len(duplicates)}; contador: {duplicate_count}. No se consultan CSV anteriores.")
+    duplicate_matches = duplicate_unverified = 0
+    for origin in duplicates:
+        try:
+            candidate = Path(origin)
+            if (candidate.resolve().is_relative_to(source) and not candidate.is_symlink()
+                    and digest(candidate) in uuids):
+                duplicate_matches += 1
+            else:
+                duplicate_unverified += 1
+        except OSError:
+            duplicate_unverified += 1
+    lines.append(f"- Duplicados con MD5 en este CSV: {duplicate_matches}; no verificables "
+                 f"sin histórico o archivo accesible: {duplicate_unverified}.")
     lines.append(f"- Rechazados: {rejected}. Motivos explícitos y advertencias del log (no equivalen a documentos únicos):")
     for reason, count in reasons.items():
         lines.append(f"  - {reason}: {count}")
