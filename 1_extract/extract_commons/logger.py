@@ -17,6 +17,16 @@ def setup_logger(log_directory: str, flow_name: str = "extract", level_name: str
     safe_flow_name = (flow_name or "extract").strip().lower().replace(" ", "_")
     log_file = log_path / f'extract_{safe_flow_name}_{timestamp}.log'
     
+    # Evitar mezclar dos ejecuciones iniciadas en el mismo segundo.
+    base = log_file
+    suffix = 1
+    while True:
+        try:
+            handler = logging.FileHandler(log_file, mode='x', encoding='utf-8')
+            break
+        except FileExistsError:
+            log_file = base.with_name(f'{base.stem}_{suffix}.log')
+            suffix += 1
     resolved_level = getattr(logging, (level_name or "INFO").upper(), logging.INFO)
 
     logging.basicConfig(
@@ -27,3 +37,4 @@ def setup_logger(log_directory: str, flow_name: str = "extract", level_name: str
         ],
         force=True,
     )
+    return log_file

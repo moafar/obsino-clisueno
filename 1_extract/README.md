@@ -233,3 +233,35 @@ que fueron rechazados. Los CSV de 158 columnas que permanezcan en `staging/`
 siguen siendo incompatibles con la lectura de CSV previos del extractor v5.0.1.
 Se requiere una conciliación y promoción controladas antes de volver a ejecutar
 la extracción sobre los directorios clínicos.
+
+
+## Auditoría automática PSG
+
+Tras cada ejecución confirmada de PSG (normal o test), se genera un informe
+Markdown junto al log de la ejecución, con sufijo `_auditoria.md`. No se genera
+en dry-run ni al cancelar la confirmación. Se evalúa exclusivamente el CSV de
+la ejecución, el contrato YAML vigente, sus contadores, log y documentos.
+No se comparan CSV históricos. La auditoría no transforma ni carga datos.
+
+Un ERROR de auditoría devuelve código de salida no nulo; no revierte documentos
+ya archivados. Las advertencias (incluidos controles no evaluados) no bloquean
+la ejecución. El informe no incluye nombres, identificadores ni rutas clínicas.
+Los rechazos sin motivo explícito no pueden clasificarse exhaustivamente.
+La eliminación de CSV previos sigue afectando al mecanismo existente de
+detección histórica de duplicados del extractor; la auditoría no lo modifica.
+
+Para auditar una extracción anterior sin reextraer (desde la raíz):
+```bash
+PYTHONPATH="$PWD/1_extract" .venv/bin/python -m extract_commons.auditoria_psg \
+  --input staging/extract_psg_YYYY-MM-DD_HH-MM.csv \
+  --log logs/extract_psg_YYYY-MM-DD_HH-MM-SS.log \
+  --source /ruta/origen --archive /ruta/archivo
+```
+La conciliación física retrospectiva solo es interpretable si el origen no
+ha cambiado desde la extracción. El contrato de referencia por defecto es
+`0_declarations/psg.yaml` (opcionalmente `--contract`).
+
+Pruebas sintéticas:
+```bash
+PYTHONPATH="$PWD/1_extract" .venv/bin/python -m unittest discover -s 1_extract/tests -p 'test_*.py'
+```
