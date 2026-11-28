@@ -55,7 +55,7 @@ schema:
     input:
       columns:
         pte_nombre: string
-        pte_id: string
+        pte_id: string  # E18: ausencia conservada como NULL e incidencia
         pte_edad_anos: int
         pte_edad_meses: int
         pte_edad_dias: int
@@ -206,11 +206,11 @@ schema:
         clin_interpretacion: string
         clin_conclusiones: string
         clin_ronquido: string
-        meta_fecha_estudio: date
+        meta_fecha_estudio: date  # E18: NULL/fecha inválida con incidencia en transformación
         meta_solicita: string
         meta_empresa: string
         meta_fuente: string
-        meta_uuid: string
+        meta_uuid: string  # E19: obligatorio; primera aparición conservada por lote
         meta_version_control: string
         meta_completitud_pct: float
     output:
@@ -372,7 +372,7 @@ schema:
         meta_uuid: string
         meta_version_control: string
         meta_completitud_pct: float
-        meta_incidencias_calidad: string
+        meta_incidencias_calidad: string  # E17–E18: JSON por fila; NULL sin incidencias
   load:
     input:
       columns: *transform_output_columns

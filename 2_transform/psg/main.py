@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import logging
 from pathlib import Path
 import re
 import sys
@@ -31,7 +32,7 @@ from transform_commons.io import (
 )
 from transform_commons.ops import register_builtin_operations
 from transform_commons.schema import validate_input_schema, validate_output_schema
-from psg.core.transforms import register_psg_operations
+from psg.core.transforms import register_psg_operations, validate_psg_technical_metadata
 
 SUPPORTED_INPUT_EXTENSIONS = {".csv"}
 
@@ -64,36 +65,43 @@ def _safe_file_label(path: Path, index: int) -> str:
     return f"archivo #{index}"
 
 
-def _check_selected_uuids(input_files: list[Path], input_config: dict) -> None:
-    """Rechaza UUID repetidos en el lote completo antes de escribir salidas."""
-    seen: dict[str, int] = {}
-    implicated: set[int] = set()
+def _check_selected_uuids(input_files: list[Path], input_config: dict) -> dict[Path, list[int]]:
+    """Conserva la primera fila por UUID en el lote seleccionado."""
+    seen: dict[str, dict[str, str]] = {}
+    keep: dict[Path, list[int]] = {}
+    duplicates = different = 0
     separator = input_config.get("sep", ",")
     encoding = input_config.get("encoding", "utf-8")
     for index, path in enumerate(input_files, start=1):
         label = _safe_file_label(path, index)
+        keep[path] = []
         try:
             with path.open("r", newline="", encoding=encoding) as source:
                 reader = csv.DictReader(source, delimiter=separator, strict=True)
                 if not reader.fieldnames or "meta_uuid" not in reader.fieldnames:
                     raise ValueError(f"Falta meta_uuid en {label}")
-                for record in reader:
+                for position, record in enumerate(reader):
+                    if None in record or any(value is None for value in record.values()):
+                        raise ValueError(f"Fila PSG incompleta o con columnas extra en {label}")
                     uuid = record.get("meta_uuid")
-                    if uuid is None or not uuid.strip():
-                        raise ValueError(f"UUID PSG vacío en {label}")
+                    if uuid is None or not re.fullmatch(r"[0-9a-f]{32}", uuid.strip()):
+                        raise ValueError(f"UUID PSG ausente o inválido en {label}")
                     uuid = uuid.strip()
                     if uuid in seen:
-                        implicated.update((seen[uuid], index))
+                        duplicates += 1
+                        different += record != seen[uuid]
                     else:
-                        seen[uuid] = index
+                        seen[uuid] = record
+                        keep[path].append(position)
         except (OSError, UnicodeError, csv.Error):
             raise ValueError(f"No se pudo leer meta_uuid en {label}") from None
-    if implicated:
-        labels = [
-            _safe_file_label(path, index)
-            for index, path in enumerate(input_files, start=1) if index in implicated
-        ]
-        raise ValueError("UUID PSG duplicado; archivos implicados: " + ", ".join(labels))
+    if duplicates:
+        logging.warning("UUID PSG repetidos en lote: %s omitidos; %s con valores distintos",
+                        duplicates, different)
+    logging.info("UUID PSG: entradas=%s, conservadas=%s, duplicadas=%s",
+                 sum(len(rows) for rows in keep.values()) + duplicates,
+                 sum(len(rows) for rows in keep.values()), duplicates)
+    return keep
 
 
 def _load_pipeline_config(config_path: str, search_bases: list[Path]) -> dict:
@@ -116,7 +124,7 @@ def _require_exact_columns(dataframe, schema_config: dict, section: str) -> None
 def _validate_psg_input_schema(dataframe, schema_config: dict) -> None:
     # Los números clínicos se convierten con incidencias en la operación PSG.
     metadata = {name: kind for name, kind in schema_config["columns"].items()
-                if name.startswith("meta_")}
+                if name.startswith("meta_") and name != "meta_fecha_estudio"}
     validate_input_schema(dataframe, {"columns": metadata})
 
 
@@ -205,6 +213,7 @@ def run(
     input_path: str,
     output_path: str | None,
     dry_run: bool = False,
+    keep_rows: list[int] | None = None,
 ) -> Path | None:
     search_bases = _search_bases()
     pipeline_config = _load_pipeline_config(config_path, search_bases)
@@ -218,11 +227,14 @@ def run(
         raise ValueError("La entrada PSG debe ser un CSV de extracción")
     dataframe = read_dataset(str(resolved_input_path), config=pipeline_config.get("input", {}))
     _require_exact_columns(dataframe, pipeline_config.get("schema", {}).get("input", {}), "entrada")
-
-    _validate_psg_input_schema(
-        dataframe=dataframe,
-        schema_config=pipeline_config.get("schema", {}).get("input", {}),
-    )
+    _validate_psg_input_schema(dataframe, pipeline_config["schema"]["input"])
+    if keep_rows is None:
+        keep_rows = _check_selected_uuids([resolved_input_path], pipeline_config.get("input", {}))[resolved_input_path]
+    discarded = ~dataframe.index.isin(keep_rows)
+    validate_psg_technical_metadata(dataframe.loc[discarded])
+    dataframe = dataframe.iloc[keep_rows].copy()
+    if dataframe.empty:
+        return None
 
     transformed = run_pipeline(
         pipeline_config=pipeline_config,
@@ -325,7 +337,7 @@ def execute(
             "Usa --input para procesar uno específico."
         )
 
-    _check_selected_uuids(input_files, pipeline_config.get("input", {}))
+    keep_rows = _check_selected_uuids(input_files, pipeline_config.get("input", {}))
 
     plans: list[tuple[Path, Path]] = []
     for input_file in input_files:
@@ -351,6 +363,7 @@ def execute(
             input_path=str(input_file),
             output_path=output_path,
             dry_run=dry_run,
+            keep_rows=keep_rows[input_file],
         )
         if generated_output:
             print(f"✅ Procesamiento completado. Archivo generado: {generated_output}")

@@ -124,6 +124,15 @@ class PsgLoadTest(unittest.TestCase):
         workbook.save(self.path)
         self.execute(expect_error=True)
 
+    def test_nullable_partition_date_reaches_arrow_as_null(self):
+        self.write([self.row(meta_fecha_estudio=None)])
+        result = self.execute()
+        field = NAMES.index("meta_fecha_estudio")
+        self.assertEqual("NULLABLE", self.schema[field].mode)
+        self.assertTrue(pd.isna(result.loc[0, "meta_fecha_estudio"]))
+        arrow = _pandas_helpers.dataframe_to_arrow(result, self.schema)
+        self.assertEqual(1, arrow.column("meta_fecha_estudio").null_count)
+
     def test_reject_schema_errors(self):
         for columns in (NAMES[::-1], NAMES + ["unexpected"]):
             with self.subTest(columns=len(columns)):

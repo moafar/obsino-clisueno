@@ -127,8 +127,9 @@ class PSGExtractorTest(unittest.TestCase):
         derived = {
             "pte_edad_decimal_anos", "pte_grupo_edad", "pte_peso_kg",
             "pte_talla_cm", "pte_cuello_cm", "pte_perimetro_abdominal_cm",
+            "meta_incidencias_calidad",
         }
-        self.assertEqual(157, len(fields))
+        self.assertEqual(158, len(fields))
         self.assertEqual(set(fields) - derived, set(PSG_COLUMNS) - {
             f"pte_{part}_{kind}"
             for part in ("peso", "talla", "cuello", "perimetro_abdominal")

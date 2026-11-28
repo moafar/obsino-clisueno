@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 import json
+import re
+import logging
 from typing import Any
 
 import pandas as pd
@@ -207,11 +209,20 @@ def _numeric(series: pd.Series, column: str, integer: bool = False,
     return values.mask(invalid).astype("Int64" if integer else "Float64")
 
 
-def _date(series: pd.Series, column: str) -> pd.Series:
-    text = series.astype("string").str.strip().replace("", pd.NA)
+def _date(series: pd.Series, column: str,
+          incidents: list[list[dict[str, str]]]) -> pd.Series:
+    text = series.astype("string").str.strip()
+    missing = text.isna() | text.str.upper().isin({"", "N/A", "NA", "NULL", "NONE"})
+    text = text.mask(missing)
     parsed = pd.to_datetime(text, errors="coerce", dayfirst=True, format="mixed")
-    if (text.notna() & parsed.isna()).any():
-        raise ValueError(f"Fecha inválida en {column}")
+    for position, is_missing in enumerate(missing.fillna(True).to_numpy(dtype=bool)):
+        if is_missing or pd.isna(parsed.iloc[position]):
+            incidents[position].append({
+                "campo": column,
+                "valor_original": None if pd.isna(series.iloc[position]) else str(series.iloc[position]),
+                "error": "fecha_ausente" if is_missing else "fecha_invalida",
+                "accion": "convertido_a_null",
+            })
     return parsed
 
 
@@ -229,15 +240,33 @@ def _converted_unit(dataframe: pd.DataFrame, part: str,
     return result
 
 
+def validate_psg_technical_metadata(dataframe: pd.DataFrame) -> None:
+    """Comprueba metadatos bloqueantes también en filas que se omitirán por UUID."""
+    if dataframe.empty:
+        return
+    completeness = _numeric(dataframe["meta_completitud_pct"], "meta_completitud_pct")
+    if completeness.isna().any() or (((completeness < 0) | (completeness > 100))
+                                     .fillna(False).any()):
+        raise ValueError("meta_completitud_pct ausente o fuera del rango 0-100")
+
+
 def _op_psg_basal_transform(dataframe: pd.DataFrame, **_: Any) -> pd.DataFrame:
     required = (set(FINAL_COLS) - DERIVED) | {
         f"pte_{part}_{kind}"
         for part in UNIT_FACTORS for kind in ("valor", "unidad")
     }
-    if set(dataframe.columns) != required or len(dataframe.columns) != 159:
-        raise ValueError("El esquema de entrada PSG debe tener exactamente 159 columnas")
+    if set(dataframe.columns) != required or len(dataframe.columns) != len(required):
+        raise ValueError("El esquema de entrada PSG no coincide con el contrato")
 
-    df = dataframe.copy()
+    source_uuids = dataframe["meta_uuid"].astype("string").str.strip()
+    if not source_uuids.str.fullmatch(r"[0-9a-f]{32}", na=False).all():
+        raise ValueError("UUID PSG ausente o inválido")
+    repeated = source_uuids.duplicated(keep="first")
+    validate_psg_technical_metadata(dataframe.loc[repeated])
+    if repeated.any():
+        logging.warning("UUID PSG repetidos en entrada: %s omitidos", int(repeated.sum()))
+    df = dataframe.loc[~repeated].copy()
+    original_ids = df["pte_id"].copy()
     incidents: list[list[dict[str, str]]] = [[] for _ in range(len(df))]
     for column, dtype in DATA_TYPES.items():
         if column in DERIVED:
@@ -248,9 +277,20 @@ def _op_psg_basal_transform(dataframe: pd.DataFrame, **_: Any) -> pd.DataFrame:
             df[column] = _numeric(df[column], column,
                                   incidents=None if column.startswith("meta_") else incidents)
         elif dtype == "date":
-            df[column] = _date(df[column], column)
+            df[column] = _date(df[column], column, incidents)
         else:
             df[column] = df[column].astype("string").replace("", pd.NA)
+
+    missing_id = df["pte_id"].isna() | df["pte_id"].str.strip().eq("")
+    for position, is_missing in enumerate(missing_id.fillna(True).to_numpy(dtype=bool)):
+        if is_missing:
+            incidents[position].append({
+                "campo": "pte_id",
+                "valor_original": None if pd.isna(original_ids.iloc[position])
+                else str(original_ids.iloc[position]),
+                "error": "identificador_ausente", "accion": "conservar_null",
+            })
+    df["pte_id"] = df["pte_id"].mask(missing_id)
 
     missing_t90 = df["oxi_t90_pct"].isna()
     t90_minutes = df["oxi_t90_tst_min"]
@@ -276,10 +316,8 @@ def _op_psg_basal_transform(dataframe: pd.DataFrame, **_: Any) -> pd.DataFrame:
     if ((completeness < 0) | (completeness > 100)).fillna(False).any():
         raise ValueError("meta_completitud_pct fuera del rango 0-100")
     uuids = df["meta_uuid"].str.strip()
-    if uuids.isna().any() or uuids.eq("").any():
-        raise ValueError("UUID PSG ausente")
-    if uuids.duplicated().any():
-        raise ValueError("UUID PSG duplicado en la entrada; no se eliminaron filas")
+    if uuids.isna().any() or not uuids.str.fullmatch(r"[0-9a-f]{32}", na=False).all():
+        raise ValueError("UUID PSG ausente o inválido")
 
     years = df["pte_edad_anos"].astype("Float64")
     months = df["pte_edad_meses"].astype("Float64")

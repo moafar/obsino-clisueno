@@ -1,5 +1,6 @@
 import re
 import json
+import hashlib
 import io
 import sys
 import tempfile
@@ -42,6 +43,8 @@ def source_row(**overrides):
                meta_fecha_estudio="01/02/2026", oxi_t90_despierto_min="0",
                clin_interpretacion="Texto íntegro con acentos.\nSegunda línea.")
     row.update(overrides)
+    if row["meta_uuid"] is not None and not re.fullmatch(r"[0-9a-f]{32}", row["meta_uuid"]):
+        row["meta_uuid"] = hashlib.md5(row["meta_uuid"].encode()).hexdigest()
     return row
 
 
@@ -126,16 +129,59 @@ class PSGTransformTest(unittest.TestCase):
         self.assertTrue(pd.api.types.is_datetime64_any_dtype(result["meta_fecha_estudio"]))
         self.assertTrue(result["meta_incidencias_calidad"].isna().all())
 
-    def test_invalid_metadata_and_duplicate_uuid_raise_without_dropping(self):
+    def test_invalid_metadata_and_uuid_remain_blocking(self):
         for changes in (
             {"meta_completitud_pct": "101"},
             {"meta_completitud_pct": "valor ilegible"},
-            {"meta_fecha_estudio": "fecha imposible"},
         ):
             with self.subTest(changes=changes), self.assertRaises((ValueError, SchemaValidationError)):
                 self.transform([source_row(**changes)])
-        with self.assertRaisesRegex(ValueError, "duplicado"):
-            self.transform([source_row(), source_row(pte_id="000124")])
+        invalid = source_row()
+        invalid["meta_uuid"] = "uuid inválido"
+        with self.assertRaisesRegex(ValueError, "UUID PSG ausente o inválido"):
+            self.transform([invalid])
+
+    def test_missing_id_and_date_are_recorded_without_invented_values(self):
+        result = self.transform([
+            source_row(pte_id="", meta_fecha_estudio=""),
+            source_row(meta_uuid="second", meta_fecha_estudio="fecha imposible"),
+        ])
+        self.assertTrue(result["meta_fecha_estudio"].isna().all())
+        self.assertTrue(pd.isna(result.loc[0, "pte_id"]))
+        self.assertEqual("000123", result.loc[1, "pte_id"])
+        first = json.loads(result.loc[0, "meta_incidencias_calidad"])
+        second = json.loads(result.loc[1, "meta_incidencias_calidad"])
+        self.assertEqual({"meta_fecha_estudio", "pte_id"}, {item["campo"] for item in first})
+        self.assertEqual("fecha_invalida", second[0]["error"])
+        self.assertEqual("fecha imposible", second[0]["valor_original"])
+
+    def test_duplicate_uuid_keeps_first_row(self):
+        first = source_row()
+        result = self.transform([first, source_row(pte_id="descartado"),
+                                 source_row(meta_uuid="third", pte_id="   ")])
+        self.assertEqual(2, len(result))
+        self.assertEqual("000123", result.iloc[0]["pte_id"])
+        self.assertTrue(pd.isna(result.iloc[1]["pte_id"]))
+        incidence = json.loads(result.iloc[1]["meta_incidencias_calidad"])
+        self.assertEqual("   ", next(item["valor_original"] for item in incidence
+                                     if item["campo"] == "pte_id"))
+
+    def test_duplicate_cannot_hide_blocking_metadata(self):
+        rows = [source_row(), source_row(meta_completitud_pct="101")]
+        with self.assertRaisesRegex(ValueError, "meta_completitud_pct"):
+            self.transform(rows)
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "extract_psg_synthetic.csv"
+            output = Path(folder) / "output.xlsx"
+            pd.DataFrame(rows, columns=PSG_COLUMNS).to_csv(source, index=False)
+            with self.assertRaises((ValueError, SchemaValidationError)):
+                run(str(CONTRACT), str(source), str(output))
+            self.assertFalse(output.exists())
+
+    def test_nonempty_patient_id_has_no_unapproved_format_rule(self):
+        result = self.transform([source_row(pte_id="identificador-sintético")])
+        self.assertEqual("identificador-sintético", result.iloc[0]["pte_id"])
+        self.assertTrue(pd.isna(result.iloc[0]["meta_incidencias_calidad"]))
 
     def test_incompatible_clinical_numbers_become_null_with_original_value(self):
         rows = [
@@ -260,6 +306,7 @@ class PSGTransformTest(unittest.TestCase):
             read_back = read_dataset(str(source), config=self.config["input"])
             self.assertEqual("000123", read_back.loc[0, "pte_id"])
             self.assertEqual("", read_back.loc[0, "pte_edad_meses"])
+            self.assertEqual("string", str(read_back["pte_edad_anos"].dtype))
             self.assertEqual(target, run(str(CONTRACT), str(source), str(target)))
             workbook = load_workbook(target, read_only=True, data_only=True)
             try:
@@ -355,18 +402,24 @@ class PSGTransformTest(unittest.TestCase):
         self.assertEqual((0, None, 2), (result, error, len(outputs)))
 
         shared = {**unique, second_name: [source_row(meta_uuid="uuid-1", pte_id="000124")]}
-        result, error, outputs = exercise(shared)
-        self.assertIsNone(result)
-        self.assertIn(first_name, error)
-        self.assertIn(second_name, error)
-        self.assertEqual([], outputs)
+        with self.assertLogs(level="WARNING") as captured:
+            result, error, outputs = exercise(shared)
+        self.assertEqual((0, None, [first_name.replace(".csv", "_transformed.xlsx")]),
+                         (result, error, outputs))
+        self.assertIn("1 con valores distintos", " ".join(captured.output))
 
         repeated = {first_name: [source_row(meta_uuid="uuid-1"),
                                  source_row(meta_uuid="uuid-1", pte_id="000124")]}
-        result, error, outputs = exercise(repeated)
-        self.assertIsNone(result)
-        self.assertIn(first_name, error)
-        self.assertEqual([], outputs)
+        with self.assertLogs(level="WARNING") as captured:
+            result, error, outputs = exercise(repeated)
+        self.assertEqual((0, None, 1), (result, error, len(outputs)))
+        self.assertIn("1 con valores distintos", " ".join(captured.output))
+
+        identical = {first_name: [source_row(meta_uuid="uuid-1"), source_row(meta_uuid="uuid-1")]}
+        with self.assertLogs(level="WARNING") as captured:
+            result, error, outputs = exercise(identical)
+        self.assertEqual((0, None, 1), (result, error, len(outputs)))
+        self.assertIn("0 con valores distintos", " ".join(captured.output))
 
         result, error, outputs = exercise({first_name: [source_row()]}, explicit_input=True)
         self.assertEqual((0, None, 1), (result, error, len(outputs)))
