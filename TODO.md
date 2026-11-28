@@ -4,7 +4,7 @@
 **Fecha de referencia:** 2026-11-28  
 **Rama de desarrollo:** `integration/psg-evoluciones`  
 **Commit base:** `d11abaf`  
-**Estado:** 3/36 evoluciones completadas (E01–E03; E04 pendiente de formalización). 33 pendientes.
+**Estado:** 4/36 evoluciones completadas (E01–E04); PT01 cerrado. 32 pendientes.
 **Versión de referencia:** `v5.0.1`.
 **Objetivo prioritario:** operación diaria autónoma, fiable, recuperable e idempotente; rendimiento suficiente, no máximo.
 
@@ -19,7 +19,9 @@
 - Preservar la durabilidad de las escrituras, el archivado seguro y la trazabilidad. No eliminar `fsync`, bloqueos o garantías de integridad por motivos de rendimiento sin demostrar una alternativa equivalente.
 - Aplicar YAGNI. No introducir dependencias, abstracciones ni cambios de arquitectura sin necesidad demostrada.
 
-### Orientación arquitectónica aprobada para formalizar en E04
+### Arquitectura aprobada y formalizada en E04
+
+Decisión, fundamentos, alternativas y riesgos: `docs/e04_decision_arquitectura.md`.
 
 - Mantener WSL2 como entorno de ejecución, documentos originales y archivo definitivo en NTFS, y archivos intermedios/estado operativo en el sistema nativo Linux de WSL. No trasladar documentos originales a ext4 para acelerar el procesamiento.
 - No desarrollar una variante Windows nativa, instalar Cygwin ni ampliar los benchmarks de plataformas sin una necesidad operativa demostrada.
@@ -45,10 +47,12 @@
 
 **Objetivo:** cerrar el diagnóstico y formalizar la arquitectura operativa, sin ampliar estudios de rendimiento innecesariamente.
 
+**Estado:** completado el 2026-11-28; E01–E04 cerradas conforme a sus criterios de aceptación.
+
 - [x] **E01 — Revisión profunda del extractor.** Analizar flujo de funciones, operaciones de disco, CPU, memoria, extracción DOC/RTF, expresiones regulares, hashes, escrituras y auditoría. **Aceptación:** informe con hallazgos sustentados, cuellos de botella y propuestas priorizadas, sin cambios funcionales.
 - [x] **E02 — Benchmark de entornos de ejecución.** Comparar WSL sobre NTFS, WSL sobre sistema de archivos Linux y Windows nativo cuando sea viable, con la misma muestra aislada y condiciones documentadas. Medir tiempo, rendimiento, CPU/memoria cuando sea posible y equivalencia de resultados. **Aceptación:** resultados reproducibles; separar entornos no medidos de los medidos. **Resultado:** 24 mediciones DOC/RTF; C: NTFS/DrvFs 6,49–8,82 veces el tiempo ext4; resultados equivalentes, auditoría OK. E: no montada; Windows nativo no medido.
 - [x] **E03 — Compatibilidad de catdoc y archivado en Windows.** Evaluar viabilidad de catdoc (incluida opción Cygwin si procede), equivalencia del texto y las garantías de `flock`, `renameat2` y operaciones con descriptores de directorio. **Aceptación:** matriz de compatibilidad, limitaciones y pruebas disponibles; no sustituir garantías de seguridad sin equivalencia demostrada. **Resultado:** incompatibilidades POSIX confirmadas por código y documentación; Cygwin no verificado; respaldo link/unlink observado en C: NTFS, colisión y reintento sintético satisfactorios; durabilidad eléctrica y bloqueo concurrente no demostrados. Cierre del diagnóstico comunicado por Codex; revisión documental y estática parcial, no ejecución independiente.
-- [ ] **E04 — Formalizar la arquitectura de operación diaria.** Documentar la decisión aprobada de conservar WSL2, NTFS para documentos y ext4 para intermediarios, sin migración a Windows nativo ni copia de originales a ext4. Definir los requisitos de operación diaria, ventana y volumen de referencia, manejo de indisponibilidad y criterio de suficiencia del rendimiento; distinguir valores medidos de objetivos pendientes. No realizar nuevos benchmarks de plataformas por defecto. **Aceptación:** decisión documentada y aprobada, dependencias y riesgos explícitos, criterios de suficiencia operativa acordados o incertidumbres registradas con responsable y momento de resolución; sin cambios funcionales.
+- [x] **E04 — Formalizar la arquitectura de operación diaria.** Documentar la decisión aprobada de conservar WSL2, NTFS para documentos y ext4 para intermediarios, sin migración a Windows nativo ni copia de originales a ext4. Definir los requisitos de operación diaria, ventana y volumen de referencia, manejo de indisponibilidad y criterio de suficiencia del rendimiento; distinguir valores medidos de objetivos pendientes. No realizar nuevos benchmarks de plataformas por defecto. **Aceptación:** decisión documentada y aprobada, dependencias y riesgos explícitos, criterios de suficiencia operativa acordados o incertidumbres registradas con responsable y momento de resolución; sin cambios funcionales. **Resultado:** decisión formalizada en `docs/e04_decision_arquitectura.md`; ventana, volumen y disponibilidad pendientes con responsable y momento de resolución registrados.
 
 ### PT02 — Contrato de calidad y completitud (prioridad 2)
 
@@ -138,7 +142,7 @@
 
 - E02: `docs/e02_benchmark_entornos.md`, `docs/e02_benchmark.py`, `docs/e02_mediciones.json`. 24 ejecuciones sintéticas con 30/120 DOC y RTF, tres repeticiones por combinación; 54 pruebas superadas según Codex. C: NTFS/DrvFs tardó 6,49–8,82 veces el tiempo ext4; archivado y auditoría dominaron el coste en NTFS. Copia inicial del corpus y verificaciones finales excluidas de la medición. No extrapolar a E: ni a producción; Windows nativo no medido.
 - E03: `docs/e03_compatibilidad_windows.md`, `docs/e03_archivado_sintetico.py`, `docs/e03_texto_sintetico.py`. CPython Windows no compatible directamente con las primitivas POSIX; `renameat2` devuelve EINVAL en C: NTFS/DrvFs y activa link/unlink. Colisión y reintento sintéticos satisfactorios. No se demostró bloqueo concurrente, durabilidad eléctrica ni equivalencia de conversores Windows. E26 debe resolver movimiento completado sin log y evaluar recuperación de metadatos.
-- Decisión de reorientación: no optimizar por velocidad aislada. Mantener WSL2 y almacenamiento documental NTFS, intermediarios Linux y ejecución diaria. No desarrollar adaptación Windows ni transferencia de originales a ext4. Formalizar en E04; E09 y E34–E36 quedan condicionadas al beneficio operativo. El formato vigente debe cumplir garantías de publicación segura y recuperación antes de producción, independientemente de Parquet.
+- Decisión de reorientación formalizada en `docs/e04_decision_arquitectura.md`: no optimizar por velocidad aislada. Mantener WSL2 y almacenamiento documental NTFS, intermediarios Linux y ejecución diaria. No desarrollar adaptación Windows ni transferencia de originales a ext4. E09 y E34–E36 quedan condicionadas al beneficio operativo. El formato vigente debe cumplir garantías de publicación segura y recuperación antes de producción, independientemente de Parquet.
 
 ## 4. Registro de ejecución
 
@@ -153,5 +157,6 @@ Añadir una entrada por tarea terminada o bloqueada. Mantener el historial; no s
 | 2026-11-28 | E02 | Completada y validada documentalmente | 24 mediciones DOC/RTF; equivalencia de resultados y archivado, auditoría OK y 54 pruebas según Codex; revisión estática de instrumentos. E: y Windows nativo sin medir. | `docs/e02_benchmark_entornos.md`, `docs/e02_benchmark.py`, `docs/e02_mediciones.json` (base `d64afa3`) |
 | 2026-11-28 | E03 | Diagnóstico completado | Informe y comprobaciones sintéticas; revisión del informe y script de archivado, sin revisión independiente del script de texto ni ejecución independiente. Limitaciones registradas; sin cambio funcional. | `docs/e03_compatibilidad_windows.md`, `docs/e03_archivado_sintetico.py`, `docs/e03_texto_sintetico.py` (base `adcd03e`) |
 | 2026-11-28 | Hoja de ruta | Reorientada | Prioridad a operación diaria fiable, recuperación e idempotencia; optimizaciones de rendimiento condicionadas y no bloqueantes; 36 identificadores conservados. | Decisión del responsable del proyecto; formalización pendiente E04 |
+| 2026-11-28 | E04 / PT01 | Completada / cerrado | Decisiones aprobadas formalizadas; criterio de suficiencia, dependencias, riesgos e incertidumbres con responsable y momento de resolución documentados. Sin cambios funcionales ni nuevos benchmarks; versión `v5.0.1` conservada. | `docs/e04_decision_arquitectura.md`; aprobación del responsable en la solicitud de E04 (base `5c66e50`) |
 
-**Próxima tarea:** E04 — formalizar la arquitectura de operación diaria. No iniciar nuevos benchmarks ni cambiar código funcional.
+**Próxima tarea pendiente:** E05 de PT02; requiere autorización para iniciarla.
