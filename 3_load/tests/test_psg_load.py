@@ -79,12 +79,12 @@ class PsgLoadTest(unittest.TestCase):
             return client.load_table_from_dataframe.call_args.args[0]
 
     def test_contract_configuration_and_date_type(self):
-        self.assertEqual(len(SCHEMA), 157)
+        self.assertEqual(len(SCHEMA), 158)
         self.assertEqual(SCHEMA, load.load_schema(CONTRACT, "schema.transform.output.columns"))
         self.assertEqual((sum(kind == "INT" for kind in SCHEMA.values()),
                           sum(kind == "FLOAT" for kind in SCHEMA.values()),
                           sum(kind == "STRING" for kind in SCHEMA.values()),
-                          sum(kind == "DATE" for kind in SCHEMA.values())), (31, 113, 12, 1))
+                          sum(kind == "DATE" for kind in SCHEMA.values())), (31, 113, 13, 1))
         self.assertEqual(self.config.schema_yaml_path, CONTRACT)
         self.assertEqual(load.resolve_config_yaml_path("psg"), CONTRACT)
         self.assertEqual(self.config.schema_path_in_yaml, "schema.load.input.columns")

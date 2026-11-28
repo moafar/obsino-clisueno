@@ -140,13 +140,25 @@ class AuditTest(unittest.TestCase):
         self.assertNotIn("Coherencia matemática", report)
         self.assertNotIn("porcentaje fuera de 0", report)
 
-    def test_invalid_technical_type_remains_blocking(self):
+    def test_invalid_clinical_numeric_type_is_nonblocking(self):
         self.row["arq_tiempo_sueno_min"] = "ilegible"
+        self.row["evresp_ac_numero_n"] = "12,5"
         self.row["meta_completitud_pct"] = _completeness(self.row, "doc")
+        self.write_csv()
+        state, report = self.audit()
+        self.assertEqual("ADVERTENCIA", state)
+        self.assertIn("ADVERTENCIA — Tipos clínicos numéricos", report)
+        self.assertIn("Valores incompatibles tolerados por E16: 2", report)
+        self.assertIn("OK — Tipos YAML", report)
+        self.assertIn("OK — Recálculo de completitud", report)
+
+    def test_invalid_technical_type_remains_blocking(self):
+        self.row["meta_completitud_pct"] = "ilegible"
         self.write_csv()
         state, report = self.audit()
         self.assertEqual("ERROR", state)
         self.assertIn("ERROR — Tipos YAML", report)
+        self.assertIn("OK — Tipos clínicos numéricos", report)
 
     def test_rejection_codes_reconcile_without_exposing_paths(self):
         origins = [self.source / "unreadable.doc", self.source / "nohash.rtf"]

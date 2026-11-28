@@ -372,6 +372,7 @@ schema:
         meta_uuid: string
         meta_version_control: string
         meta_completitud_pct: float
+        meta_incidencias_calidad: string
   load:
     input:
       columns: *transform_output_columns

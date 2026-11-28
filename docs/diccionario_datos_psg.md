@@ -1,12 +1,12 @@
 # Diccionario de datos — polisomnografía (PSG)
 
-> **Estado:** diccionario canónico de 157 campos usado por el contrato de salida vigente; la matriz de disponibilidad procede de la revisión del 23 de noviembre de 2026. La entrada de extracción contiene 159 columnas físicas por el desglose de cuatro medidas antropométricas en valor y unidad. La completitud por formato se documenta en `e06_denominadores_psg.md` y `e07_completitud_psg.md`.
+> **Estado:** diccionario canónico de 158 campos usado por el contrato de salida vigente; la matriz de disponibilidad procede de la revisión del 23 de noviembre de 2026. La entrada de extracción contiene 159 columnas físicas por el desglose de cuatro medidas antropométricas en valor y unidad. La completitud por formato se documenta en `e06_denominadores_psg.md` y `e07_completitud_psg.md`.
 
 ## 1. Alcance y verificación
 
 Se consolidan los nombres acordados para PSG y se contrasta su disponibilidad con **seis informes de ejemplo**: **3 RTF** y **3 DOC**. La comparación distingue presencia de un valor verificable de mera existencia de una etiqueta o una columna. Se ha revisado la matriz de extracción experimental y las tablas originales de ambas plantillas. **No equivale a validar todo el universo de informes ni el pipeline de producción**.
 
-**Total de campos canónicos propuestos: 157**, distribuidos en 10 grupos.
+**Total de campos canónicos: 158**, distribuidos en 10 grupos.
 
 ### Interpretación de la disponibilidad
 
@@ -242,6 +242,7 @@ Las referencias de disponibilidad se basan en la matriz de seis documentos, con 
 | 155 | `meta_uuid` | Hash identificador determinista del contenido binario del archivo de origen. | texto | — | Generado | Generado |
 | 156 | `meta_version_control` | Marca de fecha y hora de la ejecución de extracción, en el formato histórico. | texto | — | Generado | Generado |
 | 157 | `meta_completitud_pct` | Porcentaje de indicadores lógicos aplicables con valor recuperado: 124 en DOC y 129 en RTF. Edad en años/meses/días cuenta una sola vez; 0 explícito cuenta como presente. No mide exactitud clínica. | decimal | % | Generado | Generado |
+| 158 | `meta_incidencias_calidad` | JSON STRING con incidencias técnicas de conversión por fila (`campo`, `valor_original`, `error`, `accion`); NULL sin incidencias. | texto | — | Generado | Generado |
 
 ## 3. Diferencias de disponibilidad entre DOC y RTF
 
@@ -332,7 +333,7 @@ Las referencias de disponibilidad se basan en la matriz de seis documentos, con 
 | `meta_version_control` | El campo histórico es una marca temporal, no un identificador de versión semántica. |
 
 
-### Inclusión y completitud de la extracción (desde el contrato de 157 campos)
+### Inclusión y completitud de la extracción (desde el contrato de 158 campos)
 
 - **Inclusión:** detección del título «INFORME DE POLISOMNOGRAFÍA BASAL» (excluidos informes DAM) en el contenido convertido; una tabla ausente o ilegible no invalida por sí sola el documento.
 - **Extracción:** las secciones se evalúan independientemente. Las filas desalineadas no se asignan por conjetura; los valores no recuperables quedan nulos.

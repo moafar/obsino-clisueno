@@ -1,4 +1,5 @@
 import re
+import json
 import io
 import sys
 import tempfile
@@ -21,7 +22,8 @@ from transform_commons.errors import SchemaValidationError
 from transform_commons.io import read_dataset
 from transform_commons.schema import validate_input_schema, validate_output_schema
 from psg.core.transforms import DATA_TYPES, FINAL_COLS, register_psg_operations
-from psg.main import _discover_input_files, _load_pipeline_config, _require_exact_columns, execute, run
+from psg.main import (_discover_input_files, _load_pipeline_config,
+                      _require_exact_columns, _validate_psg_input_schema, execute, run)
 from xpap.core.transforms import DATA_TYPES as XPAP_DATA_TYPES
 from xpap.core.transforms import FINAL_COLS as XPAP_FINAL_COLS
 from xpap.core.transforms import register_xpap_operations
@@ -52,7 +54,7 @@ class PSGTransformTest(unittest.TestCase):
         registry = OperationRegistry()
         register_psg_operations(registry)
         _require_exact_columns(source, self.config["schema"]["input"], "entrada")
-        validate_input_schema(source, self.config["schema"]["input"])
+        _validate_psg_input_schema(source, self.config["schema"]["input"])
         output = run_pipeline(self.config, registry, source)
         _require_exact_columns(output, self.config["schema"]["output"], "salida")
         validate_output_schema(output, self.config["schema"]["output"])
@@ -66,7 +68,7 @@ class PSGTransformTest(unittest.TestCase):
         )
         types = {"texto": "string", "categoría": "string", "entero": "int",
                  "decimal": "float", "fecha": "date"}
-        self.assertEqual(157, len(rows))
+        self.assertEqual(158, len(rows))
         self.assertEqual({name: types[kind] for name, kind in rows}, DATA_TYPES)
         self.assertEqual([name for name, _ in rows], FINAL_COLS)
         self.assertEqual(list(PSG_COLUMNS), list(self.config["schema"]["input"]["columns"]))
@@ -101,7 +103,7 @@ class PSGTransformTest(unittest.TestCase):
         ]
         result = self.transform(rows)
         self.assertEqual(3, len(result))
-        self.assertEqual(157, len(result.columns))
+        self.assertEqual(158, len(result.columns))
         self.assertEqual(["000123", "000124", "000125"], result["pte_id"].tolist())
         self.assertEqual(11.9167, result.loc[0, "pte_edad_decimal_anos"])
         self.assertEqual("Menor de 12", result.loc[0, "pte_grupo_edad"])
@@ -122,18 +124,50 @@ class PSGTransformTest(unittest.TestCase):
         self.assertEqual("Int64", str(result["pte_edad_anos"].dtype))
         self.assertEqual("Float64", str(result["pte_peso_kg"].dtype))
         self.assertTrue(pd.api.types.is_datetime64_any_dtype(result["meta_fecha_estudio"]))
+        self.assertTrue(result["meta_incidencias_calidad"].isna().all())
 
-    def test_invalid_values_and_duplicate_uuid_raise_without_dropping(self):
+    def test_invalid_metadata_and_duplicate_uuid_raise_without_dropping(self):
         for changes in (
-            {"pte_edad_anos": "12,5"},
             {"meta_completitud_pct": "101"},
-            {"arq_tiempo_sueno_min": "valor ilegible"},
+            {"meta_completitud_pct": "valor ilegible"},
             {"meta_fecha_estudio": "fecha imposible"},
         ):
             with self.subTest(changes=changes), self.assertRaises((ValueError, SchemaValidationError)):
                 self.transform([source_row(**changes)])
         with self.assertRaisesRegex(ValueError, "duplicado"):
             self.transform([source_row(), source_row(pte_id="000124")])
+
+    def test_incompatible_clinical_numbers_become_null_with_original_value(self):
+        rows = [
+            source_row(pte_edad_anos="12,5", arq_tiempo_sueno_min="valor ilegible",
+                       pte_peso_valor="peso?", evresp_ah_numero_n="inf",
+                       clin_epworth_puntos="9999999999999999999999"),
+            source_row(meta_uuid="clean-2", pte_id="000124", pte_edad_anos="0",
+                       arq_tiempo_sueno_min="3,5", pte_peso_valor="70000",
+                       pte_peso_unidad="g"),
+            source_row(meta_uuid="absent-3", pte_id="000125", pte_edad_anos="N/A",
+                       arq_tiempo_sueno_min="--", pte_peso_valor=""),
+        ]
+        result = self.transform(rows)
+        for column in ("pte_edad_anos", "arq_tiempo_sueno_min", "pte_peso_kg",
+                       "evresp_ah_numero_n"):
+            self.assertTrue(pd.isna(result.loc[0, column]), column)
+        self.assertEqual("Int64", str(result["pte_edad_anos"].dtype))
+        self.assertEqual("Float64", str(result["arq_tiempo_sueno_min"].dtype))
+        self.assertEqual(0, result.loc[1, "pte_edad_anos"])
+        self.assertEqual(3.5, result.loc[1, "arq_tiempo_sueno_min"])
+        self.assertEqual(70, result.loc[1, "pte_peso_kg"])
+        self.assertTrue(result.loc[1:, "meta_incidencias_calidad"].isna().all())
+        incidents = json.loads(result.loc[0, "meta_incidencias_calidad"])
+        self.assertEqual(5, len(incidents))
+        self.assertEqual({"pte_edad_anos": "12,5", "arq_tiempo_sueno_min": "valor ilegible",
+                          "evresp_ah_numero_n": "inf", "pte_peso_valor": "peso?",
+                          "clin_epworth_puntos": "9999999999999999999999"},
+                         {item["campo"]: item["valor_original"] for item in incidents})
+        self.assertTrue(all(set(item) == {"campo", "valor_original", "error", "accion"}
+                            and item["accion"] == "convertido_a_null" for item in incidents))
+        self.assertEqual(result.loc[0, "meta_incidencias_calidad"],
+                         self.transform(rows).loc[0, "meta_incidencias_calidad"])
 
     def test_invalid_anthropometric_units_become_null(self):
         cases = [
@@ -230,13 +264,30 @@ class PSGTransformTest(unittest.TestCase):
             workbook = load_workbook(target, read_only=True, data_only=True)
             try:
                 sheet = workbook.active
-                self.assertEqual(157, sheet.max_column)
+                self.assertEqual(158, sheet.max_column)
                 self.assertEqual("000123", sheet.cell(2, FINAL_COLS.index("pte_id") + 1).value)
                 self.assertEqual(70, sheet.cell(2, FINAL_COLS.index("pte_peso_kg") + 1).value)
                 self.assertEqual(5.5, sheet.cell(2, FINAL_COLS.index("oxi_t90_pct") + 1).value)
                 self.assertEqual("De 12 a 18", sheet.cell(2, FINAL_COLS.index("pte_grupo_edad") + 1).value)
                 self.assertEqual("Texto íntegro con acentos.\nSegunda línea.",
                                  sheet.cell(2, FINAL_COLS.index("clin_interpretacion") + 1).value)
+            finally:
+                workbook.close()
+
+    def test_incidence_is_serialized_in_xlsx_output(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "extract_psg_synthetic.csv"
+            target = Path(folder) / "output.xlsx"
+            pd.DataFrame([source_row(arq_tiempo_sueno_min="no numérico")],
+                         columns=PSG_COLUMNS).to_csv(source, index=False)
+            self.assertEqual(target, run(str(CONTRACT), str(source), str(target)))
+            workbook = load_workbook(target, read_only=True, data_only=True)
+            try:
+                value = workbook.active.cell(2, FINAL_COLS.index("meta_incidencias_calidad") + 1).value
+                self.assertEqual([{
+                    "campo": "arq_tiempo_sueno_min", "valor_original": "no numérico",
+                    "error": "decimal_incompatible", "accion": "convertido_a_null",
+                }], json.loads(value))
             finally:
                 workbook.close()
 

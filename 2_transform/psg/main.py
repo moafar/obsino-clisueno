@@ -113,6 +113,13 @@ def _require_exact_columns(dataframe, schema_config: dict, section: str) -> None
         raise ValueError(f"Columnas u orden incorrectos en {section} PSG")
 
 
+def _validate_psg_input_schema(dataframe, schema_config: dict) -> None:
+    # Los números clínicos se convierten con incidencias en la operación PSG.
+    metadata = {name: kind for name, kind in schema_config["columns"].items()
+                if name.startswith("meta_")}
+    validate_input_schema(dataframe, {"columns": metadata})
+
+
 def _resolve_nested_path(payload: Any, dotted_path: str) -> Any:
     current = payload
     for segment in [part.strip() for part in dotted_path.split(".") if part.strip()]:
@@ -212,7 +219,7 @@ def run(
     dataframe = read_dataset(str(resolved_input_path), config=pipeline_config.get("input", {}))
     _require_exact_columns(dataframe, pipeline_config.get("schema", {}).get("input", {}), "entrada")
 
-    validate_input_schema(
+    _validate_psg_input_schema(
         dataframe=dataframe,
         schema_config=pipeline_config.get("schema", {}).get("input", {}),
     )

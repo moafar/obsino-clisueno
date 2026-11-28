@@ -568,7 +568,7 @@ def validate_target_schema(
             for field in fields
         ]
     if signature(actual) != signature(expected):
-        die("El esquema físico de la tabla destino no coincide con los 157 campos PSG")
+        die(f"El esquema físico de la tabla destino no coincide con los {len(expected)} campos PSG")
 
 
 def cast_dataframe(dataframe: pd.DataFrame, schema_yaml: dict[str, str]) -> pd.DataFrame:
@@ -772,7 +772,7 @@ def run(config: LoaderConfig, flow: str) -> None:
         if config.schema_path_in_yaml != "schema.load.input.columns":
             die("PSG debe usar schema.load.input.columns")
         output_schema = load_schema(config.schema_yaml_path, "schema.transform.output.columns")
-        if schema_yaml != output_schema or len(schema_yaml) != 157:
+        if schema_yaml != output_schema or len(schema_yaml) != 158:
             die("El contrato de carga PSG no coincide con la salida canónica de transform")
         validate_target_schema(client, config.table_fqn, bq_schema)
     log(f"Esquema leído con {len(expected_columns)} campos")

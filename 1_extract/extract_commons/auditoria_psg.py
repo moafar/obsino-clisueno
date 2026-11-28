@@ -49,7 +49,9 @@ def typed(value, kind):
     if kind not in {"int", "float"}:
         raise ValueError("Tipo no soportado")
     number = float(value.strip().replace(",", "."))
-    if not math.isfinite(number) or (kind == "int" and not number.is_integer()):
+    if (not math.isfinite(number) or
+            (kind == "int" and (not number.is_integer() or
+                                not -(2**63) <= number < 2**63))):
         raise ValueError("Número inválido")
     return number
 
@@ -231,7 +233,7 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
               f"adicionales: {len(set(header) - set(schema))}; orden exacto: {schema_ok}.")
 
     uuids = Counter()
-    invalid_types, months = Counter(), Counter()
+    invalid_clinical_types, invalid_technical_types, months = Counter(), Counter(), Counter()
     indicator_counts = defaultdict(Counter)
     format_rows, scores_by_format = Counter(), defaultdict(list)
     scores, dates, ids = [], [], set()
@@ -258,7 +260,10 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
                 try:
                     typed(value, kind)
                 except (ValueError, OverflowError):
-                    invalid_types[name] += 1
+                    if kind in {"int", "float"} and not name.startswith("meta_"):
+                        invalid_clinical_types[name] += 1
+                    else:
+                        invalid_technical_types[name] += 1
             try:
                 date = date_value(row["meta_fecha_estudio"])
                 if date is None:
@@ -298,8 +303,13 @@ def audit_psg(csv_path, log_path, contract_path, source, archive, result=None,
                     trace_bad += 1
         check("UUID", status(not invalid_uuid and len(uuids) == len(rows)),
               f"Inválidos o ausentes: {invalid_uuid}; repetidos: {len(rows)-len(uuids)}.")
-        check("Tipos YAML", status(not invalid_types), f"Valores inválidos: {sum(invalid_types.values())}.")
-        for name, count in invalid_types.items():
+        check("Tipos YAML", status(not invalid_technical_types),
+              f"Valores técnicos inválidos: {sum(invalid_technical_types.values())}.")
+        for name, count in invalid_technical_types.items():
+            lines.append(f"  - {name}: {count}")
+        check("Tipos clínicos numéricos", "ADVERTENCIA" if invalid_clinical_types else "OK",
+              f"Valores incompatibles tolerados por E16: {sum(invalid_clinical_types.values())}.")
+        for name, count in invalid_clinical_types.items():
             lines.append(f"  - {name}: {count}")
         check("Identificación", "ADVERTENCIA" if missing_id else "OK", f"ID ausentes: {missing_id}; identificadores distintos: {len(ids)}.")
         check("Fechas", "ADVERTENCIA" if missing_date or invalid_date else "OK",

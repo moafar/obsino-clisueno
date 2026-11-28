@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import json
 from typing import Any
 
 import pandas as pd
@@ -166,11 +167,13 @@ DATA_TYPES: dict[str, str] = {
     "meta_uuid": "string",
     "meta_version_control": "string",
     "meta_completitud_pct": "float",
+    "meta_incidencias_calidad": "string",
 }
 FINAL_COLS = list(DATA_TYPES)
 DERIVED = {
     "pte_edad_decimal_anos", "pte_grupo_edad", "pte_peso_kg",
     "pte_talla_cm", "pte_cuello_cm", "pte_perimetro_abdominal_cm",
+    "meta_incidencias_calidad",
 }
 UNIT_FACTORS = {
     "peso": {"kg": 1, "kgs": 1, "g": 0.001, "gr": 0.001, "grs": 0.001},
@@ -180,16 +183,28 @@ UNIT_FACTORS = {
 }
 
 
-def _numeric(series: pd.Series, column: str, integer: bool = False) -> pd.Series:
-    text = series.astype("string").str.strip().replace({"": pd.NA, "-": pd.NA, "--": pd.NA})
-    text = text.str.replace(",", ".", regex=False)
-    try:
-        values = pd.to_numeric(text, errors="raise")
-        if integer and ((values.dropna() % 1) != 0).any():
-            raise ValueError("Valor no entero")
-        return values.astype("Int64" if integer else "Float64")
-    except (ValueError, TypeError) as exc:
-        raise ValueError(f"Valor numérico inválido en {column}") from exc
+def _numeric(series: pd.Series, column: str, integer: bool = False,
+             incidents: list[list[dict[str, str]]] | None = None) -> pd.Series:
+    text = series.astype("string").str.strip()
+    absent = text.str.upper().isin({"", "N/A", "NA", "NAN", "NULL", "NONE"})
+    absent |= text.str.fullmatch(r"[.\-]+", na=False)
+    text = text.mask(absent).str.replace(",", ".", regex=False)
+    values = pd.to_numeric(text, errors="coerce")
+    invalid = text.notna() & (values.isna() | values.isin([math.inf, -math.inf]))
+    if integer:
+        invalid |= text.notna() & values.mod(1).ne(0).fillna(False)
+        invalid |= values.ge(2**63).fillna(False) | values.lt(-(2**63)).fillna(False)
+    if incidents is None and invalid.fillna(False).any():
+        raise ValueError(f"Valor numérico inválido en {column}")
+    if incidents is not None:
+        error = "entero_incompatible" if integer else "decimal_incompatible"
+        for position, is_invalid in enumerate(invalid.fillna(False).to_numpy(dtype=bool)):
+            if is_invalid:
+                incidents[position].append({
+                    "campo": column, "valor_original": str(series.iloc[position]),
+                    "error": error, "accion": "convertido_a_null",
+                })
+    return values.mask(invalid).astype("Int64" if integer else "Float64")
 
 
 def _date(series: pd.Series, column: str) -> pd.Series:
@@ -200,8 +215,10 @@ def _date(series: pd.Series, column: str) -> pd.Series:
     return parsed
 
 
-def _converted_unit(dataframe: pd.DataFrame, part: str) -> pd.Series:
-    values = _numeric(dataframe[f"pte_{part}_valor"], f"pte_{part}_valor")
+def _converted_unit(dataframe: pd.DataFrame, part: str,
+                    incidents: list[list[dict[str, str]]]) -> pd.Series:
+    values = _numeric(dataframe[f"pte_{part}_valor"], f"pte_{part}_valor",
+                      incidents=incidents)
     units = dataframe[f"pte_{part}_unidad"].astype("string").str.strip().str.lower()
     factors = UNIT_FACTORS[part]
     # Unidad ausente/no reconocida: el dato derivado queda nulo, sin inferir la unidad.
@@ -221,13 +238,15 @@ def _op_psg_basal_transform(dataframe: pd.DataFrame, **_: Any) -> pd.DataFrame:
         raise ValueError("El esquema de entrada PSG debe tener exactamente 159 columnas")
 
     df = dataframe.copy()
+    incidents: list[list[dict[str, str]]] = [[] for _ in range(len(df))]
     for column, dtype in DATA_TYPES.items():
         if column in DERIVED:
             continue
         if dtype == "int":
-            df[column] = _numeric(df[column], column, integer=True)
+            df[column] = _numeric(df[column], column, integer=True, incidents=incidents)
         elif dtype == "float":
-            df[column] = _numeric(df[column], column)
+            df[column] = _numeric(df[column], column,
+                                  incidents=None if column.startswith("meta_") else incidents)
         elif dtype == "date":
             df[column] = _date(df[column], column)
         else:
@@ -252,6 +271,8 @@ def _op_psg_basal_transform(dataframe: pd.DataFrame, **_: Any) -> pd.DataFrame:
         df.loc[calculable, "oxi_t90_pct"] = (100 * numerator / denominator).astype("Float64")
 
     completeness = df["meta_completitud_pct"]
+    if completeness.isna().any():
+        raise ValueError("meta_completitud_pct ausente")
     if ((completeness < 0) | (completeness > 100)).fillna(False).any():
         raise ValueError("meta_completitud_pct fuera del rango 0-100")
     uuids = df["meta_uuid"].str.strip()
@@ -277,7 +298,11 @@ def _op_psg_basal_transform(dataframe: pd.DataFrame, **_: Any) -> pd.DataFrame:
         ("cuello", "pte_cuello_cm"),
         ("perimetro_abdominal", "pte_perimetro_abdominal_cm"),
     ):
-        df[target] = _converted_unit(df, part)
+        df[target] = _converted_unit(df, part, incidents)
+
+    df["meta_incidencias_calidad"] = pd.Series(
+        [json.dumps(items, ensure_ascii=False, separators=(",", ":")) if items else pd.NA
+         for items in incidents], index=df.index, dtype="string")
 
     return df[FINAL_COLS].copy()
 
