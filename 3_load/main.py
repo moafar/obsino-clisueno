@@ -9,6 +9,7 @@ manual en consola, conservando validaciones clave:
 from __future__ import annotations
 
 import argparse
+import json
 import fcntl
 import logging
 import math
@@ -192,7 +193,7 @@ def _validate_input_in_staging(flow: str, input_path: Path) -> None:
         )
 
 
-def parse_cli_args() -> tuple[str, Path, str | None]:
+def parse_cli_args() -> tuple[str, Path, str | None, bool, str | None]:
     # Selecciona flujo y ruta de entrada desde CLI.
     parser = argparse.ArgumentParser(description="Carga manual a BigQuery")
     parser.add_argument(
@@ -215,7 +216,11 @@ def parse_cli_args() -> tuple[str, Path, str | None]:
         ),
     )
     parser.add_argument("--table-id", help="Tabla canónica PSG previamente creada")
+    parser.add_argument("--yes", action="store_true", help="Confirmar carga PSG sin interacción")
+    parser.add_argument("--result-json", help="Resumen técnico PSG para el orquestador")
     args = parser.parse_args()
+    if args.flow != "psg" and (args.yes or args.result_json):
+        parser.error("Las opciones de orquestación solo se admiten en PSG")
     raw_input = args.input or args.input_positional
 
     selected_flow = str(args.flow)
@@ -229,7 +234,7 @@ def parse_cli_args() -> tuple[str, Path, str | None]:
 
     if args.table_id and selected_flow != "psg":
         die("--table-id solo está disponible para PSG")
-    return selected_flow, resolved_input, args.table_id
+    return selected_flow, resolved_input, args.table_id, args.yes, args.result_json
 
 
 def resolve_config_yaml_path(flow: str) -> Path:
@@ -703,7 +708,7 @@ def move_loaded_input_file(source_path: Path, _flow: str) -> Path:
 
 def load_psg_new_rows(config: LoaderConfig, client: bigquery.Client,
                       dataframe: pd.DataFrame, uuid_values: list[str],
-                      bq_schema: list[bigquery.SchemaField]) -> None:
+                      bq_schema: list[bigquery.SchemaField]) -> dict:
     """Serializa localmente consulta, inserción confirmada y movimiento PSG."""
     STAGING_DIR.mkdir(parents=True, exist_ok=True)
     lock_path = STAGING_DIR / f".psg-load-{config.project_id}-{config.dataset_id}-{config.table_id}.lock"
@@ -731,11 +736,14 @@ def load_psg_new_rows(config: LoaderConfig, client: bigquery.Client,
                 f"enviados={sent}, insertados={inserted}")
             moved_path = move_loaded_input_file(config.source_path, "psg")
             log(f"Archivo de entrada movido a: {moved_path}")
+            return {"loaded": str(moved_path), "counts": {"received": received,
+                    "omitted": omitted, "sent": sent, "inserted": inserted},
+                    "job_id": getattr(job, "job_id", None) if sent else None}
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
 
 
-def run(config: LoaderConfig, flow: str) -> None:
+def run(config: LoaderConfig, flow: str, non_interactive: bool = False) -> dict | None:
     log("Iniciando carga manual a BigQuery")
 
     if flow == "psg":
@@ -759,7 +767,8 @@ def run(config: LoaderConfig, flow: str) -> None:
 
     # 2) Transparencia operativa: mostrar configuración y pedir confirmación humana.
     show_configuration(config)
-    confirm_execution()
+    if not non_interactive or flow != "psg":
+        confirm_execution()
     validate_paths(config)
 
     # 3) Autenticación y verificación de acceso a BigQuery.
@@ -800,8 +809,7 @@ def run(config: LoaderConfig, flow: str) -> None:
     log("Validando duplicados en el lote")
     if flow == "psg":
         uuid_values = validate_psg_uuids(dataframe)
-        load_psg_new_rows(config, client, dataframe, uuid_values, bq_schema)
-        return
+        return load_psg_new_rows(config, client, dataframe, uuid_values, bq_schema)
     else:
         uuid_values = extract_uuid_values(dataframe, config.uuid_field)
         validate_batch_duplicates(uuid_values, config.uuid_field)
@@ -852,14 +860,16 @@ def run(config: LoaderConfig, flow: str) -> None:
 
 if __name__ == "__main__":
     try:
-        selected_flow, selected_input_path, selected_table_id = parse_cli_args()
+        selected_flow, selected_input_path, selected_table_id, unattended, result_json = parse_cli_args()
         setup_logging(selected_flow)
         selected_config_path = resolve_config_yaml_path(selected_flow)
         log(f"Flujo seleccionado: {selected_flow}")
         log(f"Artefacto de entrada: {selected_input_path}")
         log(f"YAML de configuración: {selected_config_path}")
         runtime_config = load_runtime_config(selected_config_path, selected_input_path, selected_table_id)
-        run(runtime_config, selected_flow)
+        result = run(runtime_config, selected_flow, non_interactive=unattended)
+        if result_json:
+            Path(result_json).write_text(json.dumps(result), encoding="utf-8")
     except Exception as error:
         if LOGGER:
             LOGGER.exception("ERROR: %s", error)

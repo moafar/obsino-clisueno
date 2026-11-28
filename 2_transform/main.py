@@ -82,7 +82,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Ejecuta validación y transformaciones sin escribir salida",
     )
-    return parser.parse_args()
+    parser.add_argument("--yes", action="store_true", help="Confirmar transformación PSG sin interacción")
+    args = parser.parse_args()
+    if args.yes and args.flow != "psg":
+        parser.error("--yes solo se admite en PSG")
+    return args
 
 
 def resolve_config_path(flow: str, override_config: str | None) -> str:
@@ -109,6 +113,7 @@ def main() -> int:
         from psg.main import execute as execute_psg
 
         return execute_psg(
+            non_interactive=args.yes,
             config_path=config_path,
             input_path=resolved_input,
             output_path=args.output,

@@ -347,6 +347,7 @@ def execute(
     input_path: str | None,
     output_path: str | None,
     dry_run: bool,
+    non_interactive: bool = False,
 ) -> int:
     search_bases = _search_bases()
     pipeline_config = _load_pipeline_config(config_path, search_bases)
@@ -385,7 +386,7 @@ def execute(
             )
         )
 
-    if not _confirm_execution(plans, dry_run):
+    if not non_interactive and not _confirm_execution(plans, dry_run):
         print("Procesamiento cancelado por el usuario.")
         return 0
 

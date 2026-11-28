@@ -199,7 +199,7 @@ class PsgLoadTest(unittest.TestCase):
         self.write([self.row()])
         with patch.object(load, "STAGING_DIR", Path(self.temp.name)), \
              patch.object(sys, "argv", ["load", "--flow", "psg", "--input", str(self.path)]):
-            self.assertEqual(("psg", self.path, None), load.parse_cli_args())
+            self.assertEqual(("psg", self.path, None, False, None), load.parse_cli_args())
         old = self.path.with_suffix(".xlsx")
         old.touch()
         with patch.object(load, "STAGING_DIR", Path(self.temp.name)), \

@@ -3,6 +3,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 import yaml
+import json
 
 from extract_commons.logger import setup_logger
 from extract_commons.auditoria_psg import audit_psg
@@ -55,7 +56,13 @@ def parse_args():
     p.add_argument("--archive-dest", help="Destino de archivado PSG (sobrescribe el YAML)")
     p.add_argument("--output-dir", help="Directorio CSV PSG (sobrescribe el YAML)")
     p.add_argument("--test-root", help="Raíz aislada obligatoria en modo test PSG")
-    return p.parse_args()
+    p.add_argument("--yes", action="store_true", help="Confirmar operación PSG sin interacción")
+    p.add_argument("--output-file", help="Nombre CSV PSG explícito dentro de --output-dir")
+    p.add_argument("--result-json", help="Resumen técnico PSG para el orquestador")
+    args = p.parse_args()
+    if args.flow != "psg" and (args.yes or args.output_file or args.result_json):
+        p.error("Las opciones de orquestación solo se admiten en PSG")
+    return args
 
 
 def resolve_config_yaml_path(flow: str) -> Path:
@@ -253,12 +260,13 @@ def _orchestrate_psg(args, cfg: Config) -> int:
     _show_psg_configuration(args.mode, source, destination, output, args.dry_run)
     if args.dry_run:
         return EXIT_OK
-    try:
-        answer = input("¿Confirmas el inicio de la operación? [s/N]: ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        return EXIT_OK
-    if answer not in ("s", "si", "sí"):
-        return EXIT_OK
+    if not getattr(args, "yes", False):
+        try:
+            answer = input("¿Confirmas el inicio de la operación? [s/N]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return EXIT_OK
+        if answer not in ("s", "si", "sí"):
+            return EXIT_OK
     log_path = setup_logging_from_config(cfg, force_debug=args.verbose, flow="psg")
     orchestration_started_at = time.perf_counter()
     phase_times = {}
@@ -266,7 +274,14 @@ def _orchestrate_psg(args, cfg: Config) -> int:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
             output_map = build_timestamped_output_map("psg", cfg.subflujos_salida_unificada)
+            explicit = getattr(args, "output_file", None)
+            if explicit:
+                if Path(explicit).name != explicit or not re.fullmatch(r"extract_psg_[A-Za-z0-9_-]+\.csv", explicit):
+                    raise ValueError("Nombre CSV PSG explícito inválido")
+                output_map["BASAL"] = explicit
             csv_path = output / output_map["BASAL"]
+            if explicit and csv_path.exists():
+                raise FileExistsError(csv_path)
             # Cada auditoría debe corresponder exclusivamente a esta ejecución.
             if csv_path.exists():
                 stem = csv_path.stem
@@ -315,6 +330,12 @@ def _orchestrate_psg(args, cfg: Config) -> int:
                         f"{phase_times['procesamiento_s']:.3f}" if "procesamiento_s" in phase_times else "NO_EVALUADO",
                         f"{phase_times['auditoria_s']:.3f}" if "auditoria_s" in phase_times else "NO_EVALUADO",
                         time.perf_counter() - orchestration_started_at)
+    if getattr(args, "result_json", None):
+        Path(args.result_json).write_text(json.dumps({
+            "csv": str(csv_path), "audit": str(audit_path), "audit_state": audit_state,
+            "counts": {k: v for k, v in result.items() if isinstance(v, (int, float))},
+            "times": phase_times, "log": str(log_path),
+        }), encoding="utf-8")
     if (audit_state == "ERROR" or result.get("archivos_fallo_archivado", 0)
             or result.get("errores_recorrido", 0) or result.get("errores_procesamiento", 0)):
         return EXIT_PROCESS
