@@ -9,6 +9,7 @@ manual en consola, conservando validaciones clave:
 from __future__ import annotations
 
 import argparse
+import fcntl
 import logging
 import math
 import os
@@ -731,6 +732,40 @@ def move_loaded_input_file(source_path: Path, _flow: str) -> Path:
     return destination_path
 
 
+def load_psg_new_rows(config: LoaderConfig, client: bigquery.Client,
+                      dataframe: pd.DataFrame, uuid_values: list[str],
+                      bq_schema: list[bigquery.SchemaField]) -> None:
+    """Serializa localmente consulta, inserción confirmada y movimiento PSG."""
+    STAGING_DIR.mkdir(parents=True, exist_ok=True)
+    lock_path = STAGING_DIR / f".psg-load-{config.project_id}-{config.dataset_id}-{config.table_id}.lock"
+    with lock_path.open("a+b") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            received = len(dataframe)
+            existing = find_existing_uuids(client, config.table_fqn, config.uuid_field, uuid_values)
+            to_send = dataframe.loc[~dataframe[config.uuid_field].isin(existing)].copy()
+            omitted = received - len(to_send)
+            sent = len(to_send)
+            if received != omitted + sent:
+                die("No concilian los registros PSG recibidos, omitidos y enviados")
+            inserted = 0
+            if sent:
+                job_config = bigquery.LoadJobConfig(schema=bq_schema,
+                                                     write_disposition=config.write_disposition)
+                job = client.load_table_from_dataframe(to_send, config.table_fqn,
+                                                       job_config=job_config)
+                job.result()
+                inserted = job.output_rows
+                if inserted != sent:
+                    die(f"Carga PSG no conciliada: enviados={sent}, insertados={inserted}")
+            log(f"Conciliación PSG: recibidos={received}, omitidos={omitted}, "
+                f"enviados={sent}, insertados={inserted}")
+            moved_path = move_loaded_input_file(config.source_excel_path, "psg")
+            log(f"Archivo de entrada movido a: {moved_path}")
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
 def run(config: LoaderConfig, flow: str) -> None:
     log("Iniciando carga manual a BigQuery")
 
@@ -796,6 +831,8 @@ def run(config: LoaderConfig, flow: str) -> None:
     log("Validando duplicados en el lote")
     if flow == "psg":
         uuid_values = validate_psg_uuids(dataframe)
+        load_psg_new_rows(config, client, dataframe, uuid_values, bq_schema)
+        return
     else:
         uuid_values = extract_uuid_values(dataframe, config.uuid_field)
         validate_batch_duplicates(uuid_values, config.uuid_field)
@@ -805,8 +842,6 @@ def run(config: LoaderConfig, flow: str) -> None:
         log("Validando duplicados entre lote y BigQuery")
         existing_uuids = find_existing_uuids(client, config.table_fqn, config.uuid_field, uuid_values)
         if existing_uuids:
-            if flow == "psg":
-                die(f"{len(existing_uuids)} UUID PSG ya existen en la tabla destino")
             sorted_existing_uuids = sorted(existing_uuids)
             log_detail_message = (
                 f"ver detalle de UUID repetidos en el log: "

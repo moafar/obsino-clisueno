@@ -2,12 +2,15 @@
 
 import importlib.util
 import io
+import json
+import time
 import sys
 import tempfile
 import unittest
 from dataclasses import replace
 from datetime import datetime
 from contextlib import redirect_stdout
+from threading import Thread
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -31,7 +34,14 @@ class FakeClient:
     def __init__(self, schema, existing=()):
         self.schema = schema
         self.existing = set(existing)
-        self.load_table_from_dataframe = Mock(return_value=SimpleNamespace(result=Mock(), output_rows=1))
+        self.load_table_from_dataframe = Mock(side_effect=self._load)
+
+    def _load(self, dataframe, _table, job_config=None):
+        uuid_field = "meta_uuid" if "meta_uuid" in dataframe else "xpap_uuid"
+        uuids = set(dataframe[uuid_field])
+        def finish():
+            self.existing.update(uuids)
+        return SimpleNamespace(result=finish, output_rows=len(dataframe))
 
     def get_table(self, _table):
         return SimpleNamespace(schema=self.schema)
@@ -62,11 +72,12 @@ class PsgLoadTest(unittest.TestCase):
         frame = pd.DataFrame(rows, columns=columns or NAMES)
         frame.to_excel(self.path, index=False, sheet_name="procesado")
 
-    def execute(self, client=None, expect_error=False):
+    def execute(self, client=None, expect_error=False, expect_no_load=False):
         client = client or FakeClient(self.schema)
         with patch.object(load, "confirm_execution"), patch.object(load, "validate_paths"), \
              patch.object(load, "authenticate_bigquery", return_value=client), \
-             patch.object(load, "move_loaded_input_file") as move, redirect_stdout(io.StringIO()):
+             patch.object(load, "move_loaded_input_file") as move, \
+             patch.object(load, "STAGING_DIR", Path(self.temp.name)), redirect_stdout(io.StringIO()):
             if expect_error:
                 with self.assertRaises(RuntimeError):
                     load.run(self.config, "psg")
@@ -74,6 +85,10 @@ class PsgLoadTest(unittest.TestCase):
                 move.assert_not_called()
                 return
             load.run(self.config, "psg")
+            if expect_no_load:
+                client.load_table_from_dataframe.assert_not_called()
+                move.assert_called_once()
+                return None
             client.load_table_from_dataframe.assert_called_once()
             move.assert_called_once()
             return client.load_table_from_dataframe.call_args.args[0]
@@ -156,7 +171,81 @@ class PsgLoadTest(unittest.TestCase):
         self.write([self.row(), self.row(pte_id="000124")])
         self.execute(expect_error=True)
         self.write([self.row()])
-        self.execute(FakeClient(self.schema, existing={"synthetic-uuid-1"}), expect_error=True)
+        self.execute(FakeClient(self.schema, existing={"synthetic-uuid-1"}), expect_no_load=True)
+
+    def test_first_partial_and_repeated_loads_reconcile(self):
+        rows = [self.row(), self.row(meta_uuid="synthetic-uuid-2", pte_id="000124")]
+        self.write(rows)
+        client = FakeClient(self.schema)
+        self.assertEqual(2, len(self.execute(client)))
+        client.load_table_from_dataframe.reset_mock()
+        client.existing.remove("synthetic-uuid-2")
+        with patch.object(load, "log") as log_event:
+            sent = self.execute(client)
+        self.assertEqual(["synthetic-uuid-2"], sent["meta_uuid"].tolist())
+        self.assertTrue(any("recibidos=2, omitidos=1, enviados=1, insertados=1" in str(call)
+                            for call in log_event.call_args_list))
+        client.load_table_from_dataframe.reset_mock()
+        self.execute(client, expect_no_load=True)
+        self.assertEqual({"synthetic-uuid-1", "synthetic-uuid-2"}, client.existing)
+
+    def test_output_rows_mismatch_and_load_failure_keep_artifact(self):
+        self.write([self.row()])
+        for outcome in (SimpleNamespace(result=Mock(), output_rows=0),
+                        SimpleNamespace(result=Mock(side_effect=RuntimeError("fallo sintético")),
+                                        output_rows=1)):
+            client = FakeClient(self.schema)
+            client.load_table_from_dataframe = Mock(return_value=outcome)
+            with patch.object(load, "confirm_execution"), patch.object(load, "validate_paths"), \
+                 patch.object(load, "authenticate_bigquery", return_value=client), \
+                 patch.object(load, "STAGING_DIR", Path(self.temp.name)), \
+                 patch.object(load, "move_loaded_input_file") as move, \
+                 redirect_stdout(io.StringIO()):
+                with self.assertRaises(RuntimeError):
+                    load.run(self.config, "psg")
+                move.assert_not_called()
+                self.assertTrue(self.path.exists())
+
+    def test_e22_json_and_null_survive_psg_load_preparation(self):
+        payload = json.dumps([{"campo": "pte_edad_anos", "valor_original": "x",
+                               "error": "entero_incompatible", "accion": "convertido_a_null"}],
+                             ensure_ascii=False, separators=(",", ":"))
+        self.write([self.row(meta_incidencias_calidad=payload),
+                    self.row(meta_uuid="synthetic-uuid-2", meta_incidencias_calidad=None)])
+        sent = self.execute()
+        self.assertEqual(payload, sent.loc[0, "meta_incidencias_calidad"])
+        self.assertTrue(pd.isna(sent.loc[1, "meta_incidencias_calidad"]))
+        arrow = _pandas_helpers.dataframe_to_arrow(sent, self.schema)
+        self.assertEqual(payload, arrow.column("meta_incidencias_calidad")[0].as_py())
+        self.assertIsNone(arrow.column("meta_incidencias_calidad")[1].as_py())
+
+    def test_local_lock_serializes_query_and_load(self):
+        self.write([self.row()])
+        client = FakeClient(self.schema)
+        def slow_load(dataframe, table, job_config=None):
+            time.sleep(0.05)
+            return client._load(dataframe, table, job_config)
+        client.load_table_from_dataframe = Mock(side_effect=slow_load)
+        errors = []
+        def worker():
+            try:
+                load.run(self.config, "psg")
+            except Exception as error:
+                errors.append(error)
+        with patch.object(load, "confirm_execution"), patch.object(load, "validate_paths"), \
+             patch.object(load, "authenticate_bigquery", return_value=client), \
+             patch.object(load, "STAGING_DIR", Path(self.temp.name)), \
+             patch.object(load, "move_loaded_input_file") as move, \
+             redirect_stdout(io.StringIO()):
+            threads = [Thread(target=worker) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=5)
+            self.assertFalse(any(thread.is_alive() for thread in threads))
+        self.assertEqual([], errors)
+        self.assertEqual(1, client.load_table_from_dataframe.call_count)
+        self.assertEqual(2, move.call_count)
 
     def test_reject_incompatible_physical_schema_and_historical_table(self):
         self.write([self.row()])

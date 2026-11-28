@@ -1,0 +1,9 @@
+# E23 — Omisión de UUID existentes en carga PSG
+
+La carga PSG conserva las validaciones de esquema, tipos, UUID no vacío y duplicados dentro del lote. Bajo `flock` en un archivo estable de `staging` asociado a la tabla destino, consulta UUID existentes mediante `find_existing_uuids()` y sus bloques parametrizados, omite esas filas y envía solo las nuevas con `WRITE_APPEND`. Conciliación: **recibidos = omitidos + enviados**; tras `job.result()`, **enviados = `output_rows` = insertados**. Si todos existen, no crea trabajo de carga y mueve el artefacto a `_loaded` como lote ya conciliado. Ante consulta, carga o recuento fallido, el origen permanece recuperable y no se llama al movimiento.
+
+El bloqueo cubre únicamente procesos locales que utilicen el mismo archivo de bloqueo en el mismo sistema de archivos y la misma tabla configurada. No impide escrituras de otros equipos, aplicaciones o jobs de BigQuery; una inserción externa entre consulta y carga puede crear duplicados. E25 debe coordinar el bloqueo con la orquestación diaria; E26 debe resolver trabajos remotos de resultado incierto y fallos entre confirmación y movimiento mediante reconciliación antes del reintento. No se afirma unicidad global ni atomicidad entre BigQuery y el sistema local.
+
+No se cambia la estrategia de consulta ni el comportamiento XPAP. La tabla indicada en E21 no tiene particionamiento por columna, por lo que no requiere filtro de partición en estas consultas. No se introducen MERGE, staging remoto ni consultas nuevas. Las pruebas usan exclusivamente BigQuery simulado y artefactos sintéticos.
+
+La consulta existente efectúa como máximo una consulta parametrizada por cada bloque de 5000 UUID. No se midieron latencia, bytes procesados ni coste reales porque E23 no accedió a BigQuery; las pruebas demuestran conteos, flujo local y exclusión mutua, no rendimiento remoto ni protección ante escritores externos.
