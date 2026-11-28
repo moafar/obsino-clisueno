@@ -431,6 +431,35 @@ class PSGArchivingTest(unittest.TestCase):
         self.assertFalse((self.destination / "2026/2026-02/bs_second.doc").exists())
         self.assertEqual(1, len(self.csv_rows()))
 
+    def test_resume_checkpoint_reconciles_recovered_archive_failure(self):
+        source = self.source / "synthetic.doc"
+        source.write_bytes(b"synthetic")
+        summary = self.root / "extract.json"
+        with patch.object(archivo_utils, "_rename_noreplace", side_effect=OSError(errno.EIO, "interrumpido")):
+            self.assertEqual(extract_main.EXIT_PROCESS, self.run_cli(result_json=str(summary)))
+        self.assertTrue(source.exists())
+        self.assertEqual(0, self.run_cli(result_json=str(summary), resume_extraction=True))
+        self.assertFalse(source.exists())
+        import json
+        result = json.loads(summary.read_text())
+        self.assertEqual(0, result["counts"]["archivos_fallo_archivado"])
+        self.assertEqual(1, result["counts"]["archivos_extraidos"])
+        self.assertEqual(1, len(self.csv_rows()))
+
+    def test_source_change_and_single_history_read(self):
+        (self.source / "first.doc").write_bytes(b"first-synthetic")
+        self.assertEqual(0, self.run_cli())
+        new_source, new_archive = self.root / "source2", self.root / "archive2"
+        new_source.mkdir()
+        new_archive.mkdir()
+        (new_source / "second.doc").write_bytes(b"second-synthetic")
+        history_reader = extract_main.load_known_psg_uuids
+        with patch.object(extract_main, "load_known_psg_uuids", wraps=history_reader) as history, \
+             patch.object(archivo_utils, "load_known_psg_uuids", side_effect=AssertionError("No duplicar lectura")):
+            self.assertEqual(0, self.run_cli(input=str(new_source), archive_dest=str(new_archive)))
+        history.assert_called_once_with(self.output)
+        self.assertEqual(2, len(self.csv_rows()))
+
     def test_existing_archive_name_survives_retry(self):
         source = self.source / "synthetic.doc"
         source.write_bytes(b"synthetic")

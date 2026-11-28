@@ -9,6 +9,9 @@ import time
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.psg_state import psg_lock
 from statistics import mean, median
 
 import yaml
@@ -447,6 +450,7 @@ if __name__ == "__main__":
     parser.add_argument("--contract", type=Path, default=Path(__file__).resolve().parents[2] /
                         "0_declarations/psg.yaml")
     args = parser.parse_args()
-    path, state = audit_psg(args.input, args.log, args.contract, args.source, args.archive)
+    with psg_lock(args.input.resolve().parent):
+        path, state = audit_psg(args.input, args.log, args.contract, args.source, args.archive)
     print(f"Auditoría PSG: {state} | {path}")
     raise SystemExit(1 if state == "ERROR" else 0)

@@ -83,8 +83,9 @@ def parse_args() -> argparse.Namespace:
         help="Ejecuta validación y transformaciones sin escribir salida",
     )
     parser.add_argument("--yes", action="store_true", help="Confirmar transformación PSG sin interacción")
+    parser.add_argument("--recover-publication", action="store_true", help="Validar/publicar un Parquet PSG interrumpido")
     args = parser.parse_args()
-    if args.yes and args.flow != "psg":
+    if (args.yes or args.recover_publication) and args.flow != "psg":
         parser.error("--yes solo se admite en PSG")
     return args
 
@@ -114,6 +115,7 @@ def main() -> int:
 
         return execute_psg(
             non_interactive=args.yes,
+            recover_publication=args.recover_publication,
             config_path=config_path,
             input_path=resolved_input,
             output_path=args.output,

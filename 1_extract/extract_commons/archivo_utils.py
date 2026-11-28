@@ -1,5 +1,9 @@
 from __future__ import annotations
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.psg_state import save, sync_dir, finish_move, file_evidence
+import json
 import re, csv, logging, os, io, fcntl
 import ctypes
 import errno
@@ -11,6 +15,51 @@ from datetime import datetime
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+PSG_RECOVERY_DIR = None
+PSG_RECOVERY_LOG = None
+
+
+def recover_psg_moves(source_root, archive_root, output, known=None):
+    directory = Path(output) / ".psg-moves"
+    if not directory.exists():
+        return
+    for path in sorted(directory.glob("*.json")):
+        item = json.loads(path.read_text())
+        if item["state"] == "LOGGED":
+            continue  # Confirmado: no pertenece al trabajo pendiente de esta invocación.
+        if item["state"] not in ("PREPARED", "DONE"):
+            raise RuntimeError("Estado inválido del journal documental PSG")
+        source, destination = Path(item["source"]), Path(item["destination"])
+        if not source.is_relative_to(source_root) or not destination.is_relative_to(archive_root):
+            raise RuntimeError("Journal de archivado fuera de las rutas operativas")
+        if known is None:
+            known = load_known_psg_uuids(output)
+        if known.get(item["uuid"]) != str(source):
+            raise RuntimeError("Archivado sin fila CSV identificada; requiere revisión")
+        descriptor = _open_psg_destination_dir(archive_root, destination.parent.relative_to(archive_root))
+        os.close(descriptor)
+        finish_move(source, destination, item["evidence"])
+        item["state"] = "DONE"
+        save(path, item)
+        _confirm_psg_move_log(item, path)
+
+
+def _confirm_psg_move_log(item, path, event_logged=False):
+    source, destination = item["source"], item["destination"]
+    message = f"Traslado PSG correcto: origen={source} destino={destination}"
+    logfile = Path(item["log"])
+    if not logfile.is_file():
+        raise RuntimeError("Falta el log original del traslado")
+    present = event_logged or message in logfile.read_text(encoding="utf-8")
+    with logfile.open("a", encoding="utf-8") as stream:
+        if not present:
+            stream.write(f"{datetime.now().isoformat()} $$ INFO $$ {message}\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    item["state"] = "LOGGED"
+    save(path, item)
+
 
 def marcar_version_extraccion() -> str:
     return f"Extraido: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -349,6 +398,7 @@ def _open_psg_destination_dir(root: Path, relative: Path) -> int:
         for part in relative.parts:
             try:
                 os.mkdir(part, dir_fd=descriptor)
+                os.fsync(descriptor)
             except FileExistsError:
                 pass
             child = os.open(part, flags, dir_fd=descriptor)
@@ -371,9 +421,28 @@ def _same_psg_file(source: Path, destination_name: str, destination_dir_fd: int)
 
 
 def _move_psg_file(archivo: Path, prefix: str, date_str: str | None,
-                   archive_root: Path, *, allow_complete_link: bool = False) -> Path:
+                   archive_root: Path, *, allow_complete_link: bool = False, initial_uuid: str | None = None) -> Path:
     relative_dir = _psg_date_path(date_str)
     destination = Path(archive_root) / relative_dir / f"{prefix}_{archivo.name}"
+    journal_path = None
+    if PSG_RECOVERY_DIR is not None:
+        if initial_uuid is None:
+            raise RuntimeError("Falta UUID inicial para el journal documental")
+        directory = Path(PSG_RECOVERY_DIR)
+        directory.mkdir(exist_ok=True)
+        sync_dir(directory.parent)
+        key = hashlib.sha256((str(archivo.resolve()) + initial_uuid).encode()).hexdigest()
+        journal_path = directory / (key + ".json")
+        item = {"source": str(archivo.resolve()), "destination": str(destination),
+                "uuid": initial_uuid, "evidence": file_evidence(archivo), "state": "PREPARED",
+                "log": str(PSG_RECOVERY_LOG)}
+        if journal_path.exists():
+            previous = json.loads(journal_path.read_text())
+            if previous["evidence"] != item["evidence"]:
+                raise RuntimeError("Evidencia documental incompatible")
+        with archivo.open("rb") as stream:
+            os.fsync(stream.fileno())
+        save(journal_path, item)
     try:
         if not re.fullmatch(r"[A-Za-z0-9_]+", prefix):
             raise RuntimeError("Prefijo PSG no válido para archivar")
@@ -400,9 +469,11 @@ def _move_psg_file(archivo: Path, prefix: str, date_str: str | None,
                             raise
                     if not _same_psg_file(archivo, destination.name, destination_fd):
                         raise RuntimeError("El enlace de archivado no coincide con el origen")
+                    os.fsync(destination_fd)
                     os.unlink(archivo)
                 elif (error.errno == errno.EEXIST and allow_complete_link and
                       _same_psg_file(archivo, destination.name, destination_fd)):
+                    os.fsync(destination_fd)
                     os.unlink(archivo)
                 else:
                     raise
@@ -412,7 +483,14 @@ def _move_psg_file(archivo: Path, prefix: str, date_str: str | None,
         logging.error("Traslado PSG fallido (%s): origen=%s destino=%s",
                       type(error).__name__, archivo, destination)
         raise
+    sync_dir(destination.parent)
+    sync_dir(archivo.parent)
+    if journal_path is not None:
+        item["state"] = "DONE"
+        save(journal_path, item)
     logging.info("Traslado PSG correcto: origen=%s destino=%s", archivo, destination)
+    if journal_path is not None:
+        _confirm_psg_move_log(item, journal_path, event_logged=True)
     return destination
 
 def _parse_date_folder(date_str: str) -> str:
@@ -543,7 +621,7 @@ def procesar_archivo(archivo: Path, *, psg_archive_dir: Path | None = None,
                     try:
                         _move_psg_file(archivo, PREFIXES.get(tipo, ""),
                                        resultados.get("meta_fecha_estudio"), psg_archive_dir,
-                                       allow_complete_link=True)
+                                       allow_complete_link=True, initial_uuid=uuid)
                         return "retried"
                     except Exception as error:
                         logging.error("Reintento de archivado PSG fallido (%s): %s", type(error).__name__, archivo)
@@ -558,7 +636,7 @@ def procesar_archivo(archivo: Path, *, psg_archive_dir: Path | None = None,
                     known_psg[uuid] = source_path
                 try:
                     _move_psg_file(archivo, PREFIXES.get(tipo, ""),
-                                   resultados.get("meta_fecha_estudio"), psg_archive_dir)
+                                   resultados.get("meta_fecha_estudio"), psg_archive_dir, initial_uuid=uuid)
                     return "new"
                 except Exception as error:
                     logging.error("Extracción PSG registrada; archivado fallido (%s): %s", type(error).__name__, archivo)

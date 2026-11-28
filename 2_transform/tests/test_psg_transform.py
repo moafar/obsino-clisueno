@@ -439,6 +439,34 @@ class PSGTransformTest(unittest.TestCase):
         result, error, outputs = exercise({first_name: [source_row()]}, explicit_input=True)
         self.assertEqual((0, None, 1), (result, error, len(outputs)))
 
+    def test_recover_publication_after_link_and_before_final_confirmation(self):
+        from psg.main import _publish_psg_parquet
+        frame = self.transform([source_row()])
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root) / "synthetic.parquet"
+            with patch("psg.main.os.unlink", side_effect=OSError("retirada interrumpida")):
+                with self.assertRaises(OSError):
+                    _publish_psg_parquet(frame, target)
+            self.assertTrue(target.exists())
+            self.assertTrue(list(Path(root).glob(".*.tmp")))
+            self.assertEqual(target, _publish_psg_parquet(frame, target, recover=True))
+            pd.testing.assert_frame_equal(frame, pd.read_parquet(target), check_exact=True)
+            wrong = frame.copy()
+            wrong.loc[0, "pte_id"] = "000999"
+            with self.assertRaises(AssertionError):
+                _publish_psg_parquet(wrong, target, recover=True)
+
+    def test_recover_validated_temporary_without_rewriting_it(self):
+        from psg.main import _publish_psg_parquet
+        frame = self.transform([source_row()])
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root) / "synthetic.parquet"
+            candidate = Path(root) / ".synthetic.parquet.synthetic.tmp"
+            frame.to_parquet(candidate, index=False, compression="snappy")
+            with patch("pandas.DataFrame.to_parquet", side_effect=AssertionError("No reescribir")):
+                _publish_psg_parquet(frame, target, recover=True)
+            self.assertTrue(candidate.samefile(target))
+
 
 if __name__ == "__main__":
     unittest.main()

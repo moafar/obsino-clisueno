@@ -7,6 +7,8 @@ import json
 import time
 import sys
 import tempfile
+import shutil
+from uuid import uuid4
 import unittest
 from dataclasses import replace
 from datetime import datetime
@@ -39,18 +41,28 @@ class FakeClient:
     def __init__(self, schema, existing=()):
         self.schema = schema
         self.existing = set(existing)
+        self.jobs = {}
         self.load_table_from_dataframe = Mock(side_effect=self._load)
         self.load_table_from_file = Mock(side_effect=AssertionError("Carga desde archivo no seleccionada"))
 
-    def _load(self, dataframe, _table, job_config=None):
+    def _load(self, dataframe, _table, job_config=None, job_id=None, location=None):
         uuid_field = "meta_uuid" if "meta_uuid" in dataframe else "xpap_uuid"
         uuids = set(dataframe[uuid_field])
+        job = SimpleNamespace(job_id=job_id, destination=_table, write_disposition="WRITE_APPEND",
+                              state="RUNNING", error_result=None, output_rows=len(dataframe))
         def finish():
-            self.existing.update(uuids)
-        return SimpleNamespace(result=finish, output_rows=len(dataframe))
+            job.state = "DONE"
+            if not job.error_result:
+                self.existing.update(uuids)
+        job.result = finish
+        self.jobs[job_id] = job
+        return job
 
     def get_table(self, _table):
-        return SimpleNamespace(schema=self.schema)
+        return SimpleNamespace(schema=self.schema, location="EU")
+
+    def get_job(self, job_id, **kwargs):
+        return self.jobs[job_id]
 
     def query(self, _sql, job_config=None):
         if job_config is None:
@@ -92,7 +104,8 @@ class PsgLoadTest(unittest.TestCase):
         client = client or FakeClient(self.schema)
         with patch.object(load, "confirm_execution"), patch.object(load, "validate_paths"), \
              patch.object(load, "authenticate_bigquery", return_value=client), \
-             patch.object(load, "move_loaded_input_file") as move, \
+             patch.object(load, "finish_move", side_effect=lambda source, target, _: shutil.copyfile(source, target)) as move, \
+             patch.object(load, "psg_load_state_path", return_value=Path(self.temp.name) / (uuid4().hex + ".json")), \
              patch.object(load, "STAGING_DIR", Path(self.temp.name)), redirect_stdout(io.StringIO()):
             if expect_error:
                 with self.assertRaises(RuntimeError):
@@ -252,15 +265,21 @@ class PsgLoadTest(unittest.TestCase):
 
     def test_output_rows_mismatch_and_load_failure_keep_artifact(self):
         self.write([self.row()])
-        for outcome in (SimpleNamespace(result=Mock(), output_rows=0),
-                        SimpleNamespace(result=Mock(side_effect=RuntimeError("fallo sintético")),
-                                        output_rows=1)):
+        for fail_result in (False, True):
             client = FakeClient(self.schema)
-            client.load_table_from_dataframe = Mock(return_value=outcome)
+            def outcome(dataframe, table, **kwargs):
+                job = client._load(dataframe, table, **kwargs)
+                if fail_result:
+                    job.result = Mock(side_effect=RuntimeError("fallo sintético"))
+                else:
+                    job.output_rows = 0
+                return job
+            client.load_table_from_dataframe = Mock(side_effect=outcome)
             with patch.object(load, "confirm_execution"), patch.object(load, "validate_paths"), \
                  patch.object(load, "authenticate_bigquery", return_value=client), \
                  patch.object(load, "STAGING_DIR", Path(self.temp.name)), \
-                 patch.object(load, "move_loaded_input_file") as move, \
+                 patch.object(load, "finish_move") as move, \
+                 patch.object(load, "psg_load_state_path", return_value=Path(self.temp.name) / (uuid4().hex + ".json")), \
                  redirect_stdout(io.StringIO()):
                 with self.assertRaises(RuntimeError):
                     load.run(self.config, "psg")
@@ -304,9 +323,9 @@ class PsgLoadTest(unittest.TestCase):
     def test_local_lock_serializes_query_and_load(self):
         self.write([self.row()])
         client = FakeClient(self.schema)
-        def slow_load(dataframe, table, job_config=None):
+        def slow_load(dataframe, table, **kwargs):
             time.sleep(0.05)
-            return client._load(dataframe, table, job_config)
+            return client._load(dataframe, table, **kwargs)
         client.load_table_from_dataframe = Mock(side_effect=slow_load)
         errors = []
         def worker():
@@ -317,7 +336,7 @@ class PsgLoadTest(unittest.TestCase):
         with patch.object(load, "confirm_execution"), patch.object(load, "validate_paths"), \
              patch.object(load, "authenticate_bigquery", return_value=client), \
              patch.object(load, "STAGING_DIR", Path(self.temp.name)), \
-             patch.object(load, "move_loaded_input_file") as move, \
+             patch.object(load, "finish_move", side_effect=lambda source, target, _: shutil.copyfile(source, target)) as move, \
              redirect_stdout(io.StringIO()):
             threads = [Thread(target=worker) for _ in range(2)]
             for thread in threads:
@@ -327,7 +346,7 @@ class PsgLoadTest(unittest.TestCase):
             self.assertFalse(any(thread.is_alive() for thread in threads))
         self.assertEqual([], errors)
         self.assertEqual(1, client.load_table_from_dataframe.call_count)
-        self.assertEqual(2, move.call_count)
+        self.assertEqual(1, move.call_count)
 
     def test_reject_incompatible_physical_schema_and_historical_table(self):
         self.write([self.row()])

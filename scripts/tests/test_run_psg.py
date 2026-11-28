@@ -46,7 +46,7 @@ class RunPsgTest(unittest.TestCase):
         if name == "1_extract":
             csv = value("--output-dir") / value("--output-file")
             if self.rows:
-                csv.write_text("synthetic CSV")
+                csv.write_text("synthetic\n" + "row\n" * self.rows)
             value("--result-json").write_text(json.dumps({"csv": str(csv),
                 "audit_state": "ADVERTENCIA" if self.warning else "OK",
                 "counts": {"archivos_registrados": self.rows}}))
@@ -58,6 +58,7 @@ class RunPsgTest(unittest.TestCase):
             self.assertTrue(source.is_file())
             loaded = source.with_name(source.stem + "_loaded.parquet")
             source.rename(loaded)
+            source.with_suffix(".load-state.json").write_text(json.dumps({"state": "LOADED", "loaded": str(loaded)}))
             value("--result-json").write_text(json.dumps({"loaded": str(loaded),
                 "job_id": "simulated-job", "counts": {"received": self.rows,
                 "omitted": 0, "sent": self.rows, "inserted": self.rows}}))
@@ -173,6 +174,120 @@ class RunPsgTest(unittest.TestCase):
                     self.assertTrue(Path(record["paths"]["csv"]).exists())
                 if index == 2:
                     self.assertTrue(Path(record["paths"]["parquet"]).exists())
+
+    def resume(self, execution):
+        with patch.object(runner, "STAGING", self.root), patch.object(runner, "preflight"), \
+             patch.object(runner.subprocess, "run", side_effect=self.cli), redirect_stdout(io.StringIO()):
+            return runner.run(resume_id=execution)
+
+    def test_resume_does_not_repeat_confirmed_stages(self):
+        record = json.loads(self.execute().read_text())
+        self.calls.clear()
+        resumed = json.loads(self.resume(record["id"]).read_text())
+        self.assertEqual([], self.calls)
+        self.assertEqual("OK", resumed["state"])
+        self.assertEqual(1, resumed["resume_count"])
+
+    def test_resume_interrupted_transform_and_confirmed_load(self):
+        original_cli = self.cli
+        for interrupted in ("2_transform", "3_load"):
+            with self.subTest(stage=interrupted), tempfile.TemporaryDirectory() as root:
+                self.root = Path(root)
+                self.calls = []
+                def interrupted_cli(command, **options):
+                    original_cli(command, **options)
+                    if Path(command[1]).parent.name == interrupted:
+                        raise subprocess.CalledProcessError(3, command)
+                with patch.object(self, "cli", side_effect=interrupted_cli):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        self.execute()
+                record = self.record()
+                self.calls.clear()
+                resumed = json.loads(self.resume(record["id"]).read_text())
+                self.assertEqual("OK", resumed["state"])
+                self.assertEqual(["2_transform", "3_load"] if interrupted == "2_transform" else [], self.calls)
+
+    def test_resume_rejects_changed_confirmed_artifact_or_lost_mount(self):
+        record = json.loads(self.execute().read_text())
+        self.calls.clear()
+        with patch.object(runner, "STAGING", self.root), \
+             patch.object(runner, "preflight", side_effect=ValueError("montaje perdido")), \
+             patch.object(runner.subprocess, "run") as cli, redirect_stdout(io.StringIO()):
+            with self.assertRaises(ValueError):
+                runner.run(resume_id=record["id"])
+            cli.assert_not_called()
+        Path(record["paths"]["csv"]).write_text("altered")
+        with self.assertRaisesRegex(RuntimeError, "ha cambiado"):
+            self.resume(record["id"])
+        self.assertEqual([], self.calls)
+        self.assertEqual("ERROR", self.record()["stages"]["extract_audit"]["state"])
+
+    def test_confirmed_inconsistency_remains_blocked_on_later_resumes(self):
+        for stage in ("extract_audit", "transform"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as root:
+                self.root = Path(root)
+                record = json.loads(self.execute().read_text())
+                target = Path(record["paths"]["csv"] if stage == "extract_audit" else record["paths"]["loaded"])
+                original = target.read_bytes()
+                target.write_bytes(b"inconsistent")
+                self.calls.clear()
+                with self.assertRaises(Exception):
+                    self.resume(record["id"])
+                self.assertEqual(stage, self.record()["recovery_blocked"]["stage"])
+                target.write_bytes(original)
+                for _ in range(2):
+                    with self.assertRaisesRegex(RuntimeError, "Reanudación bloqueada"):
+                        self.resume(record["id"])
+                self.assertEqual([], self.calls)
+                self.assertEqual("ERROR", self.record()["stages"][stage]["state"])
+
+    def test_legacy_confirmed_stage_without_fingerprint_requires_review(self):
+        path = self.execute()
+        record = json.loads(path.read_text())
+        record.pop("digests")
+        runner.save(path, record)
+        self.calls.clear()
+        with self.assertRaisesRegex(RuntimeError, "Registro anterior sin huella"):
+            self.resume(record["id"])
+        with self.assertRaisesRegex(RuntimeError, "Reanudación bloqueada"):
+            self.resume(record["id"])
+        self.assertEqual([], self.calls)
+
+    def test_resume_extraction_from_durable_checkpoint(self):
+        with patch.object(runner, "STAGING", self.root), patch.object(runner, "preflight"), \
+             redirect_stdout(io.StringIO()):
+            path = runner.run(self.source, self.archive, self.root, "synthetic_test")
+            record = json.loads(path.read_text())
+            (path.parent / "extract.json").unlink()
+            record["stages"]["extract_audit"]["state"] = "RUNNING"
+            runner.save(path, record)
+            runner.run(resume_id=record["id"])
+        self.assertEqual("EMPTY", json.loads(path.read_text())["state"])
+
+    def test_resume_without_inventory_checkpoint_stops(self):
+        self.failure = "1_extract"
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.execute()
+        record = self.record()
+        with patch.object(runner, "STAGING", self.root), patch.object(runner, "preflight"), \
+             redirect_stdout(io.StringIO()):
+            with self.assertRaises(subprocess.CalledProcessError):
+                runner.run(resume_id=record["id"])
+        final = self.record()
+        self.assertEqual("ERROR", final["stages"]["extract_audit"]["state"])
+        self.assertNotIn("transform", final["stages"])
+
+    def test_resume_load_without_journal_stops_before_resubmitting(self):
+        self.failure = "3_load"
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.execute()
+        record = self.record()
+        self.failure = None
+        self.calls.clear()
+        with self.assertRaisesRegex(RuntimeError, "journal de la carga"):
+            self.resume(record["id"])
+        self.assertEqual([], self.calls)
+        self.assertEqual("ERROR", self.record()["stages"]["load"]["state"])
 
     def test_global_exclusion(self):
         self.block = True

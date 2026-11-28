@@ -5,8 +5,10 @@ import csv
 import logging
 import os
 from pathlib import Path
-import re
 import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.psg_state import psg_lock
+import re
 import tempfile
 from typing import Any
 import pandas as pd
@@ -198,7 +200,7 @@ def _resolve_output_target(
     )
 
 
-def _publish_psg_parquet(dataframe: pd.DataFrame, target: Path) -> Path:
+def _publish_psg_parquet(dataframe: pd.DataFrame, target: Path, recover: bool = False) -> Path:
     """Valida y publica un Parquet completo sin reemplazar un destino existente."""
     def sync_directory() -> None:
         descriptor = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
@@ -208,6 +210,25 @@ def _publish_psg_parquet(dataframe: pd.DataFrame, target: Path) -> Path:
             os.close(descriptor)
 
     target.parent.mkdir(parents=True, exist_ok=True)
+    if recover and target.exists():
+        pd.testing.assert_frame_equal(dataframe, pd.read_parquet(target, engine="pyarrow"),
+                                      check_dtype=True, check_exact=True)
+        with target.open("rb") as stream:
+            os.fsync(stream.fileno())
+        sync_directory()
+        return target
+    if recover:
+        for candidate in sorted(target.parent.glob(f".{target.name}.*.tmp")):
+            try:
+                pd.testing.assert_frame_equal(dataframe, pd.read_parquet(candidate, engine="pyarrow"),
+                                              check_dtype=True, check_exact=True)
+            except (ValueError, OSError, AssertionError):
+                continue  # Un temporal incompleto no se borra ni se publica.
+            with candidate.open("rb") as stream:
+                os.fsync(stream.fileno())
+            os.link(candidate, target)
+            sync_directory()
+            return target
     with tempfile.NamedTemporaryFile(prefix=f".{target.name}.", suffix=".tmp",
                                      dir=target.parent, delete=False) as stream:
         temporary = Path(stream.name)
@@ -250,6 +271,7 @@ def run(
     output_path: str | None,
     dry_run: bool = False,
     keep_rows: list[int] | None = None,
+    recover_publication: bool = False,
 ) -> Path | None:
     search_bases = _search_bases()
     pipeline_config = _load_pipeline_config(config_path, search_bases)
@@ -295,7 +317,7 @@ def run(
         pipeline_config=pipeline_config,
         search_bases=search_bases,
     )
-    return _publish_psg_parquet(transformed, resolved_output_path)
+    return _publish_psg_parquet(transformed, resolved_output_path, recover=recover_publication)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -342,12 +364,13 @@ def main() -> int:
     )
 
 
-def execute(
+def _execute_locked(
     config_path: str,
     input_path: str | None,
     output_path: str | None,
     dry_run: bool,
     non_interactive: bool = False,
+    recover_publication: bool = False,
 ) -> int:
     search_bases = _search_bases()
     pipeline_config = _load_pipeline_config(config_path, search_bases)
@@ -397,11 +420,18 @@ def execute(
             output_path=output_path,
             dry_run=dry_run,
             keep_rows=keep_rows[input_file],
+            recover_publication=recover_publication,
         )
         if generated_output:
             print(f"✅ Procesamiento completado. Archivo generado: {generated_output}")
 
     return 0
+
+
+
+def execute(config_path, input_path, output_path, dry_run, non_interactive=False, recover_publication=False):
+    with psg_lock(STAGING_DIR):
+        return _execute_locked(config_path, input_path, output_path, dry_run, non_interactive, recover_publication)
 
 
 if __name__ == "__main__":

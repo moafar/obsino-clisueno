@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
 import fcntl
 import logging
 import math
@@ -21,6 +22,8 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.psg_state import psg_lock, save, fingerprint, finish_move, file_evidence
 from typing import Any
 
 import pandas as pd
@@ -175,6 +178,11 @@ def _validate_input_in_staging(flow: str, input_path: Path) -> None:
             f"Directorio esperado: {expected_dir}. Archivo recibido: {input_path}"
         )
 
+    recovering = (flow == "psg" and input_path.with_suffix(".load-state.json").is_file())
+    if recovering and not input_path.exists():
+        if not input_path.name.startswith("extract_psg_") or not input_path.name.endswith("_transformed.parquet"):
+            die("Nombre de recuperación PSG incompatible")
+        return
     if not input_path.exists():
         die(
             "El archivo de entrada no existe en staging. "
@@ -385,7 +393,7 @@ def validate_paths(config: LoaderConfig) -> None:
     # Verifica que todos los insumos físicos existan antes de autenticar/cargar.
     if not config.service_account_json.exists():
         die(f"No existe el JSON de la Service Account: {config.service_account_json}")
-    if not config.source_path.exists():
+    if not config.source_path.exists() and config.source_sheet_name is not None:
         die(f"No existe el artefacto de origen: {config.source_path}")
     if not config.schema_yaml_path.exists():
         die(f"No existe el archivo de schema YAML: {config.schema_yaml_path}")
@@ -450,11 +458,12 @@ def read_source_dataset(
     schema_yaml: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     # PSG exige el formato físico de E35 antes de entregar filas al cargador.
-    source_suffix = config.source_path.suffix.lower()
+    source_path = psg_read_path(config) if strict_psg else config.source_path
+    source_suffix = source_path.suffix.lower()
     if strict_psg:
         if source_suffix != ".parquet" or schema_yaml is None:
             die("PSG requiere un Parquet y el contrato YAML de carga")
-        arrow_schema = pq.read_schema(config.source_path)
+        arrow_schema = pq.read_schema(source_path)
         physical_types = {
             "STRING": pa.string(), "INT": pa.int64(), "FLOAT": pa.float64(),
             "DATE": pa.timestamp("ns"),
@@ -465,7 +474,7 @@ def read_source_dataset(
             expected_type = physical_types.get(schema_yaml[field.name])
             if expected_type is None or field.type != expected_type:
                 die(f"Tipo físico Parquet incompatible en {field.name}: {field.type}")
-        dataframe = pd.read_parquet(config.source_path, engine="pyarrow")
+        dataframe = pd.read_parquet(source_path, engine="pyarrow")
         pandas_types = {"STRING": "string", "INT": "Int64", "FLOAT": "Float64",
                         "DATE": "datetime64[ns]"}
         for name, kind in schema_yaml.items():
@@ -680,7 +689,10 @@ def normalize_empty_values(dataframe: pd.DataFrame, schema_yaml: dict[str, str])
 
 
 def move_loaded_input_file(source_path: Path, _flow: str) -> Path:
-    # Mueve el archivo cargado exitosamente en staging con sufijo _loaded.
+    if _flow == "psg":
+        destination = source_path.with_name(source_path.stem + "_loaded.parquet")
+        return finish_move(source_path, destination, file_evidence(source_path))
+    # XPAP conserva su movimiento vigente.
     destination_dir = STAGING_DIR
     destination_dir.mkdir(parents=True, exist_ok=True)
 
@@ -706,44 +718,142 @@ def move_loaded_input_file(source_path: Path, _flow: str) -> Path:
     return destination_path
 
 
+PSG_LOAD_STATES = {"READY", "SUBMITTED", "PENDING", "UNKNOWN", "FAILED", "CONFIRMED", "LOADED"}
+
+
+def read_psg_load_state(path):
+    state = json.loads(Path(path).read_text())
+    if (not isinstance(state, dict) or not isinstance(state.get("state"), str)
+            or state["state"] not in PSG_LOAD_STATES):
+        die("Estado inválido del journal de carga PSG")
+    return state
+
+
+def psg_load_state_path(config):
+    return config.source_path.with_suffix(".load-state.json")
+
+
+def psg_read_path(config):
+    if config.source_path.exists():
+        return config.source_path
+    state_path = psg_load_state_path(config)
+    if not state_path.exists():
+        die("Falta el Parquet y su registro de recuperación")
+    state = read_psg_load_state(state_path)
+    if state["state"] not in ("CONFIRMED", "LOADED") or state["source"] != str(config.source_path):
+        die("Parquet ausente sin carga confirmada")
+    destination = Path(state["loaded"])
+    if destination != config.source_path.with_name(config.source_path.stem + "_loaded.parquet"):
+        die("Ruta de recuperación de carga incompatible")
+    if fingerprint(destination) != state["artifact_sha256"]:
+        die("El Parquet cargado no coincide con el lote registrado")
+    return destination
+
+
 def load_psg_new_rows(config: LoaderConfig, client: bigquery.Client,
                       dataframe: pd.DataFrame, uuid_values: list[str],
                       bq_schema: list[bigquery.SchemaField]) -> dict:
-    """Serializa localmente consulta, inserción confirmada y movimiento PSG."""
-    STAGING_DIR.mkdir(parents=True, exist_ok=True)
+    """Carga con identidad persistida antes del envío y consulta de resultados inciertos."""
+    state_path = psg_load_state_path(config)
+    actual_path = psg_read_path(config)
+    digest = fingerprint(actual_path)
+    state = read_psg_load_state(state_path) if state_path.exists() else None
+    if state and (state["source"] != str(config.source_path) or state["table"] != config.table_fqn
+                  or state["artifact_sha256"] != digest):
+        die("Identidad del lote de carga incompatible con el registro")
+    if state is None or state["state"] in ("READY", "FAILED"):
+        for other_path in STAGING_DIR.glob("*.load-state.json"):
+            if other_path == state_path:
+                continue
+            other = read_psg_load_state(other_path)
+            if other["table"] != config.table_fqn:
+                continue
+            uncertain = other["state"] in ("SUBMITTED", "PENDING", "UNKNOWN")
+            ready_first = (other["state"] == "READY" and
+                           (state is None or state["state"] != "READY" or str(other_path) < str(state_path)))
+            if uncertain or ready_first:
+                die("Otra carga PSG está pendiente; debe reconciliarse antes de cargar este lote")
     lock_path = STAGING_DIR / f".psg-load-{config.project_id}-{config.dataset_id}-{config.table_id}.lock"
     with lock_path.open("a+b") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        try:
-            received = len(dataframe)
+        if state is None or state["state"] in ("FAILED", "READY"):
+            # READY no fue enviado: su selección puede haber quedado obsoleta.
+            attempt = (state["attempt"] if state["state"] == "READY" else state["attempt"] + 1) if state else 1
             existing = find_existing_uuids(client, config.table_fqn, config.uuid_field, uuid_values)
-            to_send = dataframe.loc[~dataframe[config.uuid_field].isin(existing)].copy()
-            omitted = received - len(to_send)
-            sent = len(to_send)
-            if received != omitted + sent:
-                die("No concilian los registros PSG recibidos, omitidos y enviados")
-            inserted = 0
-            if sent:
-                job_config = bigquery.LoadJobConfig(schema=bq_schema,
-                                                     write_disposition=config.write_disposition)
-                job = client.load_table_from_dataframe(to_send, config.table_fqn,
-                                                       job_config=job_config)
-                job.result()
-                inserted = job.output_rows
-                if inserted != sent:
-                    die(f"Carga PSG no conciliada: enviados={sent}, insertados={inserted}")
-            log(f"Conciliación PSG: recibidos={received}, omitidos={omitted}, "
-                f"enviados={sent}, insertados={inserted}")
-            moved_path = move_loaded_input_file(config.source_path, "psg")
-            log(f"Archivo de entrada movido a: {moved_path}")
-            return {"loaded": str(moved_path), "counts": {"received": received,
-                    "omitted": omitted, "sent": sent, "inserted": inserted},
-                    "job_id": getattr(job, "job_id", None) if sent else None}
-        finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
+            submitted_uuids = [value for value in uuid_values if value not in existing]
+            sent, received = len(submitted_uuids), len(dataframe)
+            location = client.get_table(config.table_fqn).location
+            identity = json.dumps([str(config.source_path), digest, config.table_fqn, attempt, submitted_uuids])
+            job_id = "psg_" + hashlib.sha256(identity.encode()).hexdigest()
+            state = {"source": str(config.source_path), "table": config.table_fqn,
+                     "artifact_sha256": digest, "attempt": attempt, "job_id": job_id if sent else None,
+                     "location": location, "state": "READY" if sent else "CONFIRMED",
+                     "uuids": submitted_uuids, "counts": {"received": received,
+                     "omitted": received - sent, "sent": sent, "inserted": 0},
+                     "loaded": str(config.source_path.with_name(config.source_path.stem + "_loaded.parquet")),
+                     "evidence": file_evidence(actual_path)}
+            save(state_path, state)
+        if state["state"] not in ("CONFIRMED", "LOADED"):
+            if state["state"] == "READY":
+                to_send = dataframe.loc[dataframe[config.uuid_field].isin(state["uuids"])]
+                if to_send[config.uuid_field].tolist() != state["uuids"]:
+                    die("El subconjunto registrado no coincide con el lote")
+                state["state"] = "SUBMITTED"
+                save(state_path, state)  # Identidad e intento guardados ANTES de enviar.
+                job = None
+                try:
+                    job = client.load_table_from_dataframe(to_send, config.table_fqn,
+                        job_id=state["job_id"], location=state["location"],
+                        job_config=bigquery.LoadJobConfig(schema=bq_schema, write_disposition="WRITE_APPEND"))
+                    job.result()
+                except Exception:
+                    confirmed_failure = (job is not None and job.state == "DONE" and job.error_result
+                        and job.job_id == state["job_id"] and str(job.destination) == config.table_fqn
+                        and job.write_disposition == "WRITE_APPEND")
+                    state["state"] = "FAILED" if confirmed_failure else "UNKNOWN"
+                    save(state_path, state)
+                    raise
+            else:
+                try:
+                    job = client.get_job(state["job_id"], project=config.project_id, location=state["location"])
+                except Exception:
+                    state["state"] = "UNKNOWN"
+                    save(state_path, state)
+                    die("Resultado remoto desconocido; no se reenvía el lote")
+            if (job.job_id != state["job_id"] or str(job.destination) != config.table_fqn
+                    or job.write_disposition != "WRITE_APPEND"):
+                die("El trabajo remoto no corresponde al intento registrado")
+            if job.state != "DONE":
+                state["state"] = "PENDING" if job.state in ("PENDING", "RUNNING") else "UNKNOWN"
+                save(state_path, state)
+                die("Trabajo remoto pendiente; reanude para consultar, sin reenviar")
+            if job.error_result:
+                state["state"] = "FAILED"
+                save(state_path, state)
+                die("Fallo remoto confirmado; una próxima reanudación creará otro intento")
+            if job.output_rows != state["counts"]["sent"]:
+                state["state"] = "UNKNOWN"
+                save(state_path, state)
+                die("Carga PSG no conciliada; resultado remoto requiere revisión")
+            state["counts"]["inserted"] = job.output_rows
+            state["state"] = "CONFIRMED"
+            save(state_path, state)
+        counts = state["counts"]
+        if counts["received"] != counts["omitted"] + counts["sent"] or counts["sent"] != counts["inserted"]:
+            die("Cantidades de carga no conciliadas")
+        if state["state"] != "LOADED":
+            finish_move(config.source_path, Path(state["loaded"]), state["evidence"])
+            state["state"] = "LOADED"
+            save(state_path, state)
+        if fingerprint(Path(state["loaded"])) != digest:
+            die("El artefacto archivado no corresponde al lote")
+        log("Conciliación PSG: " + ", ".join(f"{key}={value}" for key, value in zip(
+            ("recibidos", "omitidos", "enviados", "insertados"),
+            (counts["received"], counts["omitted"], counts["sent"], counts["inserted"]))))
+        return {"loaded": state["loaded"], "counts": counts, "job_id": state["job_id"]}
 
 
-def run(config: LoaderConfig, flow: str, non_interactive: bool = False) -> dict | None:
+def _run_locked(config: LoaderConfig, flow: str, non_interactive: bool = False) -> dict | None:
     log("Iniciando carga manual a BigQuery")
 
     if flow == "psg":
@@ -858,6 +968,13 @@ def run(config: LoaderConfig, flow: str, non_interactive: bool = False) -> dict 
     log(f"Archivo de entrada movido a: {moved_path}")
 
 
+def run(config: LoaderConfig, flow: str, non_interactive: bool = False) -> dict | None:
+    if flow != "psg":
+        return _run_locked(config, flow, non_interactive)
+    with psg_lock(STAGING_DIR):
+        return _run_locked(config, flow, non_interactive)
+
+
 if __name__ == "__main__":
     try:
         selected_flow, selected_input_path, selected_table_id, unattended, result_json = parse_cli_args()
@@ -869,7 +986,7 @@ if __name__ == "__main__":
         runtime_config = load_runtime_config(selected_config_path, selected_input_path, selected_table_id)
         result = run(runtime_config, selected_flow, non_interactive=unattended)
         if result_json:
-            Path(result_json).write_text(json.dumps(result), encoding="utf-8")
+            save(Path(result_json), result)
     except Exception as error:
         if LOGGER:
             LOGGER.exception("ERROR: %s", error)

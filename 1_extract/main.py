@@ -2,11 +2,13 @@ import argparse, sys, time, logging, os, fcntl, re
 from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.psg_state import psg_lock, save
 import yaml
 import json
 
 from extract_commons.logger import setup_logger
-from extract_commons.auditoria_psg import audit_psg
+from extract_commons.auditoria_psg import audit_psg, read_log
 from extract_commons.directorio_utils import validar_directorio, procesar_directorio
 from extract_commons.archivo_utils import configure_subflows, load_known_psg_uuids
 
@@ -59,8 +61,9 @@ def parse_args():
     p.add_argument("--yes", action="store_true", help="Confirmar operación PSG sin interacción")
     p.add_argument("--output-file", help="Nombre CSV PSG explícito dentro de --output-dir")
     p.add_argument("--result-json", help="Resumen técnico PSG para el orquestador")
+    p.add_argument("--resume-extraction", action="store_true", help="Reconciliar una extracción interrumpida con checkpoint")
     args = p.parse_args()
-    if args.flow != "psg" and (args.yes or args.output_file or args.result_json):
+    if args.flow != "psg" and (args.yes or args.output_file or args.result_json or args.resume_extraction):
         p.error("Las opciones de orquestación solo se admiten en PSG")
     return args
 
@@ -256,7 +259,22 @@ def _show_psg_configuration(mode: str, source: Path, destination: Path,
 
 
 def _orchestrate_psg(args, cfg: Config) -> int:
+    _, _, output, _ = _psg_runtime(args, cfg)
+    from extract_commons import archivo_utils
+    previous = (archivo_utils.PSG_RECOVERY_DIR, archivo_utils.PSG_RECOVERY_LOG)
+    try:
+        with psg_lock(output):
+            return _orchestrate_psg_locked(args, cfg)
+    finally:
+        archivo_utils.PSG_RECOVERY_DIR, archivo_utils.PSG_RECOVERY_LOG = previous
+
+
+def _orchestrate_psg_locked(args, cfg: Config) -> int:
     source, destination, output, cfg = _psg_runtime(args, cfg)
+    from extract_commons import archivo_utils
+    archivo_utils.PSG_RECOVERY_DIR = output / ".psg-moves"
+    if getattr(args, "resume_extraction", False):
+        return _resume_extraction(args, source, destination, output)
     _show_psg_configuration(args.mode, source, destination, output, args.dry_run)
     if args.dry_run:
         return EXIT_OK
@@ -268,6 +286,7 @@ def _orchestrate_psg(args, cfg: Config) -> int:
         if answer not in ("s", "si", "sí"):
             return EXIT_OK
     log_path = setup_logging_from_config(cfg, force_debug=args.verbose, flow="psg")
+    archivo_utils.PSG_RECOVERY_LOG = log_path
     orchestration_started_at = time.perf_counter()
     phase_times = {}
     with (output / ".psg-archive.lock").open("a+b") as lock:
@@ -296,6 +315,11 @@ def _orchestrate_psg(args, cfg: Config) -> int:
             logger.info("Progreso PSG 1/3: lectura de UUID históricos iniciada")
             history_started_at = time.perf_counter()
             known = load_known_psg_uuids(output)
+            try:
+                archivo_utils.recover_psg_moves(source, destination, output, known=known)
+            except Exception as error:
+                logger.error("Recuperación documental PSG bloqueada: %s", type(error).__name__)
+                return EXIT_PROCESS
             phase_times["historicos_s"] = time.perf_counter() - history_started_at
             logger.info("Progreso PSG 1/3: lectura de UUID históricos terminada; tiempo_s=%.3f",
                         phase_times["historicos_s"])
@@ -304,6 +328,11 @@ def _orchestrate_psg(args, cfg: Config) -> int:
             phase_times["procesamiento_s"] = elapsed
             logger.info("Progreso PSG 2/3: procesamiento terminado; tiempo_s=%.3f", elapsed)
             report(result, source, elapsed, args.verbose)
+            if getattr(args, "result_json", None):
+                save(Path(args.result_json).with_suffix(".checkpoint.json"), {
+                    "csv": str(csv_path), "log": str(log_path), "source": str(source),
+                    "archive": str(destination), "result": result, "elapsed": elapsed,
+                    "times": phase_times})
             logger.info("Progreso PSG 3/3: auditoría iniciada")
             audit_started_at = time.perf_counter()
             try:
@@ -331,15 +360,59 @@ def _orchestrate_psg(args, cfg: Config) -> int:
                         f"{phase_times['auditoria_s']:.3f}" if "auditoria_s" in phase_times else "NO_EVALUADO",
                         time.perf_counter() - orchestration_started_at)
     if getattr(args, "result_json", None):
-        Path(args.result_json).write_text(json.dumps({
+        save(Path(args.result_json), {
             "csv": str(csv_path), "audit": str(audit_path), "audit_state": audit_state,
             "counts": {k: v for k, v in result.items() if isinstance(v, (int, float))},
             "times": phase_times, "log": str(log_path),
-        }), encoding="utf-8")
+        })
     if (audit_state == "ERROR" or result.get("archivos_fallo_archivado", 0)
             or result.get("errores_recorrido", 0) or result.get("errores_procesamiento", 0)):
         return EXIT_PROCESS
     return EXIT_OK
+
+
+def _resume_extraction(args, source, destination, output):
+    from extract_commons import archivo_utils
+    if not args.result_json:
+        raise ValueError("La reanudación requiere --result-json")
+    checkpoint = Path(args.result_json).with_suffix(".checkpoint.json")
+    if not checkpoint.exists():
+        archivo_utils.recover_psg_moves(source, destination, output)
+        raise RuntimeError("Inventario de extracción no confirmado; movimientos conciliados, revisión necesaria")
+    item = json.loads(checkpoint.read_text())
+    if item["source"] != str(source) or item["archive"] != str(destination):
+        raise RuntimeError("Checkpoint de extracción incompatible")
+    log_path = Path(item["log"])
+    if not log_path.is_file():
+        raise RuntimeError("No existe el log de extracción original")
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s $$ %(levelname)s $$ %(message)s',
+                        handlers=[logging.FileHandler(log_path, encoding="utf-8")], force=True)
+    archivo_utils.recover_psg_moves(source, destination, output)
+    # El checkpoint conserva el inventario original; solo se corrigen movimientos demostrados.
+    import csv
+    origins = set()
+    if Path(item["csv"]).exists():
+        with Path(item["csv"]).open(newline="", encoding="utf-8") as stream:
+            origins = {row["meta_fuente"] for row in csv.DictReader(stream)}
+    moves = read_log(log_path)[0]
+    if any(len(destinations) != 1 for destinations in moves.values()):
+        raise RuntimeError("Traslados repetidos o ambiguos en el log original")
+    new_archived = sum(origin in origins for origin in moves)
+    retried = len(moves) - new_archived
+    result = dict(item["result"])
+    recovered = new_archived + retried - result["archivos_extraidos"] - result["archivos_reintentados"]
+    if not 0 <= recovered <= result["archivos_fallo_archivado"]:
+        raise RuntimeError("No concilian los movimientos recuperados con el inventario original")
+    result.update(archivos_extraidos=new_archived, archivos_reintentados=retried,
+                  archivos_fallo_archivado=result["archivos_fallo_archivado"] - recovered)
+    audit_path, state = audit_psg(item["csv"], log_path, args.config or resolve_config_yaml_path("psg"),
+        source, destination, result=result, elapsed=item["elapsed"],
+        phase_times=item["times"])
+    save(Path(args.result_json), {"csv": item["csv"], "log": str(log_path),
+        "audit": str(audit_path), "audit_state": state,
+        "counts": {k: v for k, v in result.items() if isinstance(v, (int, float))},
+        "times": item["times"]})
+    return EXIT_PROCESS if state == "ERROR" else EXIT_OK
 
 def maybe_unify(cfg: Config) -> None:
     if not cfg.carpeta_csv:

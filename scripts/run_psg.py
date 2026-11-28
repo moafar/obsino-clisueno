@@ -1,8 +1,7 @@
-"""Orquestación PSG mediante las CLI de cada capa; sin reanudación automática."""
+"""Orquestación y reanudación explícita PSG mediante las CLI de cada capa."""
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
 import os
 import re
@@ -17,6 +16,9 @@ from uuid import uuid4
 import pyarrow.parquet as pq
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.psg_state import save, psg_lock, fingerprint, sync_dir
+
 ROOT = Path(__file__).resolve().parents[1]
 STAGING = ROOT / "staging"
 CONTRACT = ROOT / "0_declarations/psg.yaml"
@@ -26,25 +28,6 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
-def save(path, record):
-    """Reemplazo atómico y sincronizado en el mismo directorio."""
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
-                                         prefix=".state-", delete=False) as stream:
-            temporary = Path(stream.name)
-            json.dump(record, stream, ensure_ascii=False, indent=2)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-        descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
 
 
 def preflight(source, archive, mount, staging, credentials):
@@ -73,38 +56,83 @@ def preflight(source, archive, mount, staging, credentials):
             os.fsync(stream.fileno())
 
 
-def run(source: Path, archive: Path, mount: Path, table_id: str) -> Path:
+def run(source: Path | None = None, archive: Path | None = None, mount: Path | None = None,
+        table_id: str | None = None, resume_id: str | None = None) -> Path:
     staging = STAGING.resolve(strict=True)
-    source, archive, mount = (p.resolve() for p in (source, archive, mount))
-    with (staging / ".psg-run.lock").open("a+b") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise RuntimeError("Ya hay un orquestador PSG activo") from None
-        execution = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "_" + uuid4().hex
-        folder = staging / "psg_runs" / execution
-        folder.mkdir(parents=True, exist_ok=False)
-        state_path = folder / "run.json"
-        csv = staging / f"extract_psg_{execution}.csv"
-        parquet = csv.with_name(csv.stem + "_transformed.parquet")
-        record = {"id": execution, "state": "RUNNING", "started_at": now(),
-                  "paths": {"source": str(source), "archive": str(archive),
-                            "csv": str(csv), "parquet": str(parquet)},
-                  "stages": {}, "error": None}
+    with psg_lock(staging, blocking=False) as descriptor:
+        if resume_id:
+            if not re.fullmatch(r"[A-Za-z0-9_-]+", resume_id):
+                raise ValueError("Identificador de ejecución inválido")
+            folder = staging / "psg_runs" / resume_id
+            state_path = folder / "run.json"
+            record = json.loads(state_path.read_text())
+            if record.get("recovery_blocked"):
+                raise RuntimeError("Reanudación bloqueada por una inconsistencia previamente confirmada")
+            if record["id"] != resume_id:
+                raise RuntimeError("Identidad de ejecución inconsistente")
+            source, archive, mount = (Path(record["paths"][key]) for key in ("source", "archive", "mount"))
+            table_id = record["destination"].split(".")[-1]
+            execution = resume_id
+            csv = staging / f"extract_psg_{execution}.csv"
+            parquet = csv.with_name(csv.stem + "_transformed.parquet")
+            if record["paths"]["csv"] != str(csv) or record["paths"]["parquet"] != str(parquet):
+                raise RuntimeError("Rutas de ejecución inconsistentes")
+            record["resume_count"] = record.get("resume_count", 0) + 1
+            record.update(state="RUNNING", error=None)
+        else:
+            if not all((source, archive, mount, table_id)):
+                raise ValueError("Una ejecución nueva requiere input, archive-dest, mount y table-id")
+            source, archive, mount = (p.resolve() for p in (source, archive, mount))
+            execution = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "_" + uuid4().hex
+            folder = staging / "psg_runs" / execution
+            folder.mkdir(parents=True, exist_ok=False)
+            sync_dir(folder.parent)
+            sync_dir(staging)
+            state_path = folder / "run.json"
+            csv = staging / f"extract_psg_{execution}.csv"
+            parquet = csv.with_name(csv.stem + "_transformed.parquet")
+            record = {"id": execution, "state": "RUNNING", "started_at": now(),
+                      "paths": {"source": str(source), "archive": str(archive), "mount": str(mount),
+                                "csv": str(csv), "parquet": str(parquet)},
+                      "digests": {}, "stages": {}, "error": None}
+        record["paths"]["load_state"] = str(parquet.with_suffix(".load-state.json"))
         started = time.perf_counter()
         save(state_path, record)
 
         def stage(name, command, result_path=None, validate=None):
-            entry = {"state": "RUNNING", "started_at": now(),
-                     "log": str(folder / f"{name}.log")}
+            previous = record["stages"].get(name)
+            if previous and previous["state"] == "OK":
+                try:
+                    validate(previous["result"])
+                except Exception as error:
+                    previous.update(state="ERROR", error=type(error).__name__)
+                    record["recovery_blocked"] = {"stage": name, "error": type(error).__name__}
+                    save(state_path, record)
+                    raise
+                return previous["result"]
+            attempt = (previous or {}).get("attempt", 0) + 1
+            entry = {"state": "RUNNING", "started_at": now(), "attempt": attempt,
+                     "log": str(folder / f"{name}.{attempt}.log")}
             record["stages"][name] = entry
             save(state_path, record)
             tick = time.perf_counter()
             try:
-                with Path(entry["log"]).open("xb") as log:
-                    subprocess.run([sys.executable, *map(str, command)], cwd=ROOT,
-                                   stdin=subprocess.DEVNULL, stdout=log,
-                                   stderr=subprocess.STDOUT, check=True)
+                cached = result_path and result_path.exists()
+                if cached and previous and name == "extract_audit":
+                    cached = json.loads(result_path.read_text())["audit_state"] in ("OK", "ADVERTENCIA")
+                if not cached:
+                    if previous and name == "load" and not parquet.with_suffix(".load-state.json").is_file():
+                        raise RuntimeError("No existe el journal de la carga interrumpida; requiere revisión")
+                    if previous and name == "extract_audit":
+                        command = [*command, "--resume-extraction"]
+                    if previous and name == "transform":
+                        command = [*command, "--recover-publication"]
+                    with Path(entry["log"]).open("xb") as log:
+                        subprocess.run([sys.executable, *map(str, command)], cwd=ROOT,
+                                       stdin=subprocess.DEVNULL, stdout=log,
+                                       stderr=subprocess.STDOUT, check=True,
+                                       pass_fds=(descriptor,),
+                                       env={**os.environ, "PSG_LOCK_FD": str(descriptor)})
                 result = json.loads(result_path.read_text()) if result_path else {}
                 entry["result"] = result
                 if validate is not None:
@@ -124,12 +152,24 @@ def run(source: Path, archive: Path, mount: Path, table_id: str) -> Path:
                 raise ValueError("Debe indicar una tabla canónica explícita")
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table_id):
                 raise ValueError("Tabla no válida")
-            record["destination"] = f"{config['project_id']}.{config['dataset_id']}.{table_id}"
+            destination = f"{config['project_id']}.{config['dataset_id']}.{table_id}"
+            if resume_id and record["destination"] != destination:
+                raise RuntimeError("El contrato ha cambiado de destino")
+            record["destination"] = destination
             preflight(source, archive, mount, staging, ROOT / config["service_account_json"])
             logs = ROOT / "logs"
             logs.mkdir(exist_ok=True)
             with tempfile.TemporaryFile(dir=logs):
                 pass
+            def verify_artifact(key, path):
+                actual = fingerprint(path)
+                expected = record.setdefault("digests", {}).get(key)
+                if expected is not None and actual != expected:
+                    raise RuntimeError("El artefacto ha cambiado desde su confirmación")
+                if resume_id and record["stages"].get(key, {}).get("state") == "OK" and expected is None:
+                    raise RuntimeError("Registro anterior sin huella de artefacto; requiere revisión")
+                record["digests"][key] = actual
+
             def validate_extraction(result):
                 record["audit"] = {"state": result["audit_state"], "report": result.get("audit")}
                 if result["audit_state"] not in ("OK", "ADVERTENCIA") or result["csv"] != str(csv):
@@ -137,18 +177,33 @@ def run(source: Path, archive: Path, mount: Path, table_id: str) -> Path:
                 rows = result["counts"]["archivos_registrados"]
                 if rows and not csv.is_file():
                     raise RuntimeError("No existe el CSV declarado por extracción")
-                record["counts"] = {"extracted": rows}
+                if rows:
+                    verify_artifact("extract_audit", csv)
+                record.setdefault("counts", {})["extracted"] = rows
 
             def validate_transform(_result):
-                transformed = pq.read_metadata(parquet).num_rows
+                actual = parquet
+                if not actual.exists():
+                    state = json.loads(parquet.with_suffix(".load-state.json").read_text())
+                    if state["state"] not in ("CONFIRMED", "LOADED"):
+                        raise RuntimeError("Parquet ausente sin carga confirmada")
+                    actual = Path(state["loaded"])
+                transformed = pq.read_metadata(actual).num_rows
+                verify_artifact("transform", actual)
                 if transformed != record["counts"]["extracted"]:
                     raise RuntimeError("No concilian extracción y transformación")
                 record["counts"]["transformed"] = transformed
 
             def validate_load(result):
+                expected_loaded = parquet.with_name(parquet.stem + "_loaded.parquet")
+                if Path(result["loaded"]) != expected_loaded:
+                    raise RuntimeError("Ruta del artefacto cargado inconsistente")
                 if (result["counts"]["received"] != record["counts"]["transformed"]
                         or not Path(result["loaded"]).is_file()):
                     raise RuntimeError("Carga no conciliada con el artefacto local")
+                verify_artifact("load", Path(result["loaded"]))
+                if record["digests"]["load"] != record["digests"]["transform"]:
+                    raise RuntimeError("El artefacto cargado no coincide con el transformado")
 
             extraction = stage("extract_audit", [ROOT / "1_extract/main.py", "--flow", "psg",
                 "--input", source, "--archive-dest", archive, "--output-dir", staging,
@@ -180,13 +235,16 @@ def run(source: Path, archive: Path, mount: Path, table_id: str) -> Path:
 
 def main():
     parser = argparse.ArgumentParser(description="Ejecutar PSG con auditoría integrada y registro persistente")
-    parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--archive-dest", type=Path, required=True)
-    parser.add_argument("--mount", type=Path, required=True, help="Montaje documental real, por ejemplo /mnt/e")
-    parser.add_argument("--table-id", required=True, help="Tabla canónica de destino explícita")
+    parser.add_argument("--input", type=Path)
+    parser.add_argument("--archive-dest", type=Path)
+    parser.add_argument("--mount", type=Path, help="Montaje documental real, por ejemplo /mnt/e")
+    parser.add_argument("--table-id", help="Tabla canónica de destino explícita")
+    parser.add_argument("--resume", help="Identificador de ejecución a reanudar")
     args = parser.parse_args()
+    if args.resume and any((args.input, args.archive_dest, args.mount, args.table_id)):
+        parser.error("--resume reutiliza las rutas y el destino registrados")
     try:
-        run(args.input, args.archive_dest, args.mount, args.table_id)
+        run(args.input, args.archive_dest, args.mount, args.table_id, resume_id=args.resume)
         return 0
     except (Exception, KeyboardInterrupt) as error:
         print(f"Orquestación PSG detenida: {type(error).__name__}", file=sys.stderr)
