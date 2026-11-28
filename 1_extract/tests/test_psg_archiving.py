@@ -284,6 +284,16 @@ class PSGArchivingTest(unittest.TestCase):
         self.assertEqual(1, result["archivos_reintentados"])
         self.assertEqual(2, result["archivos_registrados"])
 
+    def test_audit_automatically_written_after_extraction(self):
+        source = self.source / "synthetic.doc"
+        source.write_bytes(b"synthetic")
+        self.assertEqual(0, self.run_cli())
+        reports = list((self.root / "logs").glob("extract_psg_*_auditoria.md"))
+        self.assertEqual(1, len(reports))
+        self.assertIn("MD5 correctos: 1", reports[0].read_text(encoding="utf-8"))
+        self.assertFalse(source.exists())
+        self.assertEqual(1, len(self.csv_rows()))
+
     def test_normal_mode_accepts_alternate_origin(self):
         source, destination, output, _ = extract_main._psg_runtime(
             self.args(mode="normal", test_root=None), self.config)

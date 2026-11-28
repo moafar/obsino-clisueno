@@ -5,6 +5,7 @@ from pathlib import Path
 import yaml
 
 from commons.logger import setup_logger
+from commons.auditoria_psg import audit_psg
 from commons.directorio_utils import validar_directorio, procesar_directorio
 from commons.archivo_utils import configure_subflows, load_known_psg_uuids
 
@@ -116,7 +117,9 @@ def load_config(path_cfg: str) -> Config:
 
 def setup_logging_from_config(cfg: Config, force_debug: bool, flow: str):
     level_name = "DEBUG" if force_debug else cfg.logging_level
-    setup_logger(str(cfg.logging_dir), flow_name=flow, level_name=level_name)
+    if flow == "psg" and getattr(logging, level_name, logging.INFO) > logging.INFO:
+        level_name = "INFO"  # La auditoría requiere los eventos de traslado.
+    return setup_logger(str(cfg.logging_dir), flow_name=flow, level_name=level_name)
 
 def resolve_input_dir(cli_dir: str | None, cfg: Config) -> Path:
     path = Path(cli_dir).resolve() if cli_dir else cfg.entrada_ruta
@@ -253,20 +256,41 @@ def _orchestrate_psg(args, cfg: Config) -> int:
         return EXIT_OK
     if answer not in ("s", "si", "sí"):
         return EXIT_OK
-    setup_logging_from_config(cfg, force_debug=args.verbose, flow="psg")
-    output_map = build_timestamped_output_map("psg", cfg.subflujos_salida_unificada)
-    configure_subflows(unified_file_for=output_map, prefixes=cfg.subflujos_prefijos,
-                       output_dir=output)
-    logger.info("PSG: modo=%s origen=%s destino=%s salida=%s", args.mode, source, destination, output)
+    log_path = setup_logging_from_config(cfg, force_debug=args.verbose, flow="psg")
     with (output / ".psg-archive.lock").open("a+b") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
+            output_map = build_timestamped_output_map("psg", cfg.subflujos_salida_unificada)
+            csv_path = output / output_map["BASAL"]
+            # Cada auditoría debe corresponder exclusivamente a esta ejecución.
+            if csv_path.exists():
+                stem = csv_path.stem
+                suffix = 1
+                while csv_path.exists():
+                    csv_path = output / f"{stem}_{suffix}.csv"
+                    suffix += 1
+                output_map["BASAL"] = csv_path.name
+            configure_subflows(unified_file_for=output_map, prefixes=cfg.subflujos_prefijos,
+                               output_dir=output)
+            logger.info("PSG: modo=%s origen=%s destino=%s salida=%s", args.mode, source, destination, output)
             known = load_known_psg_uuids(output)
             result, elapsed = run_processing(source, cfg, archive_dir=destination, known_psg=known)
+            report(result, source, elapsed, args.verbose)
+            try:
+                audit_path, audit_state = audit_psg(
+                    csv_path, log_path, args.config or resolve_config_yaml_path("psg"),
+                    source, destination, result=result,
+                    extensions=cfg.tipos_validos or ("doc", "rtf"), elapsed=elapsed)
+                print(f"Auditoría PSG: {audit_state} | {audit_path}")
+            except Exception as error:
+                logger.error("Auditoría PSG no completada: %s", type(error).__name__)
+                print("Auditoría PSG no completada; consulte el log. No se revierten los traslados.",
+                      file=sys.stderr)
+                return EXIT_PROCESS
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
-    report(result, source, elapsed, args.verbose)
-    if result.get("archivos_fallo_archivado", 0) or result.get("errores_recorrido", 0):
+    if (audit_state == "ERROR" or result.get("archivos_fallo_archivado", 0)
+            or result.get("errores_recorrido", 0)):
         return EXIT_PROCESS
     return EXIT_OK
 
