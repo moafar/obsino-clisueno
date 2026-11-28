@@ -1,6 +1,7 @@
-"""Pruebas locales con XLSX sintético y BigQuery simulado; nunca escribe en BigQuery."""
+"""Pruebas locales con Parquet sintético y BigQuery simulado; nunca escribe en BigQuery."""
 
 import importlib.util
+import hashlib
 import io
 import json
 import time
@@ -17,10 +18,14 @@ from unittest.mock import Mock, patch
 
 import pandas as pd
 from google.cloud.bigquery import _pandas_helpers
-from openpyxl import load_workbook
 
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "1_extract"))
+sys.path.insert(0, str(ROOT / "2_transform"))
+from src.basal.procesar_basal import PSG_COLUMNS
+from psg.main import run as transform_psg
+
 SPEC = importlib.util.spec_from_file_location("psg_load_main_test", ROOT / "3_load/main.py")
 load = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = load
@@ -35,6 +40,7 @@ class FakeClient:
         self.schema = schema
         self.existing = set(existing)
         self.load_table_from_dataframe = Mock(side_effect=self._load)
+        self.load_table_from_file = Mock(side_effect=AssertionError("Carga desde archivo no seleccionada"))
 
     def _load(self, dataframe, _table, job_config=None):
         uuid_field = "meta_uuid" if "meta_uuid" in dataframe else "xpap_uuid"
@@ -57,7 +63,7 @@ class PsgLoadTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.path = Path(self.temp.name) / "extract_psg_synthetic_transformed.xlsx"
+        self.path = Path(self.temp.name) / "extract_psg_synthetic_transformed.parquet"
         self.config = load.load_runtime_config(CONTRACT, self.path, "tbl_psg_canonica_test")
         self.schema = load.build_bq_schema(SCHEMA)
 
@@ -68,9 +74,19 @@ class PsgLoadTest(unittest.TestCase):
         row.update(changes)
         return row
 
-    def write(self, rows, columns=None):
+    def write(self, rows, columns=None, physical_overrides=None):
         frame = pd.DataFrame(rows, columns=columns or NAMES)
-        frame.to_excel(self.path, index=False, sheet_name="procesado")
+        for name in frame.columns:
+            if name not in SCHEMA:
+                continue
+            kind = (physical_overrides or {}).get(name, SCHEMA[name])
+            target = {"STRING": "string", "INT": "Int64", "FLOAT": "Float64",
+                      "DATE": "datetime64[ns]"}.get(kind, kind)
+            try:
+                frame[name] = frame[name].astype(target)
+            except (ValueError, TypeError):
+                pass  # El caso inválido se escribe con su tipo físico incorrecto.
+        frame.to_parquet(self.path, index=False, engine="pyarrow", compression="snappy")
 
     def execute(self, client=None, expect_error=False, expect_no_load=False):
         client = client or FakeClient(self.schema)
@@ -118,13 +134,13 @@ class PsgLoadTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             load.load_runtime_config(CONTRACT, self.path, "tbl_psg_legacy_prd")
 
-    def test_valid_xlsx_preserves_values_and_types(self):
+    def test_valid_parquet_preserves_values_and_types(self):
         self.write([self.row()])
         result = self.execute()
         self.assertEqual(list(result.columns), NAMES)
         self.assertEqual(result.loc[0, "pte_id"], "000123")
         self.assertEqual(result.loc[0, "meta_uuid"], "synthetic-uuid-1")
-        self.assertEqual(str(result.loc[0, "meta_fecha_estudio"]), "2025-01-02")
+        self.assertEqual(result.loc[0, "meta_fecha_estudio"], pd.Timestamp("2025-01-02"))
         self.assertEqual(result.loc[0, "pte_edad_anos"], 0)
         self.assertEqual(result.loc[0, "arq_tiempo_sueno_min"], 12.5)
         self.assertIn("niño", result.loc[0, "clin_ronquido"])
@@ -133,10 +149,7 @@ class PsgLoadTest(unittest.TestCase):
         self.assertEqual(arrow_table.schema.field("meta_fecha_estudio").type.__str__(), "date32[day]")
 
     def test_reject_numeric_physical_identifier(self):
-        self.write([self.row()])
-        workbook = load_workbook(self.path)
-        workbook["procesado"].cell(2, NAMES.index("pte_id") + 1).value = 123
-        workbook.save(self.path)
+        self.write([self.row(pte_id=123)], physical_overrides={"pte_id": "Int64"})
         self.execute(expect_error=True)
 
     def test_nullable_partition_date_reaches_arrow_as_null(self):
@@ -153,6 +166,54 @@ class PsgLoadTest(unittest.TestCase):
             with self.subTest(columns=len(columns)):
                 self.write([self.row()], columns)
                 self.execute(expect_error=True)
+
+    def test_reject_wrong_physical_types_and_legacy_formats(self):
+        for name, kind, value in (("pte_id", "Int64", 123),
+                                  ("pte_edad_anos", "Float64", 12.0),
+                                  ("arq_tiempo_sueno_min", "Int64", 12),
+                                  ("meta_fecha_estudio", "string", "2025-01-02")):
+            with self.subTest(name=name):
+                self.write([self.row(**{name: value})], physical_overrides={name: kind})
+                self.execute(expect_error=True)
+        old = self.path.with_suffix(".xlsx")
+        old.touch()
+        self.assertFalse(load._is_flow_transformed_file(old, "psg"))
+
+    def test_discovery_excludes_partial_loaded_and_legacy_files(self):
+        with patch.object(load, "STAGING_DIR", Path(self.temp.name)):
+            self.write([self.row()])
+            for name in ("extract_psg_synthetic_transformed.parquet.tmp",
+                         "extract_psg_synthetic_transformed_loaded.parquet",
+                         "extract_psg_synthetic_transformed_partial.parquet",
+                         "extract_psg_synthetic_transformed.xlsx"):
+                (Path(self.temp.name) / name).touch()
+            self.assertEqual(self.path, load._discover_latest_input("psg"))
+            for name in ("extract_psg_synthetic_transformed.parquet.tmp",
+                         "extract_psg_synthetic_transformed_loaded.parquet",
+                         "extract_psg_synthetic_transformed_partial.parquet",
+                         "extract_psg_synthetic_transformed.xlsx"):
+                with self.subTest(name=name):
+                    self.assertFalse(load._is_flow_transformed_file(Path(self.temp.name) / name, "psg"))
+
+    def test_cli_accepts_only_published_psg_parquet(self):
+        self.write([self.row()])
+        with patch.object(load, "STAGING_DIR", Path(self.temp.name)), \
+             patch.object(sys, "argv", ["load", "--flow", "psg", "--input", str(self.path)]):
+            self.assertEqual(("psg", self.path, None), load.parse_cli_args())
+        old = self.path.with_suffix(".xlsx")
+        old.touch()
+        with patch.object(load, "STAGING_DIR", Path(self.temp.name)), \
+             patch.object(sys, "argv", ["load", "--flow", "psg", "--input", str(old)]):
+            with self.assertRaises(RuntimeError):
+                load.parse_cli_args()
+
+    def test_loaded_parquet_suffix_is_preserved(self):
+        self.write([self.row()])
+        with patch.object(load, "STAGING_DIR", Path(self.temp.name)):
+            moved = load.move_loaded_input_file(self.path, "psg")
+        self.assertEqual("extract_psg_synthetic_transformed_loaded.parquet", moved.name)
+        self.assertTrue(moved.exists())
+        self.assertFalse(self.path.exists())
 
     def test_reject_invalid_values(self):
         for changes in (
@@ -211,13 +272,34 @@ class PsgLoadTest(unittest.TestCase):
                                "error": "entero_incompatible", "accion": "convertido_a_null"}],
                              ensure_ascii=False, separators=(",", ":"))
         self.write([self.row(meta_incidencias_calidad=payload),
-                    self.row(meta_uuid="synthetic-uuid-2", meta_incidencias_calidad=None)])
+                    self.row(meta_uuid="synthetic-uuid-2", pte_id=None,
+                             meta_incidencias_calidad=None)])
         sent = self.execute()
         self.assertEqual(payload, sent.loc[0, "meta_incidencias_calidad"])
         self.assertTrue(pd.isna(sent.loc[1, "meta_incidencias_calidad"]))
+        self.assertTrue(pd.isna(sent.loc[1, "pte_id"]))
         arrow = _pandas_helpers.dataframe_to_arrow(sent, self.schema)
         self.assertEqual(payload, arrow.column("meta_incidencias_calidad")[0].as_py())
         self.assertIsNone(arrow.column("meta_incidencias_calidad")[1].as_py())
+
+    def test_csv_transform_parquet_and_simulated_load(self):
+        source = Path(self.temp.name) / "extract_psg_synthetic.csv"
+        original = dict.fromkeys(PSG_COLUMNS, "")
+        uuid = hashlib.md5(b"psg-e36-synthetic").hexdigest()
+        original.update(pte_id="000123", meta_uuid=uuid, meta_fecha_estudio="02/01/2025",
+                        meta_completitud_pct="20", pte_edad_anos="12",
+                        arq_tiempo_sueno_min="valor incompatible")
+        pd.DataFrame([original], columns=PSG_COLUMNS).to_csv(source, index=False)
+        self.assertEqual(self.path, transform_psg(str(CONTRACT), str(source), str(self.path)))
+        expected = pd.read_parquet(self.path)
+        sent = self.execute()
+        pd.testing.assert_frame_equal(expected, sent, check_dtype=True, check_exact=True)
+        self.assertEqual("000123", sent.loc[0, "pte_id"])
+        self.assertEqual(uuid, sent.loc[0, "meta_uuid"])
+        self.assertTrue(pd.isna(sent.loc[0, "arq_tiempo_sueno_min"]))
+        self.assertEqual("valor incompatible", json.loads(sent.loc[0, "meta_incidencias_calidad"])[0]["valor_original"])
+        self.assertTrue(source.exists())
+        self.assertTrue(self.path.exists())  # El doble sustituye al movimiento remoto.
 
     def test_local_lock_serializes_query_and_load(self):
         self.write([self.row()])
@@ -260,7 +342,8 @@ class PsgLoadTest(unittest.TestCase):
         self.execute(expect_error=True)
 
     def test_xpap_shared_contract_and_legacy_cast(self):
-        config = load.load_runtime_config(ROOT / "0_declarations/xpap.yaml", self.path)
+        xpap_path = self.path.with_name("extract_xpap_synthetic_transformed.xlsx")
+        config = load.load_runtime_config(ROOT / "0_declarations/xpap.yaml", xpap_path)
         self.assertEqual(config.table_id, "tbl_xpap_prd")
         self.assertEqual(config.schema_path_in_yaml, "schema.load.input.columns")
         schema = load.load_schema(config.schema_yaml_path, config.schema_path_in_yaml)
@@ -269,11 +352,12 @@ class PsgLoadTest(unittest.TestCase):
         self.assertTrue(pd.isna(load.cast_dataframe(frame, {"xpap_edad": "FLOAT"}).loc[0, "xpap_edad"]))
 
     def test_xpap_simulated_load(self):
-        config = load.load_runtime_config(ROOT / "0_declarations/xpap.yaml", self.path)
+        xpap_path = self.path.with_name("extract_xpap_synthetic_transformed.xlsx")
+        config = load.load_runtime_config(ROOT / "0_declarations/xpap.yaml", xpap_path)
         schema = load.load_schema(config.schema_yaml_path, config.schema_path_in_yaml)
         row = {name: None for name in schema}
         row.update(xpap_uuid="synthetic-xpap-uuid", xpap_fecha_estudio=datetime(2025, 1, 2))
-        pd.DataFrame([row], columns=list(schema)).to_excel(self.path, index=False, sheet_name="procesado")
+        pd.DataFrame([row], columns=list(schema)).to_excel(xpap_path, index=False, sheet_name="procesado")
         client = FakeClient(load.build_bq_schema(schema))
         with patch.object(load, "confirm_execution"), patch.object(load, "validate_paths"), \
              patch.object(load, "authenticate_bigquery", return_value=client), \

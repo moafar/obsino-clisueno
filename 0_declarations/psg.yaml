@@ -44,7 +44,7 @@ load:
   table_id: tbl_psg_prd
   write_disposition: WRITE_APPEND
   service_account_json: 3_load/secrets/obsino_clisueno_key.json
-  source_sheet_name: procesado
+  input_format: parquet
   uuid_field: meta_uuid
   date_field: meta_fecha_estudio
   migrated_field: null

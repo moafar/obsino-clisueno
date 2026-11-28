@@ -9,13 +9,13 @@ source .venv/bin/activate
 
 # Ejecución desde 3_load/
 cd 3_load
-../.venv/bin/python main.py --flow <subproceso_ejemplo> --input ../staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
+../.venv/bin/python main.py --flow psg --input ../staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.parquet
 ```
 
 Ejemplo completo desde raíz:
 
 ```bash
-./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
+./.venv/bin/python 3_load/main.py --flow psg --input staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.parquet
 ```
 
 Carga manual de datasets transformados a BigQuery, con controles operativos y validaciones previas.
@@ -31,22 +31,20 @@ Carga manual de datasets transformados a BigQuery, con controles operativos y va
 ```text
 3_load/
     main.py
-    config/
-        <subproceso_ejemplo>.yaml
     secrets/
     requirements.txt
 ```
 
 Carpetas de datos operativos:
 
-- Entrada de carga: `staging/` filtrando por `extract_<flow>_..._transformed`.
+- Entrada de carga: `staging/`, PSG `extract_psg_..._transformed.parquet`; XPAP conserva sus formatos vigentes.
 - Archivado post-carga: `staging/` con sufijo `_loaded`.
 
 ## Configuración
 
 La configuración se resuelve por flujo:
 
-- `--flow <subproceso_ejemplo>` -> `3_load/config/<subproceso_ejemplo>.yaml`
+- `--flow psg` o `--flow xpap` -> `0_declarations/<flow>.yaml`
 
 Estado actual de flows:
 
@@ -67,10 +65,10 @@ Campos relevantes del YAML:
 - descripción operativa de origen (`schema_description`)
 - campos operativos (`uuid_field`, `date_field`, `migrated_field`)
 
-La ruta del Excel puede recibirse por CLI con `--input` o autodetectarse en `staging/` para el flow seleccionado.
+La ruta del artefacto puede recibirse por CLI con `--input` o autodetectarse en `staging/` para el flow seleccionado. PSG excluye XLSX, archivos temporales, parciales y `_loaded`.
 
 Para PSG, el destino definitivo es `observatorio-ino-1.clisueno.tbl_psg_prd`, configurado en `0_declarations/psg.yaml`.
-El cargador protege `tbl_psg_legacy_prd`, que conserva los datos históricos, y exige que el destino cumpla el contrato canónico de 156 columnas.
+El cargador protege `tbl_psg_legacy_prd`, que conserva los datos históricos, y exige que el destino cumpla el contrato canónico de 158 columnas.
 
 ### Contrato de schema compartido con transform
 
@@ -96,12 +94,12 @@ El script configura `GOOGLE_APPLICATION_CREDENTIALS` en tiempo de ejecución.
 
 ## Validaciones
 
-- existencia de archivos requeridos (credencial, Excel, schema)
-- columnas esperadas vs. schema YAML
-- casting por tipos declarados
-- normalización de vacíos y validación de fecha
+- existencia de archivos requeridos (credencial, artefacto, schema)
+- PSG: nombres, orden y tipos físicos Parquet y tipos pandas exactos según YAML, sin conversiones silenciosas; fecha sin hora, números finitos y completitud técnica válida
+- XPAP: casting y normalización de valores según su flujo vigente
 - duplicados dentro del lote (`uuid_field`)
-- duplicados contra BigQuery cuando `WRITE_APPEND`
+- PSG: UUID existentes en BigQuery se omiten; solo los nuevos se envían con `WRITE_APPEND`, bajo bloqueo local y con conciliación de `output_rows`
+- XPAP: duplicados contra BigQuery cuando `WRITE_APPEND`
 
 Si falla alguna validación, la carga se cancela.
 
@@ -113,8 +111,8 @@ Y se renombra agregando el sufijo `_loaded` antes de la extensión.
 
 Ejemplo:
 
-- `staging/extract_psg_2026-03-08_20-01_transformed.xlsx`
-- `staging/extract_psg_2026-03-08_20-01_transformed_loaded.xlsx`
+- `staging/extract_psg_2026-03-08_20-01_transformed.parquet`
+- `staging/extract_psg_2026-03-08_20-01_transformed_loaded.parquet`
 
 Si ya existe un archivo con ese nombre, se agrega un timestamp para evitar sobrescritura.
 
@@ -124,25 +122,25 @@ Chuleta operativa (desde raíz del proyecto):
 
 | Comando | Efecto |
 |---|---|
-| `./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx` | Carga manual del flujo indicado usando el Excel indicado por CLI, con confirmación previa. |
-| `./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx` | Igual que el anterior, usando ruta de Excel como argumento posicional. |
+| `./.venv/bin/python 3_load/main.py --flow psg --input staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.parquet` | Carga manual PSG del Parquet indicado por CLI, con confirmación previa. |
+| `./.venv/bin/python 3_load/main.py --flow psg staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.parquet` | Igual que el anterior, usando ruta posicional. |
 | `./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo>` | Autodiscovery: toma el archivo mas reciente para el flow desde `staging/`. |
 
 Desde la raíz del proyecto:
 
 ```bash
-./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> --input staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
+./.venv/bin/python 3_load/main.py --flow psg --input staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.parquet
 ```
 
 Alternativa con argumento posicional:
 
 ```bash
-./.venv/bin/python 3_load/main.py --flow <subproceso_ejemplo> staging/extract_<subproceso_ejemplo>_YYYY-MM-DD_HH-MM_transformed.xlsx
+./.venv/bin/python 3_load/main.py --flow psg staging/extract_psg_YYYY-MM-DD_HH-MM_transformed.parquet
 ```
 
 Modos de ejecución soportados:
 
-- Manual por flujo: `--flow <nombre>` + (`--input <ruta_excel>` o `<ruta_excel>` posicional), con confirmación interactiva previa a la carga.
+- Manual por flujo: `--flow <nombre>` + (`--input <ruta_artefacto>` o `<ruta_artefacto>` posicional), con confirmación interactiva previa a la carga.
 - Autodiscovery por flujo: `--flow <nombre>` sin `--input`, usa el archivo mas reciente de `staging/` que cumpla `extract_<flow>_..._transformed`.
 - Restricción de seguridad: si se pasa `--input`, la ruta debe pertenecer a `staging/` y cumplir la convención `extract_<flow>_..._transformed`; rutas externas o nombres no válidos son rechazados.
 
@@ -150,7 +148,7 @@ El script muestra configuración activa y solicita confirmación por teclado ant
 
 ## Notas operativas
 
-- El flujo seleccionado debe existir como `3_load/config/<subproceso_ejemplo>.yaml`.
+- El flujo seleccionado debe tener contrato en `0_declarations/<flow>.yaml`.
 - Si `write_disposition` es `WRITE_APPEND`, se validan duplicados en lote y contra BigQuery.
 - Si falla cualquier validación, la carga se cancela.
 - Logs de esta capa se escriben en `/home/rom/obsino/clisueno/logs` con nombre `load_<flow>_YYYY-MM-DD_HH-MM-SS.log`.

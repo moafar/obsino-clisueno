@@ -1,4 +1,4 @@
-"""Carga manual de Excel a BigQuery para la capa load.
+"""Carga manual de artefactos transformados a BigQuery para la capa load.
 
 Esta versión integrada reemplaza el enfoque HTTP de Cloud Function por ejecución
 manual en consola, conservando validaciones clave:
@@ -18,14 +18,15 @@ import shutil
 import sys
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 import yaml
 from google.cloud import bigquery
-from openpyxl import load_workbook
 
 
 # =======================
@@ -96,8 +97,8 @@ class LoaderConfig:
     table_id: str
     write_disposition: str
     service_account_json: Path
-    source_excel_path: Path
-    source_sheet_name: str
+    source_path: Path
+    source_sheet_name: str | None
     schema_yaml_path: Path
     schema_path_in_yaml: str
     schema_description: str | None
@@ -125,7 +126,8 @@ def _transformed_prefix(flow: str) -> str:
 
 
 def _is_flow_transformed_file(path: Path, flow: str) -> bool:
-    if not path.is_file() or path.suffix.lower() not in SUPPORTED_INPUT_EXTENSIONS:
+    allowed = {".parquet"} if flow == "psg" else SUPPORTED_INPUT_EXTENSIONS
+    if not path.is_file() or path.suffix.lower() not in allowed:
         return False
 
     stem = path.stem
@@ -196,7 +198,7 @@ def parse_cli_args() -> tuple[str, Path, str | None]:
     parser.add_argument(
         "input_positional",
         nargs="?",
-        help="Ruta del Excel a cargar (argumento posicional)",
+        help="Ruta del artefacto transformado a cargar (argumento posicional)",
     )
     parser.add_argument(
         "--flow",
@@ -208,7 +210,7 @@ def parse_cli_args() -> tuple[str, Path, str | None]:
         "--input",
         required=False,
         help=(
-            "Ruta del Excel a cargar (relativa a la raiz del proyecto o absoluta). "
+            "Ruta del artefacto transformado a cargar (relativa a la raiz del proyecto o absoluta). "
             "Si se omite, usa autodiscovery en staging/ filtrando por extract_<flow>_*_transformed."
         ),
     )
@@ -239,7 +241,7 @@ def resolve_config_yaml_path(flow: str) -> Path:
 
 
 def load_runtime_config(
-    config_yaml_path: Path, source_excel_path: Path, table_id_override: str | None = None
+    config_yaml_path: Path, source_path: Path, table_id_override: str | None = None
 ) -> LoaderConfig:
     # Carga configuración declarativa equivalente a la "sección 1" del script manual.
     if not config_yaml_path.exists():
@@ -253,6 +255,7 @@ def load_runtime_config(
 
     shared_contract = isinstance(raw_config.get("load"), dict)
     is_psg = raw_config.get("metadata", {}).get("domain") == "psg" if shared_contract else False
+    transform_format = raw_config.get("transform", {}).get("output", {}).get("format") if is_psg else None
     if shared_contract:
         raw_config = raw_config["load"]
     if table_id_override is not None and not is_psg:
@@ -267,8 +270,9 @@ def load_runtime_config(
         "table_id",
         "write_disposition",
         "service_account_json",
-        "source_sheet_name",
     ]
+    if not is_psg:
+        required_keys.append("source_sheet_name")
     if not shared_contract and "schema_yaml_path" not in raw_config and "shared_schema_yaml_path" not in raw_config:
         die("Debe definir 'schema_yaml_path' o 'shared_schema_yaml_path' en el YAML de configuración")
     missing = [key for key in required_keys if key not in raw_config and not (key == "table_id" and is_psg)]
@@ -280,6 +284,8 @@ def load_runtime_config(
         die("'write_disposition' debe ser WRITE_APPEND o WRITE_TRUNCATE")
     if is_psg and write_disposition != "WRITE_APPEND":
         die("PSG solo permite WRITE_APPEND")
+    if is_psg and (raw_config.get("input_format") != "parquet" or transform_format != "parquet"):
+        die("Los formatos transform.output y load.input_format de PSG deben ser parquet")
 
     raw_schema_path = raw_config.get("shared_schema_yaml_path", raw_config.get("schema_yaml_path", ""))
     schema_yaml_path = config_yaml_path if shared_contract else BASE_DIR / str(raw_schema_path).strip()
@@ -293,8 +299,8 @@ def load_runtime_config(
         table_id=str(table_id).strip(),
         write_disposition=write_disposition,
         service_account_json=BASE_DIR / str(raw_config["service_account_json"]).strip(),
-        source_excel_path=source_excel_path,
-        source_sheet_name=str(raw_config["source_sheet_name"]).strip(),
+        source_path=source_path,
+        source_sheet_name=(None if is_psg else str(raw_config["source_sheet_name"]).strip()),
         schema_yaml_path=schema_yaml_path,
         schema_path_in_yaml=schema_path_in_yaml,
         schema_description=(
@@ -340,8 +346,9 @@ def show_configuration(config: LoaderConfig) -> None:
     print("Proyecto           :", config.project_id)
     print("Dataset            :", config.dataset_id)
     print("Tabla              :", config.table_id)
-    print("Archivo origen     :", str(config.source_excel_path))
-    print("Hoja Excel         :", config.source_sheet_name)
+    print("Archivo origen     :", str(config.source_path))
+    if config.source_sheet_name:
+        print("Hoja Excel         :", config.source_sheet_name)
     print("Schema YAML        :", str(config.schema_yaml_path))
     print("Schema path YAML   :", config.schema_path_in_yaml or "(raíz)")
     print("Schema origen      :", config.schema_description or "(local)")
@@ -373,8 +380,8 @@ def validate_paths(config: LoaderConfig) -> None:
     # Verifica que todos los insumos físicos existan antes de autenticar/cargar.
     if not config.service_account_json.exists():
         die(f"No existe el JSON de la Service Account: {config.service_account_json}")
-    if not config.source_excel_path.exists():
-        die(f"No existe el Excel de origen: {config.source_excel_path}")
+    if not config.source_path.exists():
+        die(f"No existe el artefacto de origen: {config.source_path}")
     if not config.schema_yaml_path.exists():
         die(f"No existe el archivo de schema YAML: {config.schema_yaml_path}")
 
@@ -437,49 +444,46 @@ def read_source_dataset(
     config: LoaderConfig, expected_columns: list[str], strict_psg: bool = False,
     schema_yaml: dict[str, str] | None = None,
 ) -> pd.DataFrame:
-    # Carga dataset de entrada y fuerza estructura esperada (rechaza faltantes, ignora extras).
-    source_suffix = config.source_excel_path.suffix.lower()
-    if strict_psg and source_suffix == ".xls":
-        die("PSG requiere XLSX o CSV para verificar identificadores sin pérdida")
-    if strict_psg and source_suffix == ".xlsx":
-        workbook = load_workbook(config.source_excel_path, read_only=True, data_only=True)
-        try:
-            sheet = workbook[config.source_sheet_name]
-            headings = [cell.value for cell in next(sheet.iter_rows(max_row=1))]
-            if headings != expected_columns:
-                die("Las columnas PSG del XLSX no coinciden exactamente con el contrato")
-            id_column = headings.index("pte_id") + 1
-            for row_number, (cell,) in enumerate(
-                sheet.iter_rows(min_row=2, min_col=id_column, max_col=id_column), start=2
-            ):
-                if cell.value is not None and cell.data_type != "s":
-                    die(f"pte_id debe ser texto físico en XLSX (fila {row_number})")
-        finally:
-            workbook.close()
-    text_types = {name: "string" for name, kind in (schema_yaml or {}).items() if kind == "STRING"}
+    # PSG exige el formato físico de E35 antes de entregar filas al cargador.
+    source_suffix = config.source_path.suffix.lower()
+    if strict_psg:
+        if source_suffix != ".parquet" or schema_yaml is None:
+            die("PSG requiere un Parquet y el contrato YAML de carga")
+        arrow_schema = pq.read_schema(config.source_path)
+        physical_types = {
+            "STRING": pa.string(), "INT": pa.int64(), "FLOAT": pa.float64(),
+            "DATE": pa.timestamp("ns"),
+        }
+        if arrow_schema.names != expected_columns:
+            die("Las columnas PSG del Parquet no coinciden en nombre y orden con el contrato")
+        for field in arrow_schema:
+            expected_type = physical_types.get(schema_yaml[field.name])
+            if expected_type is None or field.type != expected_type:
+                die(f"Tipo físico Parquet incompatible en {field.name}: {field.type}")
+        dataframe = pd.read_parquet(config.source_path, engine="pyarrow")
+        pandas_types = {"STRING": "string", "INT": "Int64", "FLOAT": "Float64",
+                        "DATE": "datetime64[ns]"}
+        for name, kind in schema_yaml.items():
+            if str(dataframe[name].dtype) != pandas_types[kind]:
+                die(f"Tipo pandas Parquet incompatible en {name}: {dataframe[name].dtype}")
+        return dataframe
+
     if source_suffix == ".csv":
         dataframe = pd.read_csv(
-            config.source_excel_path,
-            dtype=text_types if strict_psg else None,
-            keep_default_na=not strict_psg,
+            config.source_path,
         )
     elif source_suffix in {".xlsx", ".xls"}:
         dataframe = pd.read_excel(
-            config.source_excel_path, sheet_name=config.source_sheet_name,
-            dtype=text_types if strict_psg else None,
-            keep_default_na=not strict_psg,
+            config.source_path, sheet_name=config.source_sheet_name,
         )
     else:
         die(
             "Extensión de archivo no soportada para carga. "
-            f"Extensión recibida: {config.source_excel_path.suffix}"
+            f"Extensión recibida: {config.source_path.suffix}"
         )
 
     missing_columns = [column for column in expected_columns if column not in dataframe.columns]
     extra_columns = [column for column in dataframe.columns if column not in expected_columns]
-
-    if strict_psg and list(dataframe.columns) != expected_columns:
-        die("Las columnas PSG deben coincidir en nombre, número y orden con el contrato")
 
     if missing_columns:
         print("\nERROR: faltan columnas requeridas:")
@@ -495,62 +499,27 @@ def read_source_dataset(
     return dataframe[expected_columns].copy()
 
 
-def cast_psg_dataframe(dataframe: pd.DataFrame, schema_yaml: dict[str, str]) -> pd.DataFrame:
-    """Valida los tipos canónicos sin convertir valores inválidos en nulos."""
+def validate_psg_values(dataframe: pd.DataFrame, schema_yaml: dict[str, str]) -> None:
+    """Conserva los controles técnicos sin modificar los valores del Parquet."""
     for column, field_type in schema_yaml.items():
-        source = dataframe[column]
-        if field_type == "STRING":
-            dataframe[column] = source.astype("string").replace(r"^\s*$", pd.NA, regex=True)
-            continue
-        if field_type == "DATE":
-            def as_date(value: Any) -> date | None:
-                if pd.isna(value) or value == "":
-                    return None
-                if isinstance(value, datetime):
-                    if value.time() != datetime.min.time():
-                        die(f"Fecha PSG con hora en {column}")
-                    return value.date()
-                if isinstance(value, date):
-                    return value
-                if isinstance(value, str):
-                    try:
-                        return date.fromisoformat(value.strip())
-                    except ValueError:
-                        pass
-                die(f"Fecha PSG inválida en {column}")
-            dataframe[column] = source.map(as_date)
-            continue
-        if field_type in {"FLOAT", "FLOAT64", "INTEGER", "INT", "INT64"}:
-            values = source.replace(r"^\s*$", pd.NA, regex=True)
-            if values.map(lambda value: isinstance(value, bool)).any():
-                die(f"Valor booleano incompatible en {column}")
-            try:
-                numeric = pd.to_numeric(values, errors="raise")
-            except (ValueError, TypeError):
-                die(f"Valor numérico incompatible en {column}")
-            if numeric.dropna().map(lambda value: not math.isfinite(float(value))).any():
-                die(f"Valor no finito en {column}")
-            if field_type in {"INTEGER", "INT", "INT64"}:
-                if numeric.dropna().map(
-                    lambda value: float(value) % 1 != 0 or abs(float(value)) > 2**53
-                ).any():
-                    die(f"Entero incompatible o impreciso en {column}")
-                dataframe[column] = numeric.astype("Int64")
-            else:
-                dataframe[column] = numeric.astype("float64")
-            continue
-        die(f"Tipo PSG no admitido en {column}: {field_type}")
+        if field_type == "FLOAT" and dataframe[column].dropna().map(
+            lambda value: not math.isfinite(value)
+        ).any():
+            die(f"Valor numérico incompatible en {column}")
+        if field_type == "DATE" and (
+            dataframe[column].dropna() != dataframe[column].dropna().dt.normalize()
+        ).any():
+            die(f"Fecha PSG con hora en {column}")
     completeness = dataframe["meta_completitud_pct"]
     if completeness.notna().any() and (
         ((completeness < 0) | (completeness > 100)).fillna(False).any()
     ):
         die("meta_completitud_pct fuera del rango 0-100")
-    return dataframe
 
 
 def validate_psg_uuids(dataframe: pd.DataFrame) -> list[str]:
     values = dataframe["meta_uuid"]
-    if values.isna().any() or dataframe.empty:
+    if values.isna().any() or values.str.strip().eq("").fillna(False).any() or dataframe.empty:
         die("meta_uuid vacío en lote PSG")
     uuids = values.tolist()
     if len(uuids) != len(set(uuids)):
@@ -760,7 +729,7 @@ def load_psg_new_rows(config: LoaderConfig, client: bigquery.Client,
                     die(f"Carga PSG no conciliada: enviados={sent}, insertados={inserted}")
             log(f"Conciliación PSG: recibidos={received}, omitidos={omitted}, "
                 f"enviados={sent}, insertados={inserted}")
-            moved_path = move_loaded_input_file(config.source_excel_path, "psg")
+            moved_path = move_loaded_input_file(config.source_path, "psg")
             log(f"Archivo de entrada movido a: {moved_path}")
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
@@ -812,15 +781,15 @@ def run(config: LoaderConfig, flow: str) -> None:
         validate_target_schema(client, config.table_fqn, bq_schema)
     log(f"Esquema leído con {len(expected_columns)} campos")
 
-    # 5) Ingestar Excel con control estricto de columnas.
-    log("Leyendo archivo Excel")
+    # 5) Ingestar el artefacto transformado con control estricto de columnas y tipos.
+    log("Leyendo artefacto transformado")
     dataframe = read_source_dataset(config, expected_columns, flow == "psg", schema_yaml)
-    log(f"Excel leído: {len(dataframe)} filas, {len(dataframe.columns)} columnas")
+    log(f"Artefacto leído: {len(dataframe)} filas, {len(dataframe.columns)} columnas")
 
     # 6) Estandarizar y limpiar datos previo a validaciones de unicidad.
     log("Aplicando casting y validaciones de formato")
     if flow == "psg":
-        dataframe = cast_psg_dataframe(dataframe, schema_yaml)
+        validate_psg_values(dataframe, schema_yaml)
     else:
         dataframe = cast_dataframe(dataframe, schema_yaml)
         dataframe = validate_date_field(dataframe, config.date_field)
@@ -877,7 +846,7 @@ def run(config: LoaderConfig, flow: str) -> None:
 
     log(f"Carga finalizada: {load_job.output_rows} filas en {config.table_fqn}")
 
-    moved_path = move_loaded_input_file(config.source_excel_path, flow)
+    moved_path = move_loaded_input_file(config.source_path, flow)
     log(f"Archivo de entrada movido a: {moved_path}")
 
 
@@ -887,7 +856,7 @@ if __name__ == "__main__":
         setup_logging(selected_flow)
         selected_config_path = resolve_config_yaml_path(selected_flow)
         log(f"Flujo seleccionado: {selected_flow}")
-        log(f"Excel de entrada: {selected_input_path}")
+        log(f"Artefacto de entrada: {selected_input_path}")
         log(f"YAML de configuración: {selected_config_path}")
         runtime_config = load_runtime_config(selected_config_path, selected_input_path, selected_table_id)
         run(runtime_config, selected_flow)

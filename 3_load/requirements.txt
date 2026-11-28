@@ -1,5 +1,6 @@
 google-cloud-bigquery
 pandas
+pyarrow>=14.0.0
 pandas-gbq>=0.26.1
 PyYAML
 openpyxl
