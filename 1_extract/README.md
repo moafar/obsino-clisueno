@@ -6,7 +6,7 @@ Contexto: ejecutar desde la raíz del repositorio con `.venv` activo.
 
 ```bash
 source .venv/bin/activate
-./.venv/bin/python 1_extract/main.py --flow psg --dry-run
+./.venv/bin/python 1_extract/main.py --flow psg --input /ruta/entrada --archive-dest /ruta/archivo --dry-run
 ```
 
 Prueba PSG con directorios aislados y documentos sintéticos:
@@ -16,7 +16,8 @@ mkdir -p /tmp/psg-test-01/{entrada,archivo,csv}
 touch /tmp/psg-test-01/.psg-test-root
 ./.venv/bin/python 1_extract/main.py --flow psg --mode test \
   --test-root /tmp/psg-test-01 --input /tmp/psg-test-01/entrada \
-  --archive-dest /tmp/psg-test-01/archivo --output-dir /tmp/psg-test-01/csv
+  --archive-dest /tmp/psg-test-01/archivo --output-dir /tmp/psg-test-01/csv \
+  --protected-root /ruta/documentos-protegidos
 ```
 
 Extracción estructurada desde reportes clínicos de laboratorio de sueño.
@@ -29,7 +30,7 @@ Extracción estructurada desde reportes clínicos de laboratorio de sueño.
 
 ## Entradas y salidas
 
-- Entrada: directorio configurado en `0_declarations/<flow>.yaml` (sección `extract`) (`extract.entrada.ruta`) o por CLI.
+- Entrada: PSG exige `--input` y `--archive-dest`; XPAP conserva `extract.entrada.ruta` del YAML o la ruta CLI.
 - Salida de procesamiento: archivo CSV en `staging/` (por defecto) con nombre `extract_<flow>_{timestamp}.csv` (ejemplo: `extract_psg_2026-03-29_14-19.csv`).
 - Salida de trazabilidad: logs en `logs/` bajo la raíz de la instalación.
     - Convencion: `extract_<flow>_YYYY-MM-DD_HH-MM-SS.log`.
@@ -157,25 +158,32 @@ sudo apt install catdoc
 - El proceso registra errores por archivo sin detener toda la corrida.
 - Se soporta ejecución parcial (`--no-process`, `--no-unify`) para los flujos que la admiten; PSG requiere procesamiento.
 - La opción `-v`/`--verbose` aumenta el detalle de logging (nivel DEBUG).
-- PSG archiva en el destino Windows configurado en `0_declarations/psg.yaml`; no usa `procesados/` como alternativa. Los demás flujos conservan su destino anterior.
+- PSG archiva en el destino indicado explícitamente con `--archive-dest`; no usa `procesados/` como alternativa. Los demás flujos conservan su destino anterior.
 
 ### Archivado PSG
 
-En modo normal, el YAML define el origen `/mnt/e/RESULTADOS`, el destino
-`/mnt/e/RESULTADOS/RESULTADOS_OBSERVATORIO` y la salida CSV `staging/`.
-`--input` permite otro origen del mismo dispositivo, incluido el reproceso histórico:
+En PSG, el YAML no contiene rutas documentales. Cada invocación del extractor exige
+`--input` y `--archive-dest`, incluso con `--dry-run`; no se aceptan el origen
+posicional ni valores heredados del YAML como sustitutos. Origen y archivo deben
+ser disjuntos en ambos sentidos, accesibles y del mismo dispositivo.
 
 ```bash
-./.venv/bin/python 1_extract/main.py --flow psg --mode normal --dry-run
 ./.venv/bin/python 1_extract/main.py --flow psg --mode normal \
-  --input /mnt/e/RESULTADOS_OBSERVATORIO_REPROCESO
+  --input /ruta/entrada --archive-dest /ruta/archivo --dry-run
 ```
 
-La ejecución normal y la de prueba solicitan una confirmación antes de escribir o mover.
-`--dry-run` valida y muestra la configuración sin solicitarla. El modo `test` exige
-una raíz con `.psg-test-root` y rutas de entrada, archivo y CSV dentro de ella;
-rechaza el solapamiento con las rutas clínicas configuradas. La salida de prueba
-queda fuera del CSV ordinario.
+Staging y logs continúan por defecto relativos a la raíz del repositorio.
+La ejecución normal y la de prueba solicitan confirmación salvo `--yes`.
+El modo `test` exige `.psg-test-root`, todas las rutas operativas dentro de esa raíz,
+`--output-dir` explícito y al menos un `--protected-root`. Este argumento es
+repetible: declare todas las raíces documentales protegidas. La raíz de pruebas
+no puede coincidir, contener ni estar contenida en ninguna de ellas; también
+se conserva la protección de staging/procesados ordinarios del repositorio.
+La salida de prueba queda fuera del CSV ordinario.
+
+El orquestador mantiene su comprobación de montaje y exige rutas explícitas al
+iniciar. `scripts/run_psg.py --resume ID` reutiliza las rutas registradas sin
+consultar defaults documentales del YAML. XPAP conserva su configuración.
 
 El movimiento PSG usa `renameat2(RENAME_NOREPLACE)` cuando el volumen lo admite.
 Si devuelve `EINVAL`, `ENOSYS` o `EOPNOTSUPP`, usa `os.link()` y después

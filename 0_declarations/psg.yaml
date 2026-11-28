@@ -4,19 +4,12 @@ metadata:
   domain: psg
 
 extract:
-  entrada:
-    ruta: "/mnt/e/RESULTADOS"
   procesamiento:
     tipos_validos: ["doc", "rtf"]
     glob_patron: "**/*"
     barra_progreso: true
   salida:
     carpeta_csv: "../staging"
-  archivado:
-    destino: "/mnt/e/RESULTADOS/RESULTADOS_OBSERVATORIO"
-    rutas_clinicas_protegidas:
-      - "/mnt/e/RESULTADOS"
-      - "/mnt/e/RESULTADOS_OBSERVATORIO_REPROCESO"
   subflujos:
     salida_unificada:
       BASAL: "extract_psg_{timestamp}.csv"

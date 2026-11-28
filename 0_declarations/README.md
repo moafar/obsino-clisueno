@@ -76,3 +76,5 @@ Flows activos en el repositorio: `psg`, `xpap`.
 - Mantener nombres y tipos consistentes entre `transform.output` y `load.input`.
 - Preferir reutilización por anclas/alias YAML cuando aplique.
 - Evitar rutas absolutas en declaraciones y configs que lo consumen.
+
+PSG no declara ubicaciones documentales: extracción requiere `--input` y `--archive-dest`; el aislamiento test declara raíces mediante `--protected-root` repetible. Staging/logs permanecen relativos al repositorio. XPAP conserva su configuración.

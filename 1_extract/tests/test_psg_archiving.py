@@ -43,11 +43,11 @@ class PSGArchivingTest(unittest.TestCase):
             directory.mkdir()
         self.config = extract_main.load_config(str(ROOT / "0_declarations/psg.yaml"))
 
-    def test_yaml_resolves_production_defaults_without_writing(self):
-        self.assertEqual(Path("/mnt/e/RESULTADOS"), self.config.entrada_ruta)
-        self.assertEqual(Path("/mnt/e/RESULTADOS/RESULTADOS_OBSERVATORIO"),
-                         self.config.archivo_destino)
+    def test_yaml_has_no_document_paths_and_keeps_relative_outputs(self):
+        self.assertIsNone(self.config.entrada_ruta)
+        self.assertIsNone(self.config.archivo_destino)
         self.assertEqual(ROOT / "staging", self.config.carpeta_csv)
+        self.assertEqual(ROOT / "logs", self.config.logging_dir)
 
     def args(self, **changes):
         values = dict(flow="psg", config=None, input=str(self.source), input_posicional=None,
@@ -55,6 +55,8 @@ class PSGArchivingTest(unittest.TestCase):
                       test_root=str(self.root), mode="test", dry_run=False, no_process=False,
                       no_unify=False, verbose=False)
         values.update(changes)
+        values.setdefault("protected_root", [str(self.root.parent / (self.root.name + "-protected"))]
+                          if values["mode"] == "test" else [])
         return argparse.Namespace(**values)
 
     def run_cli(self, answer="s", **changes):
@@ -255,10 +257,39 @@ class PSGArchivingTest(unittest.TestCase):
             extract_main._psg_runtime(self.args(), self.config)
 
     def test_test_mode_rejects_protected_clinical_root(self):
-        official = replace(self.config, rutas_clinicas_protegidas=[self.root])
-        with patch.object(extract_main, "load_config", return_value=official):
-            with self.assertRaises(ValueError):
-                extract_main._psg_runtime(self.args(), self.config)
+        alias = self.root / "protected-alias"
+        alias.symlink_to(self.source, target_is_directory=True)
+        for protected in (self.root, self.root.parent, self.source, alias):
+            with self.subTest(protected=protected), self.assertRaises(ValueError):
+                extract_main._psg_runtime(self.args(protected_root=[str(protected)]), self.config)
+        with self.assertRaises(ValueError):
+            extract_main._psg_runtime(self.args(protected_root=[]), self.config)
+        with self.assertRaises(ValueError):
+            extract_main._psg_runtime(self.args(protected_root=[str(self.root.parent / "unrelated"),
+                                                               str(self.root)]), self.config)
+
+    def test_explicit_document_paths_required_even_with_legacy_yaml(self):
+        legacy = replace(self.config, entrada_ruta=self.source, archivo_destino=self.destination)
+        for changes in ({"input": None}, {"archive_dest": None},
+                        {"input": None, "input_posicional": str(self.source)}):
+            for mode in ("test", "normal"):
+                with self.subTest(changes=changes, mode=mode), self.assertRaisesRegex(ValueError, "explícitos"):
+                    extract_main._psg_runtime(self.args(mode=mode, test_root=None, **changes), legacy)
+
+    def test_document_directories_must_be_disjoint_in_both_modes(self):
+        nested = self.source / "nested"
+        nested.mkdir()
+        for mode in ("normal", "test"):
+            for source, destination in ((self.source, nested), (nested, self.source), (self.source, self.source)):
+                with self.subTest(mode=mode, source=source), self.assertRaises(ValueError):
+                    extract_main._psg_runtime(self.args(mode=mode, input=str(source),
+                        archive_dest=str(destination)), self.config)
+
+    def test_protected_roots_are_repeatable_cli_arguments(self):
+        args = ['extract', '--flow', 'psg', '--protected-root', str(self.source),
+                '--protected-root', str(self.destination)]
+        with patch.object(sys, 'argv', args):
+            self.assertEqual([str(self.source), str(self.destination)], extract_main.parse_args().protected_root)
 
     def test_psg_rejects_additional_subflows_in_test_mode(self):
         unsafe = replace(self.config, subflujos_salida_unificada={

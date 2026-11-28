@@ -23,7 +23,7 @@ class PsgCliLockTest(unittest.TestCase):
                                              suffix="_transformed.parquet") as artifact:
                 cases = (
                     ("1_extract/main.py", ["--flow", "psg", "--mode", "test", "--test-root", root,
-                        "--input", str(source), "--archive-dest", str(archive), "--output-dir", str(output), "--yes"]),
+                        "--input", str(source), "--archive-dest", str(archive), "--output-dir", str(output), "--protected-root", str(directory.parent / (directory.name + "-protected")), "--yes"]),
                     ("1_extract/extract_commons/auditoria_psg.py", ["--input", artifact.name,
                         "--log", str(log), "--source", str(source), "--archive", str(archive)]),
                     ("2_transform/main.py", ["--flow", "psg", "--input", str(output / "extract_psg_locktest.csv"), "--dry-run"]),

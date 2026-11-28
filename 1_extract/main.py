@@ -27,7 +27,6 @@ class Config:
     subflujos_salida_unificada: dict[str, str] | None
     subflujos_prefijos: dict[str, str] | None
     archivo_destino: Path | None = None
-    rutas_clinicas_protegidas: list[Path] | None = None
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -48,22 +47,24 @@ def parse_args():
     p.add_argument("-c","--config", default=None,
                    help="Ruta al archivo de configuración YAML (override opcional del flow)")
     p.add_argument("--input", default=None,
-                   help="Ruta del directorio a analizar (si se omite, usa la del YAML)")
+                   help="Directorio de entrada; obligatorio mediante --input en PSG")
     p.add_argument("-v","--verbose", action="store_true",
                    help="Muestra información detallada (logging DEBUG)")
     p.add_argument("--no-process", action="store_true", help="No procesa; solo unifica CSVs")
     p.add_argument("--no-unify", action="store_true", help="No unifica; solo procesa")
     p.add_argument("--dry-run", action="store_true", help="Valida y muestra parámetros; no ejecuta")
     p.add_argument("--mode", choices=("test", "normal"), default="normal")
-    p.add_argument("--archive-dest", help="Destino de archivado PSG (sobrescribe el YAML)")
+    p.add_argument("--archive-dest", help="Destino de archivado PSG obligatorio, disjunto del origen")
     p.add_argument("--output-dir", help="Directorio CSV PSG (sobrescribe el YAML)")
     p.add_argument("--test-root", help="Raíz aislada obligatoria en modo test PSG")
+    p.add_argument("--protected-root", action="append", default=[],
+                   help="Raíz protegida PSG; repetible y obligatoria en modo test")
     p.add_argument("--yes", action="store_true", help="Confirmar operación PSG sin interacción")
     p.add_argument("--output-file", help="Nombre CSV PSG explícito dentro de --output-dir")
     p.add_argument("--result-json", help="Resumen técnico PSG para el orquestador")
     p.add_argument("--resume-extraction", action="store_true", help="Reconciliar una extracción interrumpida con checkpoint")
     args = p.parse_args()
-    if args.flow != "psg" and (args.yes or args.output_file or args.result_json or args.resume_extraction):
+    if args.flow != "psg" and (args.yes or args.output_file or args.result_json or args.resume_extraction or args.protected_root):
         p.error("Las opciones de orquestación solo se admiten en PSG")
     return args
 
@@ -120,8 +121,6 @@ def load_config(path_cfg: str) -> Config:
         subflujos_salida_unificada = salida_unificada,
         subflujos_prefijos = sub.get("prefijos"),
         archivo_destino = _resolve_from_config(archive.get("destino")),
-        rutas_clinicas_protegidas = [path for item in archive.get("rutas_clinicas_protegidas", [])
-                                    if (path := _resolve_from_config(item)) is not None],
     )
     return cfg
 
@@ -195,11 +194,13 @@ def report(res: dict, ruta: Path, dt: float, verbose: bool):
 def _psg_runtime(args, cfg: Config) -> tuple[Path, Path, Path, Config]:
     if args.no_process:
         raise ValueError("PSG requiere procesamiento; --no-process no aplica")
-    if args.mode == "test" and not all((args.test_root, args.input or args.input_posicional,
-                                        args.archive_dest, args.output_dir)):
-        raise ValueError("Modo test PSG requiere --test-root, --input, --archive-dest y --output-dir")
-    source = resolve_input_dir(args.input or args.input_posicional, cfg)
-    raw_destination = args.archive_dest or cfg.archivo_destino
+    if not args.input or not args.archive_dest:
+        raise ValueError("PSG requiere --input y --archive-dest explícitos; no se usan defaults del YAML")
+    if args.mode == "test" and not all((args.test_root, args.input,
+                                        args.archive_dest, args.output_dir, getattr(args, "protected_root", None))):
+        raise ValueError("Modo test PSG requiere --test-root, --input, --archive-dest, --output-dir y --protected-root")
+    source = resolve_input_dir(args.input, cfg)
+    raw_destination = args.archive_dest
     raw_output = args.output_dir or cfg.carpeta_csv
     if not raw_destination or not raw_output:
         raise ValueError("PSG requiere destino de archivo y salida CSV explícitos")
@@ -210,7 +211,7 @@ def _psg_runtime(args, cfg: Config) -> tuple[Path, Path, Path, Config]:
                                 ("salida CSV", output, os.W_OK | os.X_OK)):
         if not path.is_dir() or not os.access(path, access):
             raise ValueError(f"Directorio PSG no accesible: {label}: {path}")
-    if (source == destination or source.is_relative_to(destination) or
+    if (source.is_relative_to(destination) or destination.is_relative_to(source) or
             source.stat().st_dev != destination.stat().st_dev):
         raise ValueError("Origen y destino PSG deben ser directorios distintos del mismo dispositivo")
     if output.is_relative_to(source) or output.is_relative_to(destination):
@@ -219,9 +220,7 @@ def _psg_runtime(args, cfg: Config) -> tuple[Path, Path, Path, Config]:
         test_root = Path(args.test_root).resolve(strict=True)
         if not (test_root / ".psg-test-root").is_file():
             raise ValueError("La raíz de pruebas PSG requiere el marcador .psg-test-root")
-        official = load_config(str(resolve_config_yaml_path("psg")))
-        protected = (official.rutas_clinicas_protegidas or []) + [
-            official.entrada_ruta, official.archivo_destino,
+        protected = [Path(path).resolve() for path in args.protected_root] + [
             (BASE_DIR.parent / "staging").resolve(), (BASE_DIR.parent / "procesados").resolve(),
         ]
         if any(test_root.is_relative_to(path) or path.is_relative_to(test_root)
@@ -251,7 +250,7 @@ def _show_psg_configuration(mode: str, source: Path, destination: Path,
     print(f"Modo: {mode.upper()} | Flujo: PSG | Recursivo: Sí | Tipos: DOC, RTF")
     print(f"Origen: {source}\nDestino: {destination}\nSalida CSV: {output}")
     print("Organización: AAAA/AAAA-MM o sin_fecha | Prefijos acumulativos: Sí")
-    print("Destino dentro del origen: excluido por ruta real")
+    print("Origen y destino disjuntos: Sí")
     print("Origen y destino accesibles: Sí | Mismo dispositivo: Sí")
     print("Movimiento: renameat2 sin reemplazo o enlace y retirada del origen")
     print("DRY-RUN: no se extraerá ni moverá nada" if dry_run else

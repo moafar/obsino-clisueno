@@ -57,7 +57,7 @@ Archivos funcionales: `3_load/main.py` y `2_transform/psg/core/transforms.py`; r
 
 ## 4. Riesgos y decisiones pendientes
 
-- **Rutas de operación:** los defaults históricos `/mnt/e/RESULTADOS` y `/mnt/e/RESULTADOS/RESULTADOS_OBSERVATORIO` están anidados. El preflight aprobado del orquestador exige directorios disjuntos. No se ha escogido otra ruta ni movido documentación: antes de E30 el responsable debe aprobar un origen real disjunto del archivo existente, o un destino NTFS distinto y su transición. No desplegar confiando en esos defaults para la orquestación.
+- **Rutas de operación:** ajuste previo a E28 aplicado: PSG no tiene rutas documentales en YAML. Cada ejecución nueva exige `--input`/`--archive-dest`; deben ser disjuntos y cumplir acceso/dispositivo/montaje. En test se declara cada raíz protegida mediante `--protected-root` repetible y obligatorio. El responsable selecciona las rutas autorizadas; no hay defaults de producción ni traslado automático para adaptarlas.
 - **PR12 sigue abierta:** cierre formal pendiente; no volver a fusionar su rama. Véase sección 6.
 - **E28 pendiente:** diferencias con los 9.080 UUID/9.083 filas históricos no están conciliadas. Esa referencia no es una expectativa universal: hay tres filas adicionales de procedencia no verificada y las poblaciones pueden ser distintas.
 - WSL2, NTFS documental y ext4 intermedio son requisitos de operación. El preflight comprueba montaje real/acceso, pero no certifica por sí solo que el volumen Windows sea NTFS ni su disponibilidad futura.
@@ -83,6 +83,7 @@ export PSG_REVIEW_REPO=/home/rom/obsino/clisueno
 : "${PSG_REFERENCE_2024:?copia de referencia autorizada e inmutable}"
 : "${PSG_DOC_MOUNT:?montaje NTFS de laboratorio, distinto de /}"
 : "${PSG_COPY_ROOT:?directorio NUEVO de copias bajo ese montaje}"
+: "${PSG_PROTECTED_ROOTS:?raíces protegidas declaradas por el responsable, separadas por :}"
 : "${PSG_TEST_PROJECT:?proyecto de prueba distinto de observatorio-ino-1}"
 : "${PSG_TEST_DATASET:?dataset independiente con prefijo pt07_}"
 : "${PSG_TEST_TABLE:?tabla nueva con prefijo pt07_psg_}"
@@ -107,7 +108,7 @@ mkdir staging logs
 
 El responsable debe verificar también los permisos/ACL de las copias NTFS y el acceso restringido a logs/estados. La cuenta necesita crear trabajos en el proyecto de prueba y leer/escribir únicamente el dataset de prueba; nunca reutilizar la clave productiva. Verificar esas restricciones con el administrador. Confirmar WSL2 (`uname -r`), montaje (`mountpoint "$PSG_DOC_MOUNT"`, `findmnt -T "$PSG_DOC_MOUNT"`) y ext4 nativo (`findmnt -T "$PSG_CODE/staging"`). Confirmar NTFS en Windows: DrvFs puede presentarse como 9p. Si el snapshot de dependencias no se reproduce, detenerse y volver a validar ese entorno antes de usar documentos.
 
-Configurar **solo el YAML del código aislado**, preservando el YAML DEV/PRD:
+Configurar **solo el destino BigQuery en el YAML del código aislado**, preservando el YAML DEV/PRD. Las rutas documentales se pasan por CLI, no se escriben en el YAML. `PSG_PROTECTED_ROOTS` es un parámetro del protocolo de preparación de copias; el extractor no lee esa variable: en modo test recibe cada ruta mediante `--protected-root`.
 
 ```bash
 .venv/bin/python - <<'PY'
@@ -119,7 +120,8 @@ e=os.environ; mount=Path(e['PSG_DOC_MOUNT']).resolve(); root=Path(e['PSG_COPY_RO
 reference=Path(e['PSG_REFERENCE_2024']).resolve()
 assert mount != Path('/') and mount.is_mount() and root != mount and root.is_relative_to(mount)
 assert not root.exists() and reference.is_dir()
-protected=[Path(x).resolve() for x in c['extract']['archivado']['rutas_clinicas_protegidas']]
+protected=[Path(x).resolve() for x in e['PSG_PROTECTED_ROOTS'].split(os.pathsep) if x]
+assert protected
 assert not any(root.is_relative_to(x) or x.is_relative_to(root) for x in protected)
 assert not (root.is_relative_to(reference) or reference.is_relative_to(root))
 assert e['PSG_TEST_PROJECT'] != c['load']['project_id']
@@ -128,8 +130,6 @@ assert re.fullmatch(r'pt07_[A-Za-z0-9_]+',e['PSG_TEST_DATASET'])
 assert re.fullmatch(r'pt07_psg_[A-Za-z0-9_]+',e['PSG_TEST_TABLE'])
 key=Path(e['PSG_TEST_KEY']).resolve(); assert key.is_file()
 root.mkdir(); (root/'source').mkdir(); (root/'archive').mkdir(); (root/'empty').mkdir()
-c['extract']['entrada']['ruta']=str(root/'source')
-c['extract']['archivado']['destino']=str(root/'archive')
 c['load'].update(project_id=e['PSG_TEST_PROJECT'],dataset_id=e['PSG_TEST_DATASET'],
  table_id=e['PSG_TEST_TABLE'],service_account_json=str(key))
 p.write_text(yaml.safe_dump(c,sort_keys=False,allow_unicode=True))
@@ -539,3 +539,20 @@ PY
 Se propone **v6.0.0**, pendiente de autorización: PSG cambia su formato público de salida/entrada intermedia de XLSX a Parquet, añade `meta_incidencias_calidad` al esquema tipado (157 → 158 campos frente a la referencia v5.0.1), cambia los denominadores de completitud, las reglas tolerantes/duplicados y los requisitos operativos de identidad, bloqueo y persistencia. Los consumidores XLSX y ejecuciones antiguas no son intercambiables ni automáticamente reanudables. Un incremento MAJOR refleja esas incompatibilidades, aunque XPAP conserve su contrato.
 
 El CSV crudo sigue con 159 campos y el UUID documental continúa basado en el MD5 inicial. No se propone transformar históricos, recalcular completitud histórica ni añadir otra capa de compatibilidad en esta publicación. El marcador y las etiquetas no se han modificado: **v5.0.1 sigue vigente; v6.0.0 es solo una propuesta**.
+
+
+### Ajuste puntual previo a E28 — rutas explícitas
+
+El extractor PSG exige `--input` y `--archive-dest` en modo normal/test, incluso si un YAML antiguo tiene valores. El modo test exige además `--protected-root` repetible y conserva el marcador y aislamiento. Ejemplo de comprobación sobre copias, antes del ensayo operativo normal:
+
+```bash
+# La raíz del test y sus directorios deben estar preparados fuera de las raíces protegidas.
+.venv/bin/python 1_extract/main.py --flow psg --mode test --dry-run \
+ --test-root /ruta/raiz-test --input /ruta/raiz-test/entrada \
+ --archive-dest /ruta/raiz-test/archivo --output-dir /ruta/raiz-test/csv \
+ --protected-root /ruta/documental-protegida --protected-root /otra/raiz-protegida
+```
+
+No se cambia la reanudación del orquestador: obtiene origen/archivo/montaje del registro original. Los directorios son disjuntos tanto en la CLI independiente como en el orquestador. Staging y logs ordinarios siguen relativos al repositorio; XPAP mantiene sus defaults. Este ajuste no completa E28 ni añade una evolución.
+
+Validación del ajuste: 43 pruebas afectadas satisfactorias (38 de `test_psg_archiving` y 5 de CLI compartida, integración sintética y reanudación/disyunción del orquestador). El protocolo se revisó con bash -n y ast.parse, sin ejecutarlo. No se repitieron las suites de transformación/carga ajenas al ajuste; no se usaron datos reales ni BigQuery.
